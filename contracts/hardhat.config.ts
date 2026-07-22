@@ -71,7 +71,7 @@ const config: HardhatUserConfig = {
     "bot-chain-testnet": {
       url: BOT_CHAIN_TESTNET_RPC_URL,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
-      chainId: 3636,
+      chainId: 968,
     },
   },
   etherscan: {
@@ -128,7 +128,7 @@ const config: HardhatUserConfig = {
       },
       {
         network: "bot-chain-testnet",
-        chainId: 3636,
+        chainId: 968,
         urls: {
           apiURL: "https://testnet.blockscout.botanixlabs.com/api",
           browserURL: "https://testnet.blockscout.botanixlabs.com",
