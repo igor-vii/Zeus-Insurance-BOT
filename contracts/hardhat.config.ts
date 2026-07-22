@@ -20,6 +20,8 @@ const BOT_CHAIN_RPC_URL =
   process.env.BOT_CHAIN_RPC_URL ?? "https://rpc.botanixlabs.com";
 const BOT_CHAIN_TESTNET_RPC_URL =
   process.env.BOT_CHAIN_TESTNET_RPC_URL ?? "https://node.botanixlabs.dev";
+const BOT_CHAIN_MAINNET_RPC_URL =
+  process.env.BOT_CHAIN_MAINNET_RPC_URL ?? "https://rpc.botchain.ai";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -73,6 +75,11 @@ const config: HardhatUserConfig = {
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
       chainId: 968,
     },
+    "bot-chain-mainnet": {
+      url: BOT_CHAIN_MAINNET_RPC_URL,
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+      chainId: 677,
+    },
   },
   etherscan: {
     // Etherscan V2 unified API — requires an etherscan.io key (not basescan.org)
@@ -84,6 +91,7 @@ const config: HardhatUserConfig = {
       "xlayer-testnet": OKLINK_API_KEY,
       "bot-chain": OKLINK_API_KEY,
       "bot-chain-testnet": "placeholder", // Blockscout does not require a real key
+      "bot-chain-mainnet": "placeholder",
     },
     customChains: [
       {
@@ -132,6 +140,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://explorer.datagram.network/api",
           browserURL: "https://explorer.datagram.network",
+        },
+      },
+      {
+        network: "bot-chain-mainnet",
+        chainId: 677,
+        urls: {
+          apiURL: "https://explorer.botchain.ai/api",
+          browserURL: "https://explorer.botchain.ai",
         },
       },
     ],
