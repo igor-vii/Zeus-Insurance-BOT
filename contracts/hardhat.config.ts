@@ -20,10 +20,6 @@ const BOT_CHAIN_RPC_URL =
   process.env.BOT_CHAIN_RPC_URL ?? "https://rpc.botanixlabs.com";
 const BOT_CHAIN_TESTNET_RPC_URL =
   process.env.BOT_CHAIN_TESTNET_RPC_URL ?? "https://node.botanixlabs.dev";
-const BOT_CHAIN_RPC_URL =
-  process.env.BOT_CHAIN_RPC_URL ?? "https://rpc.botanixlabs.com";
-const BOT_CHAIN_TESTNET_RPC_URL =
-  process.env.BOT_CHAIN_TESTNET_RPC_URL ?? "https://node.botanixlabs.dev";
 
 const config: HardhatUserConfig = {
   solidity: {
