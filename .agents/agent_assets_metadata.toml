@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "N1au7nzYRpLfMwJYi97uZ"
+uri = "file://Zeus_Insurance_Pitch_Deck.pdf"
+type = "pdf"
+title = "Zeus Insurance — Pitch Deck (финальный)"

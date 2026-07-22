@@ -1,0 +1,85 @@
+Шаг 1: Обновить agent.json
+Замени содержимое agent.json в корне репозитория на:
+
+json
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Zeus Insurance Protocol",
+  "description": "Decentralized insurance and escrow protocol for AI agents. Protects against API failures, technical downtime, and counterparty risk. Supports x402 payments for autonomous agent transactions.",
+  "image": "https://zeus-insurance-v2.netlify.app/logo.png",
+  "x402Support": true,
+  "active": true,
+  "services": [
+    {
+      "name": "web",
+      "endpoint": "https://zeus-insurance-v2.netlify.app"
+    },
+    {
+      "name": "API",
+      "endpoint": "https://api.zeus-insurance.com",
+      "version": "v1"
+    },
+    {
+      "name": "x402",
+      "endpoint": "https://api.zeus-insurance.com/api/x402/info"
+    },
+    {
+      "name": "agentWallet",
+      "endpoint": "eip155:8453:0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640"
+    }
+  ],
+  "registrations": [
+    {
+      "agentId": "1",
+      "agentRegistry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+    }
+  ],
+  "supportedTrust": [
+    "reputation",
+    "crypto-economic"
+  ],
+  "contracts": {
+    "networks": {
+      "base-mainnet": {
+        "chainId": 8453,
+        "addresses": {
+          "ZeusEscrowBOT": "0xad........79c",
+          "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        }
+      },
+      "base-sepolia": {
+        "chainId": 84532,
+        "addresses": {
+          "ZeusInsuranceV2": "0x1d9D90d2652296A2c89E3802d45B1F2132b30076",
+          "ZeusReserveV2": "0xF5010Afe1856be1F447f962Dfa8AA30c2Ed19a47",
+          "USDC": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+        }
+      }
+    }
+  }
+}
+Шаг 2: Закоммитить изменения
+bash
+git add agent.json
+git commit -m "feat: update agent.json for ERC-8004 v1"
+git push origin main
+Шаг 3: Зарегистрировать протокол в реестре ERC-8004
+Вызови функцию register(string agentURI) контракта 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 на Base Mainnet:
+
+bash
+cast send 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 \
+  "register(string)" \
+  "https://raw.githubusercontent.com/igor-vii/Zeus-Insurance-Escrow/main/agent.json" \
+  --private-key $PRIVATE_KEY \
+  --rpc-url https://mainnet.base.org
+Или через Hardhat:
+
+bash
+cd contracts
+npx hardhat run scripts/register-erc8004.ts --network base-mainnet
+Шаг 4: Проверить регистрацию
+bash
+cast call 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 \
+  "getAgent(address)" \
+  0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640 \
+  --rpc-url https://mainnet.base.org

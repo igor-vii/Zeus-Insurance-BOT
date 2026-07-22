@@ -1,0 +1,128 @@
+ИТОГОВЫЙ ПЛАН: ДЕЛАЕМ ВСЁ СРАЗУ
+Шаг	Что делаем	Файлы
+1	Добавить base-mainnet в hardhat.config.ts	contracts/hardhat.config.ts
+2	Развернуть ZeusEscrowBOT на Base Mainnet	contracts/scripts/deploy-escrow-bot.ts
+3	Добавить комиссию в эскроу (0.7% + $0.02)	contracts/contracts/ZeusEscrowBOT.sol
+4	Полная автоматизация (API вызывает контракт)	api-server/src/services/insurance.ts
+5	Обновить SDK	sdk/src/types/index.ts
+6	Обновить agent.json и README	Корень проекта
+🔧 ШАГ 3: ДОБАВЛЯЕМ КОМИССИЮ В ZeusEscrowBOT.sol
+solidity
+// Комиссия протокола
+uint256 public constant PROTOCOL_FIXED_FEE_USDC = 0.02 * 1e6; // $0.02 (6 decimals)
+uint256 public constant PROTOCOL_PERCENT_FEE_BPS = 70; // 0.7% = 70 базисных пунктов
+address public treasury;
+
+constructor(address _usdc, address _treasury) {
+    usdc = IERC20(_usdc);
+    treasury = _treasury;
+}
+
+function depositAndCreateAgreement(
+    address executor,
+    uint256 amount,
+    uint256 timeout
+) external returns (uint256 agreementId) {
+    // Расчёт комиссии
+    uint256 percentFee = (amount * PROTOCOL_PERCENT_FEE_BPS) / 10000;
+    uint256 totalFee = PROTOCOL_FIXED_FEE_USDC + percentFee;
+    require(amount > totalFee, "Amount must cover fee");
+
+    // Переводим комиссию в казну
+    usdc.transferFrom(msg.sender, treasury, totalFee);
+
+    // Блокируем остаток
+    uint256 amountToLock = amount - totalFee;
+    usdc.transferFrom(msg.sender, address(this), amountToLock);
+
+    // ... остальная логика
+}
+🔧 ШАГ 4: ПОЛНАЯ АВТОМАТИЗАЦИЯ (API вызывает контракт)
+Файл: api-server/src/services/insurance.ts
+typescript
+import { ethers } from "ethers";
+import { ZeusSDK } from "@zeus/sdk";
+
+export async function createPolicyFromX402(params: {
+  seller: string;
+  amount: bigint;
+  timeout: number;
+  retries: number;
+  payment: any;
+}): Promise<{ policyId: number; txHash: string }> {
+  const { seller, amount, timeout, retries, payment } = params;
+
+  if (!payment || !payment.verified) {
+    throw new Error("x402 payment required");
+  }
+
+  // Серверный кошелёк
+  const provider = new ethers.JsonRpcProvider(
+    process.env.RPC_URL || "https://mainnet.base.org"
+  );
+  const signer = new ethers.Wallet(
+    process.env.SERVER_PRIVATE_KEY!,
+    provider
+  );
+
+  const sdk = new ZeusSDK();
+  await sdk.connect("base-mainnet", signer);
+
+  const result = await sdk.insurance.createPolicy(
+    seller,
+    amount,
+    timeout,
+    retries
+  );
+
+  return {
+    policyId: result.policyId,
+    txHash: result.tx.hash,
+  };
+}
+Файл: api-server/src/routes/insurance.ts (обновить)
+typescript
+router.post("/prepare-buy", async (req, res) => {
+  try {
+    const { seller, amount, timeout, retries } = req.body;
+    const payment = await x402.getPayment(req);
+
+    if (payment && payment.verified) {
+      // ✅ АВТОМАТИЧЕСКИЙ РЕЖИМ
+      const result = await createPolicyFromX402({
+        seller,
+        amount: BigInt(amount),
+        timeout: Number(timeout),
+        retries: Number(retries),
+        payment,
+      });
+      return res.json({ success: true, mode: "automatic", ...result });
+    } else {
+      // 🟡 ГИБРИДНЫЙ РЕЖИМ (возвращаем calldata)
+      const calldata = await prepareCalldata({ seller, amount, timeout, retries });
+      return res.json({ success: true, mode: "hybrid", calldata });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+📋 ИТОГОВАЯ ИНСТРУКЦИЯ ДЛЯ REPLIT
+bash
+# 1. Обновить контракт (добавить комиссию)
+# 2. Обновить hardhat.config.ts (добавить base-mainnet)
+# 3. Развернуть на Base Mainnet
+cd contracts
+pnpm hardhat run scripts/deploy-escrow-bot.ts --network base-mainnet
+
+# 4. Обновить API сервер (автоматизация)
+cd ../api-server
+# Добавить SERVER_PRIVATE_KEY в .env
+
+# 5. Обновить SDK
+cd ../sdk
+# Добавить base-mainnet в NETWORKS
+
+# 6. Закоммитить всё
+git add .
+git commit -m "feat: escrow fee + mainnet + automation"
+git push origin main

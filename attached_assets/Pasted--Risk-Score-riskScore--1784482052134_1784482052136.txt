@@ -1,0 +1,137 @@
+Замкнуть цикл обратной связи для Risk Score (добавить riskScore в БД и обновлять после выплат)
+
+Шаг 1: Миграция БД — добавить колонку riskScore
+Файл: api-server/src/db/migrations/002_add_risk_score.sql
+
+sql
+-- Добавляем колонку riskScore в таблицу policies_cache
+ALTER TABLE policies_cache 
+ADD COLUMN IF NOT EXISTS risk_score DECIMAL(5, 2) DEFAULT 0.0;
+
+-- Добавляем индекс для быстрых запросов по seller
+CREATE INDEX IF NOT EXISTS idx_policies_cache_seller_risk_score 
+ON policies_cache (seller, risk_score);
+Запуск миграции:
+
+bash
+cd api-server
+pnpm run migrate
+Или если у нас нет отдельного скрипта миграции, выполни через psql:
+
+bash
+psql $DATABASE_URL -f src/db/migrations/002_add_risk_score.sql
+Шаг 2: Обновить Drizzle-схему
+Файл: api-server/src/db/schema.ts (добавить поле)
+
+typescript
+export const policies = pgTable("policies_cache", {
+  // ... существующие поля
+  riskScore: decimal("risk_score", { precision: 5, scale: 2 }).default("0.0"),
+});
+Шаг 3: Обновить sellerHistory.ts — использовать riskScore из БД
+Уже сделано в предыдущем шаге. Агент адаптировал запрос, чтобы он брал AVG(risk_score).
+
+Шаг 4: Добавить обновление Risk Score после выплаты
+Файл: api-server/src/services/riskUpdater.ts (новый файл)
+
+typescript
+import { db } from "../db/client";
+import { policies } from "../db/schema";
+import { eq, and } from "drizzle-orm";
+import { updateRiskScore } from "./pricing";
+
+/**
+ * Update Risk Score for a seller after a payout or completion.
+ * Called from the event listener when PolicyPaid or PolicyCompleted event is received.
+ */
+export async function updateSellerRiskScore(
+  sellerAddress: string,
+  payoutAmount: bigint,
+  wasSuccessful: boolean
+): Promise<number> {
+  try {
+    // 1. Получить текущий средний Risk Score продавца
+    const result = await db
+      .select({ avgRiskScore: sql<number>`AVG(${policies.riskScore})` })
+      .from(policies)
+      .where(eq(policies.seller, sellerAddress.toLowerCase()));
+
+    const currentAvg = result[0]?.avgRiskScore || 2.0;
+
+    // 2. Рассчитать payoutFactor
+    // 0–5.0: 0 = отличный результат (выплаты не было), 5.0 = провал
+    const payoutFactor = wasSuccessful ? 0.5 : 4.0;
+
+    // 3. Обновить Risk Score
+    const newRiskScore = await updateRiskScore(
+      sellerAddress,
+      payoutFactor,
+      currentAvg
+    );
+
+    // 4. Сохранить новый Risk Score в БД
+    await db
+      .update(policies)
+      .set({ riskScore: newRiskScore.toString() })
+      .where(
+        and(
+          eq(policies.seller, sellerAddress.toLowerCase()),
+          eq(policies.status, "completed")
+        )
+      );
+
+    return newRiskScore;
+  } catch (error) {
+    console.error("Failed to update seller risk score:", error);
+    return 2.0; // fallback
+  }
+}
+Шаг 5: Интегрировать в обработчик событий
+Файл: api-server/src/services/eventListener.ts (обновить)
+
+typescript
+import { updateSellerRiskScore } from "./riskUpdater";
+
+// В обработчике события ClaimPaid
+async function handleClaimPaid(event: any) {
+  const { policyId, buyer, amount } = event.args;
+  
+  // ... существующая логика
+  
+  // Обновить Risk Score продавца
+  const policy = await getPolicy(policyId);
+  if (policy) {
+    await updateSellerRiskScore(
+      policy.seller,
+      BigInt(amount),
+      false // выплата была → провал
+    );
+  }
+}
+
+// В обработчике события PolicyCompleted (если есть)
+async function handlePolicyCompleted(event: any) {
+  const { policyId, seller } = event.args;
+  
+  await updateSellerRiskScore(
+    seller,
+    0n,
+    true // успешное выполнение
+  );
+}
+Шаг 6: Тестирование
+bash
+# 1. Проверить миграцию
+psql $DATABASE_URL -c "\d policies_cache"
+
+# 2. Создать тестовый полис и дождаться выплаты
+# 3. Проверить, что riskScore обновился
+psql $DATABASE_URL -c "SELECT seller, risk_score FROM policies_cache WHERE seller = '0x...' ORDER BY created_at DESC LIMIT 5;"
+Шаг 7: Закоммитить
+bash
+git add api-server/src/db/migrations/002_add_risk_score.sql
+git add api-server/src/db/schema.ts
+git add api-server/src/services/riskUpdater.ts
+git add api-server/src/services/eventListener.ts
+git commit -m "feat: add risk_score column and Bayesian update on payouts"
+git push origin main

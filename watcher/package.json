@@ -1,0 +1,18 @@
+{
+  "name": "@zeus/watcher",
+  "version": "1.0.0",
+  "description": "Zeus Insurance oracle watcher node — monitors seller endpoints and submits signed observations",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx/esm src/index.ts",
+    "dev": "node --import tsx/esm --watch src/index.ts"
+  },
+  "dependencies": {
+    "ethers": "^6.17.0"
+  },
+  "devDependencies": {
+    "tsx": "catalog:",
+    "@types/node": "catalog:"
+  }
+}

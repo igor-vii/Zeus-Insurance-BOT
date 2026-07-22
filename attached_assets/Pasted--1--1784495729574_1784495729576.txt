@@ -1,0 +1,92 @@
+РАЗЗАГЛУШИВАНИЕ ЭСКРОУ (МОДЕЛЬ А)
+Выполнять ТОЛЬКО после успешного завершения Задачи 1.
+
+Тема: Заменить заглушки на реальную логику в MCP-сервере для эскроу
+
+Шаг 1: Обновить api-server/src/services/escrow.ts
+Замени заглушки на реальные вызовы SDK. Используй существующий ZeusSDK и методы для эскроу на Base Mainnet.
+
+Пример для prepareCreateEscrowCalldata:
+
+typescript
+import { ZeusSDK } from "@zeus/sdk";
+import { ethers } from "ethers";
+
+export async function prepareCreateEscrowCalldata(
+  executor: string,
+  amount: string,
+  timeout: number
+) {
+  // 1. Инициализируем SDK с серверным кошельком
+  const provider = new ethers.JsonRpcProvider(
+    process.env.RPC_URL_MAINNET || "https://mainnet.base.org"
+  );
+  const signer = new ethers.Wallet(process.env.SERVER_PRIVATE_KEY!, provider);
+  const sdk = new ZeusSDK();
+  await sdk.connect("base-mainnet", signer);
+
+  // 2. Генерируем calldata для создания сделки
+  const { agreementId, fee, calldata } = await sdk.escrow.prepareCreateAgreement(
+    executor,
+    BigInt(amount),
+    timeout
+  );
+
+  return {
+    agreementId: agreementId.toString(),
+    fee: fee.toString(),
+    calldata: {
+      to: calldata.to,
+      data: calldata.data,
+      value: calldata.value || "0",
+    },
+  };
+}
+Аналогично обнови:
+
+prepareConfirmEscrowCalldata → sdk.escrow.prepareConfirm(agreementId, proof)
+
+prepareRefundEscrowCalldata → sdk.escrow.prepareRefund(agreementId)
+
+getEscrowAgreementById → запрос к БД policies_cache (используй Drizzle)
+
+Шаг 2: Убедись, что SDK доступен
+В api-server/package.json должна быть зависимость:
+
+json
+{
+  "dependencies": {
+    "@zeus/sdk": "file:../sdk"
+  }
+}
+Шаг 3: Проверить переменные окружения
+В .env должны быть:
+
+env
+SERVER_PRIVATE_KEY=0x...
+RPC_URL_MAINNET=https://mainnet.base.org
+ZEUS_ESCROW_ADDRESS=0x8D10C2c6C92b613C1938fe532f0e391044e76188
+Шаг 4: Собрать и протестировать
+bash
+cd api-server
+pnpm run build
+pnpm run dev
+Протестируй создание эскроу через MCP:
+
+bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: test-escrow-1" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "create_escrow_agreement",
+      "arguments": {
+        "executor": "0x1234567890123456789012345678901234567890",
+        "amount": "1000000",
+        "timeout": 86400
+      }
+    },
+    "id": "1"
+  }'

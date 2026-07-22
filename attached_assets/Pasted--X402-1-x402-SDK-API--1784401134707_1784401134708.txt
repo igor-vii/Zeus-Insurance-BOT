@@ -1,0 +1,172 @@
+ИНТЕГРАЦИЯ X402: ПЛАН
+📋 ЧТО НУЖНО СДЕЛАТЬ
+Шаг	Что делаем	Файлы
+1	Установить x402 SDK в API-сервер	api-server/package.json
+2	Создать конфигурацию x402	api-server/src/config/x402.ts
+3	Добавить x402 middleware	api-server/src/app.ts
+4	Обновить эндпоинт создания полиса	api-server/src/routes/insurance.ts
+5	Добавить эндпоинт для верификации платежа	api-server/src/routes/x402.ts
+6	Обновить .env	api-server/.env
+📄 ФАЙЛ 1: api-server/package.json (добавить зависимости)
+json
+{
+  "dependencies": {
+    "@x402/sdk": "^0.1.0",
+    "express": "^4.18.2"
+  }
+}
+bash
+cd api-server
+pnpm add @x402/sdk
+📄 ФАЙЛ 2: api-server/src/config/x402.ts
+typescript
+import { X402Config } from "@x402/sdk";
+
+export const x402Config: X402Config = {
+  // Сеть Base Sepolia (testnet)
+  network: "eip155:84532",
+  
+  // Адрес казны Zeus (куда приходят платежи)
+  payTo: process.env.ZEUS_TREASURY || "0xВашКошелек",
+  
+  // Токен — USDC на Base Sepolia
+  asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  
+  // Базовый URL API
+  baseUrl: process.env.API_BASE_URL || "http://localhost:8080",
+  
+  // Фасилитатор x402 (Coinbase)
+  facilitatorUrl: "https://facilitator.x402.org",
+  
+  // Лимиты
+  maxAmount: "1000000", // 1 USDC (в базовых единицах, 6 decimals)
+  minAmount: "1000",    // 0.001 USDC
+};
+📄 ФАЙЛ 3: api-server/src/app.ts (добавить middleware)
+typescript
+import express from "express";
+import { x402Middleware } from "@x402/sdk/express";
+import { x402Config } from "./config/x402";
+import insuranceRoutes from "./routes/insurance";
+import x402Routes from "./routes/x402";
+
+const app = express();
+
+app.use(express.json());
+
+// Подключаем x402 middleware ко всем эндпоинтам страховки
+app.use("/api/insurance", x402Middleware(x402Config));
+
+// Роуты
+app.use("/api/insurance", insuranceRoutes);
+app.use("/api/x402", x402Routes);
+
+export default app;
+📄 ФАЙЛ 4: api-server/src/routes/insurance.ts (обновить эндпоинт)
+typescript
+import { Router } from "express";
+import { x402 } from "@x402/sdk";
+import { insuranceService } from "../services/insurance";
+
+const router = Router();
+
+// Создание полиса (поддерживает как x402, так и обычные запросы)
+router.post("/policy", async (req, res) => {
+  try {
+    const { seller, amount, timeout, retries } = req.body;
+    
+    // Проверяем, был ли платеж через x402
+    const payment = await x402.getPayment(req);
+    
+    if (payment) {
+      // Автоматический режим: платёж уже обработан через x402
+      const policyId = await insuranceService.createPolicyFromX402({
+        seller,
+        amount,
+        timeout,
+        retries,
+        payment,
+      });
+      return res.json({ success: true, policyId });
+    }
+    
+    // Ручной режим: вызываем контракт напрямую (через SDK)
+    const policyId = await insuranceService.createPolicyDirect({
+      seller,
+      amount,
+      timeout,
+      retries,
+      signer: req.signer, // из middleware
+    });
+    
+    res.json({ success: true, policyId });
+  } catch (error) {
+    console.error("Failed to create policy:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+export default router;
+📄 ФАЙЛ 5: api-server/src/routes/x402.ts
+typescript
+import { Router } from "express";
+import { x402 } from "@x402/sdk";
+
+const router = Router();
+
+// Эндпоинт для верификации статуса платежа
+router.get("/verify/:paymentId", async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const status = await x402.getPaymentStatus(paymentId);
+    res.json({ success: true, status });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Эндпоинт для получения информации о платеже (для агентов)
+router.get("/info", async (req, res) => {
+  res.json({
+    network: "base-sepolia",
+    asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    payTo: process.env.ZEUS_TREASURY,
+    supported: true,
+  });
+});
+
+export default router;
+📄 ФАЙЛ 6: api-server/.env (добавить)
+env
+ZEUS_TREASURY=0xВашКошелек
+API_BASE_URL=https://api.zeus-insurance.com
+📋 ИНСТРУКЦИЯ ДЛЯ REPLIT
+bash
+# 1. Установить x402
+cd api-server
+pnpm add @x402/sdk
+
+# 2. Создать файлы (скопировать код выше):
+# - src/config/x402.ts
+# - src/routes/x402.ts
+# - обновить src/app.ts
+# - обновить src/routes/insurance.ts
+
+# 3. Добавить переменные в .env
+echo "ZEUS_TREASURY=0xВашКошелек" >> .env
+echo "API_BASE_URL=http://localhost:8080" >> .env
+
+# 4. Пересобрать и запустить
+pnpm run build
+pnpm run start
+🧪 ТЕСТ X402 (из агента)
+bash
+curl -X POST http://localhost:8080/api/insurance/policy \
+  -H "Content-Type: application/json" \
+  -H "PAYMENT-SIGNATURE: <подпись>" \
+  -d '{
+    "seller": "0xSellerAddress...",
+    "amount": "5000000",
+    "timeout": 86400,
+    "retries": 3
+  }'

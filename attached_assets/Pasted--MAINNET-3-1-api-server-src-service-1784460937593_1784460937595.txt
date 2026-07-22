@@ -1,0 +1,75 @@
+АВТОМАТИЗАЦИЯ ЭСКРОУ НА MAINNET (3 ШАГА)
+Шаг 1: Создать сервис эскроу
+Файл: api-server/src/services/escrow.ts
+
+typescript
+import { ethers } from "ethers";
+import { ZeusSDK } from "@zeus/sdk";
+
+export async function createEscrowAgreement(params: {
+  executor: string;
+  amount: bigint;
+  timeout: number;
+}): Promise<{ agreementId: number; txHash: string }> {
+  const { executor, amount, timeout } = params;
+
+  const provider = new ethers.JsonRpcProvider(
+    process.env.RPC_URL_MAINNET || "https://mainnet.base.org"
+  );
+  const signer = new ethers.Wallet(process.env.SERVER_PRIVATE_KEY!, provider);
+
+  const sdk = new ZeusSDK();
+  await sdk.connect("base-mainnet", signer);
+
+  const result = await sdk.escrow.depositAndCreateAgreement(executor, amount, timeout);
+
+  return {
+    agreementId: result.agreementId,
+    txHash: result.tx.hash,
+  };
+}
+Шаг 2: Добавить эндпоинт
+Файл: api-server/src/routes/escrow.ts
+
+typescript
+import { Router } from "express";
+import { createEscrowAgreement } from "../services/escrow";
+
+const router = Router();
+
+router.post("/create", async (req, res) => {
+  try {
+    const { executor, amount, timeout } = req.body;
+    
+    // Проверяем x402-платёж
+    const payment = await x402.getPayment(req);
+    if (!payment || !payment.verified) {
+      return res.status(402).json({ error: "x402 payment required" });
+    }
+
+    // Автоматическое создание эскроу
+    const result = await createEscrowAgreement({
+      executor,
+      amount: BigInt(amount),
+      timeout: Number(timeout),
+    });
+
+    res.json({
+      mode: "automatic",
+      agreementId: result.agreementId,
+      txHash: result.txHash,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+export default router;
+Шаг 3: Подключить в app.ts
+typescript
+import escrowRoutes from "./routes/escrow";
+app.use("/api/escrow", escrowRoutes);
+🔧 ЧТО СДЕЛАТЬ В REPLIT (ОДНА КОМАНДА)
+Скопируйте и отправьте агенту:
+
+"Add automatic escrow creation on Base Mainnet. Create api-server/src/services/escrow.ts with createEscrowAgreement() using SERVER_PRIVATE_KEY. Add POST /api/escrow/create endpoint that checks x402 payment and automatically creates escrow agreement on Base Mainnet. Update app.ts to mount the route. Use sdk.escrow.depositAndCreateAgreement(). No manual signing."

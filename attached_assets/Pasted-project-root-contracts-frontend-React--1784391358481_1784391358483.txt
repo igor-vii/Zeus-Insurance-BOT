@@ -1,0 +1,931 @@
+project-root/
+├── contracts/          # смарт-контракты
+├── frontend/           # React-приложение
+├── backend/            # API-сервер
+├── sdk/                # САМОСТОЯТЕЛЬНЫЙ SDK
+│   ├── src/
+│   │   ├── core/
+│   │   │   ├── client.ts
+│   │   │   ├── escrow.ts
+│   │   │   └── insurance.ts
+│   │   ├── types/
+│   │   │   └── index.ts
+│   │   └── index.ts
+│   ├── tests/
+│   │   └── sdk.test.ts
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vitest.config.ts
+│   └── README.md
+├── package.json        # корневой (с pnpm workspace)
+├── pnpm-workspace.yaml # конфигурация workspace
+├── pnpm-lock.yaml
+└── ...
+{
+  "name": "zeus-insurance",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@8.15.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
+packages:
+  - 'contracts'
+  - 'backend'
+  - 'frontend'
+  - 'sdk'
+{
+  "name": "@zeus/sdk",
+  "version": "1.0.0",
+  "description": "Unified TypeScript SDK for Zeus Insurance Protocol — designed for AI agents.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "prepare": "pnpm build"
+  },
+  "keywords": ["zeus", "insurance", "escrow", "sdk", "blockchain", "ai-agents", "web3"],
+  "author": "Zeus Insurance",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.13.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+import { z } from "zod";
+import type { Signer, Provider } from "ethers";
+
+/* ──────────────────────────── Networks ──────────────────────────── */
+
+export const NetworkSchema = z.enum([
+  "mainnet",
+  "base-sepolia",
+  "sepolia",
+  "localhost",
+]);
+export type Network = z.infer<typeof NetworkSchema>;
+
+export interface NetworkConfig {
+  name: string;
+  chainId: number;
+  escrowAddress: string;
+  insuranceAddress: string;
+  usdcAddress: string;
+  rpcUrl: string;
+}
+
+export const NETWORKS: Record<Network, NetworkConfig> = {
+  mainnet: {
+    name: "mainnet",
+    chainId: 1,
+    escrowAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    insuranceAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    usdcAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    rpcUrl: "https://eth.llamarpc.com",
+  },
+  "base-sepolia": {
+    name: "base-sepolia",
+    chainId: 84532,
+    escrowAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    insuranceAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    rpcUrl: "https://sepolia.base.org",
+  },
+  sepolia: {
+    name: "sepolia",
+    chainId: 11155111,
+    escrowAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    insuranceAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    rpcUrl: "https://rpc.sepolia.org",
+  },
+  localhost: {
+    name: "localhost",
+    chainId: 31337,
+    escrowAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    insuranceAddress: "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    rpcUrl: "http://127.0.0.1:8545",
+  },
+};
+
+/* ──────────────────────────── Zod Schemas ──────────────────────────── */
+
+const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
+const BYTES32_REGEX = /^0x[a-fA-F0-9]{64}$/;
+
+export const DepositAndCreateAgreementSchema = z.object({
+  executor: z.string().regex(ADDRESS_REGEX, "Invalid Ethereum address for executor"),
+  amount: z.bigint().positive("Amount must be a positive bigint (in base units)"),
+  timeout: z.number().int("Timeout must be an integer").positive("Timeout must be positive (seconds)"),
+});
+
+export const ConfirmExecutionSchema = z.object({
+  agreementId: z.number().int("Agreement ID must be an integer").nonnegative("Agreement ID must be non-negative"),
+  proof: z.string().regex(BYTES32_REGEX, "Proof must be a 32-byte hex string (0x + 64 hex chars)"),
+});
+
+export const RequestRefundSchema = z.object({
+  agreementId: z.number().int("Agreement ID must be an integer").nonnegative("Agreement ID must be non-negative"),
+});
+
+export const CreatePolicySchema = z.object({
+  seller: z.string().regex(ADDRESS_REGEX, "Invalid Ethereum address for seller"),
+  amount: z.bigint().positive("Amount must be a positive bigint (in base units)"),
+  timeout: z.number().int("Timeout must be an integer").positive("Timeout must be positive (seconds)"),
+  retries: z.number().int("Retries must be an integer").nonnegative("Retries must be non-negative"),
+});
+
+export const ClaimPayoutSchema = z.object({
+  policyId: z.number().int("Policy ID must be an integer").nonnegative("Policy ID must be non-negative"),
+});
+
+export const GetPolicySchema = z.object({
+  policyId: z.number().int("Policy ID must be an integer").nonnegative("Policy ID must be non-negative"),
+});
+
+/* ──────────────────────────── Domain Types ──────────────────────────── */
+
+export enum AgreementStatus {
+  Pending = 0,
+  Executed = 1,
+  Refunded = 2,
+  Cancelled = 3,
+}
+
+export interface Agreement {
+  id: number;
+  buyer: string;
+  executor: string;
+  amount: bigint;
+  timeout: number;
+  createdAt: number;
+  status: AgreementStatus;
+  proof: string | null;
+}
+
+export interface Policy {
+  id: number;
+  buyer: string;
+  seller: string;
+  amount: bigint;
+  timeout: number;
+  retries: number;
+  claims: number;
+  active: boolean;
+  claimed: boolean;
+  createdAt: number;
+}
+
+export interface TransactionResult {
+  hash: string;
+  status: number;
+  blockNumber: number;
+  gasUsed: bigint;
+}
+
+/* ──────────────────────────── Error Classes ──────────────────────────── */
+
+export class ZeusError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = "ZeusError";
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+export class ZeusNotConnectedError extends ZeusError {
+  constructor(message = "SDK is not connected. Call client.connect(network, signer) first.") {
+    super(message, "NOT_CONNECTED");
+    this.name = "ZeusNotConnectedError";
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+export class ZeusValidationError extends ZeusError {
+  constructor(message: string, details?: unknown) {
+    super(message, "VALIDATION_ERROR", details);
+    this.name = "ZeusValidationError";
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+export class ZeusTransactionError extends ZeusError {
+  constructor(
+    message: string,
+    public readonly txHash?: string,
+    details?: unknown,
+  ) {
+    super(message, "TRANSACTION_ERROR", details);
+    this.name = "ZeusTransactionError";
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+export class ZeusContractError extends ZeusError {
+  constructor(message: string, details?: unknown) {
+    super(message, "CONTRACT_ERROR", details);
+    this.name = "ZeusContractError";
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+import { JsonRpcProvider } from "ethers";
+import type { Signer, Provider, ContractRunner } from "ethers";
+import {
+  NETWORKS,
+  type Network,
+  type NetworkConfig,
+  ZeusError,
+  ZeusNotConnectedError,
+  ZeusValidationError,
+} from "../types";
+
+export class ZeusClient {
+  private _signer: Signer | null = null;
+  private _provider: Provider | null = null;
+  private _network: NetworkConfig | null = null;
+  private _address: string | null = null;
+
+  async connect(network: string, signer: Signer): Promise<void> {
+    if (!(network in NETWORKS)) {
+      throw new ZeusValidationError(
+        `Unknown network "${network}". Supported networks: ${Object.keys(NETWORKS).join(", ")}`,
+      );
+    }
+    const networkConfig = NETWORKS[network as Network];
+
+    if (!signer || typeof signer.getAddress !== "function") {
+      throw new ZeusValidationError(
+        "Invalid signer: must be an ethers v6 Signer with a getAddress() method.",
+      );
+    }
+
+    let provider: Provider | null = null;
+    if (signer.provider) {
+      provider = signer.provider;
+    } else if (networkConfig.rpcUrl) {
+      provider = new JsonRpcProvider(networkConfig.rpcUrl);
+    }
+
+    let address: string;
+    try {
+      address = await signer.getAddress();
+    } catch (err) {
+      throw new ZeusError(
+        `Failed to retrieve address from signer: ${(err as Error).message}`,
+        "SIGNER_ERROR",
+        err,
+      );
+    }
+
+    this._network = networkConfig;
+    this._signer = signer;
+    this._provider = provider;
+    this._address = address;
+  }
+
+  isReady(): boolean {
+    return this._signer !== null && this._network !== null && this._address !== null;
+  }
+
+  getAddress(): string {
+    if (!this._address) {
+      throw new ZeusNotConnectedError();
+    }
+    return this._address;
+  }
+
+  getNetwork(): NetworkConfig {
+    if (!this._network) {
+      throw new ZeusNotConnectedError();
+    }
+    return this._network;
+  }
+
+  getSigner(): Signer {
+    if (!this._signer) {
+      throw new ZeusNotConnectedError();
+    }
+    return this._signer;
+  }
+
+  getProvider(): Provider | null {
+    return this._provider;
+  }
+
+  getRunner(): ContractRunner {
+    if (!this._signer) {
+      throw new ZeusNotConnectedError();
+    }
+    return this._signer as unknown as ContractRunner;
+  }
+
+  disconnect(): void {
+    this._signer = null;
+    this._provider = null;
+    this._network = null;
+    this._address = null;
+  }
+}
+import { Contract, Interface, type TransactionReceipt } from "ethers";
+import { ZeusClient } from "./client";
+import {
+  DepositAndCreateAgreementSchema,
+  ConfirmExecutionSchema,
+  RequestRefundSchema,
+  ZeusError,
+  ZeusNotConnectedError,
+  ZeusValidationError,
+  ZeusTransactionError,
+  type TransactionResult,
+  type Agreement,
+  AgreementStatus,
+} from "../types";
+
+const ESCROW_ABI = [
+  "function depositAndCreateAgreement(address executor, uint256 amount, uint256 timeout) external returns (uint256 agreementId)",
+  "function confirmExecution(uint256 agreementId, bytes32 proof) external returns (bool)",
+  "function requestRefund(uint256 agreementId) external returns (bool)",
+  "function getAgreement(uint256 agreementId) external view returns (tuple(uint256 id, address buyer, address executor, uint256 amount, uint256 timeout, uint256 createdAt, uint8 status, bytes32 proof))",
+  "event AgreementCreated(uint256 indexed agreementId, address indexed buyer, address indexed executor, uint256 amount, uint256 timeout)",
+  "event ExecutionConfirmed(uint256 indexed agreementId, bytes32 proof)",
+  "event RefundClaimed(uint256 indexed agreementId, address indexed buyer, uint256 amount)",
+] as const;
+
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+export class ZeusEscrow {
+  constructor(private readonly client: ZeusClient) {}
+
+  private getContract(): Contract {
+    if (!this.client.isReady()) {
+      throw new ZeusNotConnectedError();
+    }
+    const network = this.client.getNetwork();
+    return new Contract(network.escrowAddress, ESCROW_ABI, this.client.getRunner());
+  }
+
+  private buildTxResult(receipt: TransactionReceipt): TransactionResult {
+    return {
+      hash: receipt.hash,
+      status: receipt.status ?? 0,
+      blockNumber: receipt.blockNumber,
+      gasUsed: receipt.gasUsed,
+    };
+  }
+
+  private parseEventFromReceipt(
+    receipt: TransactionReceipt,
+    eventName: string,
+  ): { args: Record<string, unknown> } | null {
+    const iface = new Interface(ESCROW_ABI);
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog({
+          topics: [...log.topics],
+          data: log.data,
+        });
+        if (parsed && parsed.name === eventName) {
+          return { args: parsed.args as unknown as Record<string, unknown> };
+        }
+      } catch {
+        // Skip logs that don't match our ABI
+      }
+    }
+    return null;
+  }
+
+  async depositAndCreateAgreement(
+    executor: string,
+    amount: bigint,
+    timeout: number,
+  ): Promise<{ agreementId: number; tx: TransactionResult }> {
+    const parsed = DepositAndCreateAgreementSchema.safeParse({ executor, amount, timeout });
+    if (!parsed.success) {
+      throw new ZeusValidationError(
+        "Invalid parameters for depositAndCreateAgreement",
+        parsed.error.issues,
+      );
+    }
+
+    const contract = this.getContract();
+
+    try {
+      const tx = await contract.depositAndCreateAgreement(
+        parsed.data.executor,
+        parsed.data.amount,
+        parsed.data.timeout,
+      );
+      const receipt: TransactionReceipt | null = await tx.wait();
+      if (!receipt) {
+        throw new ZeusTransactionError("Transaction was submitted but no receipt was received.");
+      }
+
+      if (receipt.status === 0) {
+        throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+      }
+
+      const event = this.parseEventFromReceipt(receipt, "AgreementCreated");
+      if (!event) {
+        throw new ZeusTransactionError(
+          "AgreementCreated event not found in transaction logs.",
+          receipt.hash,
+        );
+      }
+
+      const agreementId = Number(event.args.agreementId);
+
+      return {
+        agreementId,
+        tx: this.buildTxResult(receipt),
+      };
+    } catch (err) {
+      if (err instanceof ZeusError) throw err;
+      throw new ZeusTransactionError(
+        `Failed to create escrow agreement: ${(err as Error).message}`,
+        undefined,
+        err,
+      );
+    }
+  }
+
+  async confirmExecution(agreementId: number, proof: string): Promise<TransactionResult> {
+    const parsed = ConfirmExecutionSchema.safeParse({ agreementId, proof });
+    if (!parsed.success) {
+      throw new ZeusValidationError(
+        "Invalid parameters for confirmExecution",
+        parsed.error.issues,
+      );
+    }
+
+    const contract = this.getContract();
+
+    try {
+      const tx = await contract.confirmExecution(parsed.data.agreementId, parsed.data.proof);
+      const receipt: TransactionReceipt | null = await tx.wait();
+      if (!receipt) {
+        throw new ZeusTransactionError("Transaction was submitted but no receipt was received.");
+      }
+
+      if (receipt.status === 0) {
+        throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+      }
+
+      return this.buildTxResult(receipt);
+    } catch (err) {
+      if (err instanceof ZeusError) throw err;
+      throw new ZeusTransactionError(
+        `Failed to confirm execution: ${(err as Error).message}`,
+        undefined,
+        err,
+      );
+    }
+  }
+
+  async requestRefund(agreementId: number): Promise<TransactionResult> {
+    const parsed = RequestRefundSchema.safeParse({ agreementId });
+    if (!parsed.success) {
+      throw new ZeusValidationError(
+        "Invalid parameters for requestRefund",
+        parsed.error.issues,
+      );
+    }
+
+    const contract = this.getContract();
+
+    try {
+      const tx = await contract.requestRefund(parsed.data.agreementId);
+      const receipt: TransactionReceipt | null = await tx.wait();
+      if (!receipt) {
+        throw new ZeusTransactionError("Transaction was submitted but no receipt was received.");
+      }
+
+      if (receipt.status === 0) {
+        throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+      }
+
+      return this.buildTxResult(receipt);
+    } catch (err) {
+      if (err instanceof ZeusError) throw err;
+      throw new ZeusTransactionError(
+        `Failed to request refund: ${(err as Error).message}`,
+        undefined,
+        err,
+      );
+    }
+  }
+
+  async getAgreement(agreementId: number): Promise<Agreement> {
+    if (!Number.isInteger(agreementId) || agreementId < 0) {
+      throw new ZeusValidationError("Agreement ID must be a non-negative integer.");
+    }
+
+    const contract = this.getContract();
+
+    try {
+      const result = await contract.getAgreement(agreementId);
+
+      const proofValue: string = String(result[7]);
+      return {
+        id: Number(result[0]),
+        buyer: String(result[1]),
+        executor: String(result[2]),
+        amount: BigInt(result[3]),
+        timeout: Number(result[4]),
+        createdAt: Number(result[5]),
+        status: Number(result[6]) as AgreementStatus,
+        proof: proofValue === ZERO_BYTES32 ? null : proofValue,
+      };
+    } catch (err) {
+      if (err instanceof ZeusError) throw err;
+      throw new ZeusTransactionError(
+        `Failed to fetch agreement: ${(err as Error).message}`,
+        undefined,
+        err,
+      );
+    }
+  }
+}
+import { Contract, Interface, type TransactionReceipt } from "ethers";
+import { ZeusClient } from "./client";
+import {
+  CreatePolicySchema,
+  ClaimPayoutSchema,
+  GetPolicySchema,
+  ZeusError,
+  ZeusNotConnectedError,
+  ZeusValidationError,
+  ZeusTransactionError,
+  type TransactionResult,
+  type Policy,
+} from "../types";
+
+const INSURANCE_ABI = [
+  "function createPolicy(address seller, uint256 amount, uint256 timeout, uint256 retries) external returns (uint256 policyId)",
+  "function claimPayout(uint256 policyId) external returns (bool)",
+  "function getPolicy(uint256 policyId) external view returns (tuple(uint256 id, address buyer, address seller, uint256 amount, uint256 timeout, uint256 retries, uint256 claims, bool active, bool claimed, uint256 createdAt))",
+  "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 timeout, uint256 retries)",
+  "event PayoutClaimed(uint256 indexed policyId, address indexed buyer, uint256 amount)",
+] as const;
+
+export class ZeusInsurance {
+  constructor(private readonly client: ZeusClient) {}
+
+  private getContract(): Contract {
+    if (!this.client.isReady()) {
+      throw new ZeusNotConnectedError();
+    }
+    const network = this.client.getNetwork();
+    return new Contract(network.insuranceAddress, INSURANCE_ABI, this.client.getRunner());
+  }
+
+  private buildTxResult(receipt: TransactionReceipt): TransactionResult {
+    return {
+      hash: receipt.hash,
+      status: receipt.status ?? 0,
+      blockNumber: receipt.blockNumber,
+      gasUsed: receipt.gasUsed,
+    };
+  }
+
+  private parseEventFromReceipt(
+    receipt: TransactionReceipt,
+    eventName: string,
+  ): { args: Record<string, unknown> } | null {
+    const iface = new Interface(INSURANCE_ABI);
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog({
+          topics: [...log.topics],
+          data: log.data,
+        });
+        if (parsed && parsed.name === eventName) {
+          return { args: parsed.args as unknown as Record<string, unknown> };
+        }
+      } catch {
+        // Skip non-matching logs
+      }
+    }
+    return null;
+  }
+
+  async createPolicy(
+    seller: string,
+    amount: bigint,
+    timeout: number,
+    retries: number,
+  ): Promise<{ policyId: number; tx: TransactionResult }> {
+    const parsed = CreatePolicySchema.safeParse({ seller, amount, timeout, retries });
+    if (!parsed.success) {
+      throw new ZeusValidationError(
+        "Invalid parameters for createPolicy",
+        parsed.error.issues,
+      );
+    }
+
+    const contract = this.getContract();
+
+    try {
+      const tx = await contract.createPolicy(
+        parsed.data.seller,
+        parsed.data.amount,
+        parsed.data.timeout,
+        parsed.data.retries,
+      );
+      const receipt: TransactionReceipt | null = await tx.wait();
+      if (!receipt) {
+        throw new ZeusTransactionError("Transaction was submitted but no receipt was received.");
+      }
+
+      if (receipt.status === 0) {
+        throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+      }
+
+      const event = this.parseEventFromReceipt(receipt, "PolicyCreated");
+      if (!event) {
+        throw new ZeusTransactionError(
+          "PolicyCreated event not found in transaction logs.",
+          receipt.hash,
+        );
+      }
+
+      const policyId = Number(event.args.policyId);
+
+      return {
+        policyId,
+        tx: this.buildTxResult(receipt),
+      };
+    } catch (err) {
+      if (err instanceof ZeusError) throw err;
+      throw new ZeusTransactionError(
+        `Failed to create insurance policy: ${(err as Error).message}`,
+        undefined,
+        err,
+      );
+    }
+  }
+
+  async claimPayout(policyId: number): Promise<TransactionResult> {
+    const parsed = ClaimPayoutSchema.safeParse({ policyId });
+    if (!parsed.success) {
+      throw new ZeusValidationError(
+        "Invalid parameters for claimPayout",
+        parsed.error.issues,
+      );
+    }
+
+    const contract = this.getContract();
+
+    try {
+      const tx = await contract.claimPayout(parsed.data.policyId);
+      const receipt: TransactionReceipt | null = await tx.wait();
+      if (!receipt) {
+        throw new ZeusTransactionError("Transaction was submitted but no receipt was received.");
+      }
+
+      if (receipt.status === 0) {
+        throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+      }
+
+      return this.buildTxResult(receipt);
+    } catch (err) {
+      if (err instanceof ZeusError) throw err;
+      throw new ZeusTransactionError(
+        `Failed to claim payout: ${(err as Error).message}`,
+        undefined,
+        err,
+      );
+    }
+  }
+
+  async getPolicy(policyId: number): Promise<Policy> {
+    const parsed = GetPolicySchema.safeParse({ policyId });
+    if (!parsed.success) {
+      throw new ZeusValidationError(
+        "Invalid parameters for getPolicy",
+        parsed.error.issues,
+      );
+    }
+
+    const contract = this.getContract();
+
+    try {
+      const result = await contract.getPolicy(parsed.data.policyId);
+
+      return {
+        id: Number(result[0]),
+        buyer: String(result[1]),
+        seller: String(result[2]),
+        amount: BigInt(result[3]),
+        timeout: Number(result[4]),
+        retries: Number(result[5]),
+        claims: Number(result[6]),
+        active: Boolean(result[7]),
+        claimed: Boolean(result[8]),
+        createdAt: Number(result[9]),
+      };
+    } catch (err) {
+      if (err instanceof ZeusError) throw err;
+      throw new ZeusTransactionError(
+        `Failed to fetch policy: ${(err as Error).message}`,
+        undefined,
+        err,
+      );
+    }
+  }
+}
+import type { Signer } from "ethers";
+import { ZeusClient } from "./core/client";
+import { ZeusEscrow } from "./core/escrow";
+import { ZeusInsurance } from "./core/insurance";
+
+export class ZeusSDK {
+  public readonly client: ZeusClient;
+  public readonly escrow: ZeusEscrow;
+  public readonly insurance: ZeusInsurance;
+
+  constructor() {
+    this.client = new ZeusClient();
+    this.escrow = new ZeusEscrow(this.client);
+    this.insurance = new ZeusInsurance(this.client);
+  }
+
+  async connect(network: string, signer: Signer): Promise<void> {
+    await this.client.connect(network, signer);
+  }
+
+  isReady(): boolean {
+    return this.client.isReady();
+  }
+}
+
+export { ZeusClient } from "./core/client";
+export { ZeusEscrow } from "./core/escrow";
+export { ZeusInsurance } from "./core/insurance";
+
+export {
+  NetworkSchema,
+  NETWORKS,
+  DepositAndCreateAgreementSchema,
+  ConfirmExecutionSchema,
+  RequestRefundSchema,
+  CreatePolicySchema,
+  ClaimPayoutSchema,
+  GetPolicySchema,
+  type Network,
+  type NetworkConfig,
+  type Agreement,
+  type Policy,
+  type TransactionResult,
+  AgreementStatus,
+  ZeusError,
+  ZeusNotConnectedError,
+  ZeusValidationError,
+  ZeusTransactionError,
+  ZeusContractError,
+} from "./types";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import {
+  ZeusSDK,
+  ZeusValidationError,
+  ZeusNotConnectedError,
+  ZeusError,
+  NETWORKS,
+  AgreementStatus,
+} from "../src";
+
+const MOCK_ADDRESS = "0x1234567890123456789012345678901234567890";
+const MOCK_EXECUTOR = "0xAbCdEf0123456789AbCdEf0123456789AbCdEf01";
+const MOCK_SELLER = "0xDEADBeefDEADBeefDEADBeefDEADBeefDEADBeef";
+const MOCK_PROOF = "0x" + "ab".repeat(32);
+
+function createMockSigner(): any {
+  return {
+    getAddress: vi.fn().mockResolvedValue(MOCK_ADDRESS),
+    provider: {
+      getNetwork: vi.fn().mockResolvedValue({ chainId: 1n }),
+      send: vi.fn(),
+    },
+  };
+}
+
+describe("ZeusSDK", () => {
+  let sdk: ZeusSDK;
+
+  beforeEach(() => {
+    sdk = new ZeusSDK();
+  });
+
+  describe("ZeusClient", () => {
+    it("should not be ready before connect", () => {
+      expect(sdk.client.isReady()).toBe(false);
+    });
+
+    it("should throw getAddress when not connected", () => {
+      expect(() => sdk.client.getAddress()).toThrow(ZeusNotConnectedError);
+    });
+
+    it("should connect to base-sepolia", async () => {
+      const signer = createMockSigner();
+      await sdk.client.connect("base-sepolia", signer);
+      expect(sdk.client.isReady()).toBe(true);
+      expect(sdk.client.getNetwork().chainId).toBe(84532);
+    });
+
+    it("should throw ZeusValidationError for unknown network", async () => {
+      const signer = createMockSigner();
+      await expect(sdk.client.connect("polygon", signer)).rejects.toThrow(
+        ZeusValidationError,
+      );
+    });
+
+    it("should disconnect properly", async () => {
+      const signer = createMockSigner();
+      await sdk.client.connect("base-sepolia", signer);
+      expect(sdk.client.isReady()).toBe(true);
+      sdk.client.disconnect();
+      expect(sdk.client.isReady()).toBe(false);
+    });
+  });
+
+  describe("NETWORKS", () => {
+    it("should have base-sepolia network", () => {
+      expect(NETWORKS["base-sepolia"]).toBeDefined();
+      expect(NETWORKS["base-sepolia"].chainId).toBe(84532);
+    });
+  });
+
+  describe("Error Classes", () => {
+    it("ZeusError should have correct properties", () => {
+      const err = new ZeusError("test", "TEST_CODE", { detail: "info" });
+      expect(err.message).toBe("test");
+      expect(err.code).toBe("TEST_CODE");
+      expect(err.name).toBe("ZeusError");
+    });
+  });
+});
+# @zeus/sdk
+
+Unified TypeScript SDK for Zeus Insurance Protocol — designed for AI agents.
+
+## Установка
+
+# 1. Создать папку SDK в корне проекта
+mkdir -p sdk/src/core
+mkdir -p sdk/src/types
+mkdir -p sdk/tests
+
+# 2. Создать все файлы (скопировать содержимое)
+# - корневой package.json
+# - pnpm-workspace.yaml
+# - sdk/package.json
+# - sdk/tsconfig.json
+# - sdk/vitest.config.ts
+# - sdk/README.md
+# - все файлы в sdk/src/ и sdk/tests/
+
+# 3. Установить все зависимости через pnpm (из корня)
+pnpm install
+
+# 4. Собрать SDK
+cd sdk
+pnpm run build
+
+# 5. Запустить тесты SDK
+pnpm run test
+
+# 6. Собрать всё сразу (из корня)
+cd ..
+pnpm run build
+
+# 7. Проверить, что сборка прошла успешно
+ls -la sdk/dist/
+{
+  "dependencies": {
+    "@zeus/sdk": "workspace:*"
+  }
+}
+import { ZeusSDK } from "@zeus/sdk";
+

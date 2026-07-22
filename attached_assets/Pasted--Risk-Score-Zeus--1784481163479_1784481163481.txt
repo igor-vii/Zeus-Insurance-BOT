@@ -1,0 +1,174 @@
+Интеграция динамического ценообразования (Risk Score) для Zeus-страхования (Модель Б)
+
+Внедри модуль расчёта Risk Score и Байесовского обновления в API-сервер для Модели Б (страхование). Это не относится к эскроу — там остаётся фиксированная комиссия 0.7% + $0.02.
+
+Шаг 1: Создать файлы
+Создай следующие файлы в api-server/src/:
+
+A. services/pricing.ts — расчёт Risk Score и премии:
+
+typescript
+import { ZeusValidationError } from "../types";
+
+export interface SellerHistory {
+  totalPolicies: number;
+  failedPolicies: number;
+  avgRiskScore: number;
+}
+
+/**
+ * Calculate Risk Score for a seller.
+ * Range: 0.1 – 5.0
+ * Formula: (oracleRisk * 0.4) + (executionRisk * 0.3) + (modelRisk * 0.2) + (gasVolatility * 0.1)
+ */
+export async function calculateRiskScore(
+  sellerAddress: string,
+  amount: bigint,
+  retries: number,
+  history: SellerHistory
+): Promise<number> {
+  // Валидация адреса
+  if (!sellerAddress.startsWith("0x") || sellerAddress.length !== 42) {
+    throw new ZeusValidationError("Invalid seller address format");
+  }
+
+  // 1. Oracle_Risk (40%) — пока константа 2.0, позже из GSA
+  const oracleRisk = 2.0;
+
+  // 2. Gas_Volatility (10%) — пока константа 2.0, позже из газового оракула
+  const gasVolatility = 2.0;
+
+  // 3. Execution_Risk (30%) — из истории продавца
+  let executionRisk = 2.0;
+  if (history.totalPolicies > 0) {
+    const failureRate = history.failedPolicies / history.totalPolicies;
+    executionRisk = 1.0 + (failureRate * 4.0); // 1.0 – 5.0
+  }
+
+  // 4. Model_Risk (20%) — из истории или retries
+  let modelRisk = 2.0;
+  if (history.avgRiskScore > 0) {
+    modelRisk = history.avgRiskScore;
+  } else {
+    modelRisk = Math.min(5.0, 1.0 + (retries * 0.5));
+  }
+
+  // Итоговый Risk Score
+  const rawScore = (oracleRisk * 0.4) + (executionRisk * 0.3) + (modelRisk * 0.2) + (gasVolatility * 0.1);
+  const riskScore = Math.max(0.1, Math.min(5.0, rawScore));
+
+  return riskScore;
+}
+
+/**
+ * Calculate premium based on amount and Risk Score.
+ * Formula: amount × (0.05 + 0.01 × riskScore)
+ */
+export async function calculatePremium(
+  amount: bigint,
+  riskScore: number
+): Promise<bigint> {
+  if (amount <= 0n) {
+    throw new ZeusValidationError("Amount must be greater than 0");
+  }
+  if (riskScore < 0.1 || riskScore > 5.0) {
+    throw new ZeusValidationError("Risk score must be between 0.1 and 5.0");
+  }
+
+  // (0.05 + 0.01 * riskScore) * 10000 → целое число для BigInt
+  const multiplier = Math.round((5 + riskScore) * 100);
+  const premiumAmount = (amount * BigInt(multiplier)) / 10000n;
+
+  return premiumAmount;
+}
+
+/**
+ * Bayesian update of Risk Score after payout.
+ * Formula: newScore = (currentScore × N + payoutFactor) / (N + 1), N = 10
+ */
+export async function updateRiskScore(
+  sellerAddress: string,
+  payoutFactor: number,
+  currentRiskScore: number
+): Promise<number> {
+  if (payoutFactor < 0 || payoutFactor > 5.0) {
+    throw new ZeusValidationError("Payout factor must be between 0 and 5.0");
+  }
+
+  const N = 10;
+  const newScore = (currentRiskScore * N + payoutFactor) / (N + 1);
+  return Math.max(0.1, Math.min(5.0, newScore));
+}
+B. services/sellerHistory.ts — получение истории из БД:
+
+typescript
+import { sql, count, avg } from "drizzle-orm";
+import { db } from "../db/client";
+import { policies } from "../db/schema";
+import { ZeusValidationError } from "../types";
+import { SellerHistory } from "./pricing";
+
+export async function getSellerHistory(sellerAddress: string): Promise<SellerHistory> {
+  if (!sellerAddress.startsWith("0x") || sellerAddress.length !== 42) {
+    throw new ZeusValidationError("Invalid seller address");
+  }
+
+  const result = await db
+    .select({
+      totalPolicies: count(),
+      failedPolicies: sql<number>`COUNT(CASE WHEN ${policies.status} = 'failed' THEN 1 END)`,
+      avgRiskScore: avg(policies.riskScore),
+    })
+    .from(policies)
+    .where(sql`${policies.sellerAddress} = ${sellerAddress.toLowerCase()}`);
+
+  if (!result[0] || result[0].totalPolicies === 0) {
+    return { totalPolicies: 0, failedPolicies: 0, avgRiskScore: 0 };
+  }
+
+  return {
+    totalPolicies: result[0].totalPolicies || 0,
+    failedPolicies: result[0].failedPolicies || 0,
+    avgRiskScore: result[0].avgRiskScore ? parseFloat(String(result[0].avgRiskScore)) : 0,
+  };
+}
+C. Обновить routes/insurance.ts — добавить расчёт в эндпоинт /prepare-buy:
+
+Добавь в POST /api/insurance/prepare-buy перед формированием calldata:
+
+typescript
+import { getSellerHistory } from "../services/sellerHistory";
+import { calculateRiskScore, calculatePremium } from "../services/pricing";
+
+// Внутри эндпоинта:
+const history = await getSellerHistory(seller);
+const riskScore = await calculateRiskScore(seller, BigInt(amount), retries, history);
+const premiumAmount = await calculatePremium(BigInt(amount), riskScore);
+
+// Теперь premiumAmount используй для calldata вместо фиксированного процента
+Шаг 2: Установить зависимости (если нет)
+bash
+cd api-server
+pnpm add drizzle-orm pg
+pnpm add -D @types/pg
+Шаг 3: Протестировать
+Отправь запрос:
+
+bash
+curl -X POST http://localhost:8080/api/insurance/prepare-buy \
+  -H "Content-Type: application/json" \
+  -d '{"seller":"0x1234567890123456789012345678901234567890","amount":"1000000","retries":2}'
+Ожидаемый ответ:
+
+json
+{
+  "success": true,
+  "riskScore": 2.0,
+  "premiumAmount": "70000",
+  "calldata": "0x..."
+}
+Шаг 4: Закоммитить
+bash
+git add api-server/src/services/pricing.ts api-server/src/services/sellerHistory.ts api-server/src/routes/insurance.ts
+git commit -m "feat: dynamic pricing (Risk Score) for Model B insurance"
+git push origin main

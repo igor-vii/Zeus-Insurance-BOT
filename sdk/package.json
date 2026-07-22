@@ -1,0 +1,37 @@
+{
+  "name": "@zeus/sdk",
+  "version": "1.0.0",
+  "description": "Unified TypeScript SDK for Zeus Insurance Protocol — designed for AI agents.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test tests/sdk.test.ts",
+    "test:watch": "node --import tsx --test --watch tests/sdk.test.ts",
+    "clean": "rm -rf dist",
+    "prepare": "pnpm build"
+  },
+  "keywords": ["zeus", "insurance", "escrow", "sdk", "blockchain", "ai-agents", "web3"],
+  "author": "Zeus Insurance",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.13.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

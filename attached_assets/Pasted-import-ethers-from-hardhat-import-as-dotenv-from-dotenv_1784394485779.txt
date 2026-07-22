@@ -1,0 +1,69 @@
+import { ethers } from "hardhat";
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+async function main() {
+  console.log("🚀 Starting deployment of ZeusInsuranceV2...");
+
+  const [deployer] = await ethers.getSigners();
+  console.log(`📡 Deploying with account: ${deployer.address}`);
+  console.log(`💰 Balance: ${ethers.formatEther(await deployer.provider.getBalance(deployer.address))} ETH`);
+
+  const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+
+  // 1. Деплой ZeusInsuranceV2
+  console.log("\n📦 Deploying ZeusInsuranceV2...");
+  const ZeusInsuranceV2 = await ethers.getContractFactory("ZeusInsuranceV2");
+  const insurance = await ZeusInsuranceV2.deploy(
+    USDC_ADDRESS,        // USDC токен
+    86_400,              // дефолтный таймаут (24 часа)
+    7,                   // базовая премия в процентах (7%)
+    1_000_000_000n,      // лимит на полис (1,000 USDC с 6 decimals)
+    1_000_000_000_000n   // дневной лимит выплат (1,000,000 USDC)
+  );
+  await insurance.waitForDeployment();
+
+  const insuranceAddress = await insurance.getAddress();
+  console.log(`✅ ZeusInsuranceV2 deployed to: ${insuranceAddress}`);
+
+  // 2. Верификация на BaseScan
+  console.log("\n🔍 Verifying contract on BaseScan...");
+  try {
+    await hre.run("verify:verify", {
+      address: insuranceAddress,
+      constructorArguments: [
+        USDC_ADDRESS,
+        86_400,
+        7,
+        1_000_000_000n,
+        1_000_000_000_000n
+      ],
+    });
+    console.log("✅ Contract verified on BaseScan");
+  } catch (error) {
+    console.log("⚠️ Verification failed (may be already verified):", error);
+  }
+
+  // 3. Обновление SDK с новым адресом
+  console.log("\n📝 Updating SDK with new contract address...");
+  const fs = require("fs");
+  const path = require("path");
+  const sdkTypesPath = path.join(__dirname, "../sdk/src/types/index.ts");
+  
+  let sdkContent = fs.readFileSync(sdkTypesPath, "utf8");
+  sdkContent = sdkContent.replace(
+    /escrowAddress: "0x[a-fA-F0-9]{40}"/,
+    `escrowAddress: "${insuranceAddress}"`
+  );
+  fs.writeFileSync(sdkTypesPath, sdkContent);
+  console.log(`✅ SDK updated with new address: ${insuranceAddress}`);
+
+  console.log("\n🎉 Deployment complete!");
+  console.log(`📝 Add to .env:\nZEUS_INSURANCE_ADDRESS=${insuranceAddress}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

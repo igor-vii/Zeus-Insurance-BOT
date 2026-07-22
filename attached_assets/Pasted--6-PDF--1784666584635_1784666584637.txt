@@ -1,0 +1,77 @@
+текст для 6-ти слайдов, которые вы можете скомпоновать в PDF. Я описываю, что должно быть на каждом слайде. Вы можете использовать готовый дизайн с лендинга как основу для первых двух слайдов.
+
+📄 Слайд 1: Титульный
+Заголовок: Zeus Insurance Protocol
+
+Подзаголовок: Trust Layer for the Agentic Economy
+
+Визуал: Логотип Зевса (щит с молнией) и фоновая графика (молнии, грозовое облако).
+
+Текст внизу: Decentralized insurance and escrow for AI agents.
+
+📄 Слайд 2: Проблема и Решение (как с лендинга)
+Заголовок: AI Agents Lose Millions on Failed API Calls
+
+Слева (Проблема):
+
+💸 API не отвечает → деньги списаны.
+
+⏳ Возврат требует доверия и времени.
+
+🧩 Нет стандартного способа застраховать сделку.
+
+Справа (Решение — Zeus):
+
+🛡️ Автоматическая страховка и эскроу.
+
+⚡ Молниеносные выплаты из резерва.
+
+🔌 Интеграция за 3 клика через SDK.
+
+📄 Слайд 3: Как это работает (анимированный пример)
+Заголовок: Automatic Protection in Action
+
+Визуал: Взять анимированный блок с лендинга (💳 Agent pays → ⚡ API fails → 🛡️ Zeus refunds).
+
+Текст под ним: "Agent pays $1.00. API fails. Zeus automatically refunds $0.93 to the agent's wallet."
+
+📄 Слайд 4: Продукты
+Заголовок: Two Products, One Trust Layer
+
+Слева: Модель А — Защищённая сделка (Escrow)
+
+💰 Блокировка средств до выполнения.
+
+🔒 0.7% + $0.02 комиссия.
+
+🛡️ Возврат депозита по таймауту.
+
+Справа: Модель Б — All-inclusive Insurance
+
+🔥 Покрывает API-сбои и ошибки сети.
+
+📊 Динамическая премия (Risk Score).
+
+⚡ Мгновенные выплаты из резерва.
+
+📄 Слайд 5: Технологии и Интеграция
+Заголовок: Built for the Agent Economy
+
+Логотипы/Иконки:
+
+X Layer Mainnet (наша сеть) — Chain 196.
+
+OKX AI Agent Marketplace — наш ASP #7202.
+
+x402 Protocol — платежи для агентов.
+
+MCP Server — 7 инструментов для интеграции.
+
+Текст: "Live on X Layer Mainnet. Ready for agents on OKX AI."
+
+📄 Слайд 6: Команда и Призыв
+Заголовок: Ready to Build the Future of Trust
+
+Текст: "Team with deep expertise in Solidity, TypeScript, and DeFi protocols. Deployed multiple smart contracts on Ethereum and Base mainnets."
+
+Кнопка/Призыв: Explore Zeus → (ссылка на лендинг или OKX AI).

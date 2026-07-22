@@ -1,0 +1,265 @@
+Шаг 1: Заменить контракт ZeusInsuranceV2.sol
+
+Замени код в contracts/ZeusInsuranceV2.sol на адаптированную версию:
+
+solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+interface IZeusReserve {
+    function executePayout(uint256 policyId, uint256 amount) external;
+}
+
+contract ZeusInsuranceV2 is Ownable {
+    using ECDSA for bytes32;
+    using SafeERC20 for IERC20;
+
+    enum PolicyStatus { Active, Claimed, Rejected, Expired }
+
+    struct Policy {
+        address buyer;
+        address seller;
+        uint256 amount;
+        uint256 timeout;
+        PolicyStatus status;
+        uint256 premium;
+    }
+
+    struct Observation {
+        bytes32 requestId;
+        uint256 timestamp;
+        uint8 status;        // 0=OK, 1=TIMEOUT, 2=ERROR_500, 3=LATE
+        bytes32 metadataHash;
+        uint256 nonce;
+        bytes signature;
+    }
+
+    struct Vote {
+        uint256 policyId;
+        uint8[] statuses;
+        mapping(address => bool) hasVoted;
+        bool resolved;
+    }
+
+    IERC20 public usdc;
+    IZeusReserve public reserve;
+
+    mapping(uint256 => Policy) public policies;
+    uint256 public policyCounter;
+    
+    mapping(bytes32 => Vote) public pendingVotes;
+    mapping(bytes32 => bool) public usedNonces;
+    mapping(uint256 => bytes32) public policyToRequestId;
+    
+    address[] public watchers;
+    mapping(address => bool) public isWatcher;
+
+    // Events
+    event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount);
+    event ObservationSubmitted(bytes32 indexed requestId, address indexed watcher, uint8 status);
+    event VoteResolved(bytes32 indexed requestId, uint8 decision, uint256 policyId);
+    event PayoutExecuted(uint256 indexed policyId, address indexed buyer, uint256 amount);
+    event ClaimRejected(uint256 indexed policyId);
+
+    constructor(address _usdc, address _reserve) Ownable(msg.sender) {
+        usdc = IERC20(_usdc);
+        reserve = IZeusReserve(_reserve);
+    }
+
+    // ==========================================
+    // Управление полисами
+    // ==========================================
+
+    function createPolicy(
+        address seller,
+        uint256 amount,
+        uint256 timeout,
+        uint256 premium
+    ) external returns (uint256) {
+        policyCounter++;
+        policies[policyCounter] = Policy({
+            buyer: msg.sender,
+            seller: seller,
+            amount: amount,
+            timeout: timeout,
+            status: PolicyStatus.Active,
+            premium: premium
+        });
+        emit PolicyCreated(policyCounter, msg.sender, seller, amount);
+        return policyCounter;
+    }
+
+    // ==========================================
+    // Логика Оракула (Наблюдатели)
+    // ==========================================
+
+    function addWatcher(address watcher) external onlyOwner {
+        require(!isWatcher[watcher], "Already a watcher");
+        isWatcher[watcher] = true;
+        watchers.push(watcher);
+    }
+
+    function removeWatcher(address watcher) external onlyOwner {
+        require(isWatcher[watcher], "Not a watcher");
+        isWatcher[watcher] = false;
+    }
+
+    function submitObservation(uint256 policyId, Observation calldata obs) external {
+        require(!usedNonces[obs.requestId], "Request ID already used/resolved");
+        require(block.timestamp >= obs.timestamp - 120 && block.timestamp <= obs.timestamp + 120, "Time window exceeded");
+
+        address watcher = _verifyObservation(obs);
+        require(isWatcher[watcher], "Invalid watcher signature");
+
+        Policy memory policy = policies[policyId];
+        require(policy.buyer != address(0), "Policy does not exist");
+        bytes32 expectedRequestId = keccak256(abi.encodePacked(policy.buyer, policy.seller, obs.timestamp));
+        require(obs.requestId == expectedRequestId, "Invalid requestId");
+
+        Vote storage vote = pendingVotes[obs.requestId];
+        
+        if (vote.policyId == 0) {
+            vote.policyId = policyId;
+            policyToRequestId[policyId] = obs.requestId;
+        } else {
+            require(vote.policyId == policyId, "Policy ID mismatch");
+        }
+
+        require(!vote.hasVoted[watcher], "Watcher already voted");
+        vote.hasVoted[watcher] = true;
+        vote.statuses.push(obs.status);
+
+        emit ObservationSubmitted(obs.requestId, watcher, obs.status);
+
+        if (vote.statuses.length >= 3) {
+            _executeVote(obs.requestId);
+        }
+    }
+
+    function _verifyObservation(Observation memory obs) internal view returns (address) {
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            obs.requestId,
+            obs.timestamp,
+            obs.status,
+            obs.metadataHash,
+            obs.nonce
+        ));
+        bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
+        return ethSignedMessageHash.recover(obs.signature);
+    }
+
+    function _executeVote(bytes32 requestId) internal {
+        Vote storage vote = pendingVotes[requestId];
+        require(!vote.resolved, "Vote already resolved");
+        
+        usedNonces[requestId] = true;
+        vote.resolved = true;
+
+        uint256 timeoutCount = 0;
+        for (uint i = 0; i < vote.statuses.length; i++) {
+            if (vote.statuses[i] == 1) {
+                timeoutCount++;
+            }
+        }
+
+        if (timeoutCount >= 2) {
+            emit VoteResolved(requestId, 1, vote.policyId);
+            _executePayout(vote.policyId);
+        } else {
+            emit VoteResolved(requestId, 0, vote.policyId);
+            _rejectClaim(vote.policyId);
+        }
+    }
+
+    function _executePayout(uint256 policyId) internal {
+        Policy storage policy = policies[policyId];
+        require(policy.status == PolicyStatus.Active, "Policy not active");
+        
+        policy.status = PolicyStatus.Claimed;
+        uint256 amount = policy.amount;
+        
+        reserve.executePayout(policyId, amount);
+        
+        emit PayoutExecuted(policyId, policy.buyer, amount);
+    }
+
+    function _rejectClaim(uint256 policyId) internal {
+        Policy storage policy = policies[policyId];
+        require(policy.status == PolicyStatus.Active, "Policy not active");
+        policy.status = PolicyStatus.Rejected;
+        emit ClaimRejected(policyId);
+    }
+}
+Шаг 2: Обновить скрипт деплоя
+
+Создай scripts/deploy-insurance-v2.ts:
+
+typescript
+import { ethers } from "hardhat";
+
+const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // Base Sepolia
+const RESERVE_ADDRESS = "0xF5010Afe1856be1F447f962Dfa8AA30c2Ed19a47"; // ZeusReserveV2
+
+async function main() {
+  const [deployer] = await ethers.getSigners();
+  console.log("Deploying with account:", deployer.address);
+
+  const ZeusInsuranceV2 = await ethers.getContractFactory("ZeusInsuranceV2");
+  const insurance = await ZeusInsuranceV2.deploy(USDC_ADDRESS, RESERVE_ADDRESS);
+  await insurance.waitForDeployment();
+  
+  const address = await insurance.getAddress();
+  console.log(`✅ ZeusInsuranceV2 deployed to: ${address}`);
+
+  // Добавить наблюдателей (из кошельков Hardhat)
+  const watchers = [
+    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+  ];
+
+  for (const watcher of watchers) {
+    const tx = await insurance.addWatcher(watcher);
+    await tx.wait();
+    console.log(`👁️ Added watcher: ${watcher}`);
+  }
+
+  console.log("🎉 Deployment complete!");
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+Шаг 3: Добавить тесты
+
+Скопируй тесты из файла, который я прислал ранее, в test/ZeusInsuranceV2.test.ts и адаптируй под USDC (используй моки).
+
+Шаг 4: Задеплоить на Sepolia
+
+bash
+npx hardhat run scripts/deploy-insurance-v2.ts --network sepolia
+Шаг 5: Обновить SDK
+
+В sdk/src/core/insurance.ts добавь метод:
+
+typescript
+async submitObservation(policyId: number, observation: Observation): Promise<TransactionResult> {
+    // Вызывает contract.submitObservation(policyId, observation)
+}
+Шаг 6: Обновить API
+
+В api-server/src/routes/insurance.ts добавь эндпоинт:
+
+typescript
+router.post("/observation", async (req, res) => {
+    const { policyId, observation } = req.body;
+    // Проверка подписи на сервере (опционально)
+    const result = await insuranceService.submitObservation(policyId, observation);
+    res.json(result);
+});
