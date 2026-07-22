@@ -83,7 +83,7 @@ const config: HardhatUserConfig = {
       xlayer: OKLINK_API_KEY,
       "xlayer-testnet": OKLINK_API_KEY,
       "bot-chain": OKLINK_API_KEY,
-      "bot-chain-testnet": OKLINK_API_KEY,
+      "bot-chain-testnet": "placeholder", // Blockscout does not require a real key
     },
     customChains: [
       {
@@ -130,8 +130,8 @@ const config: HardhatUserConfig = {
         network: "bot-chain-testnet",
         chainId: 968,
         urls: {
-          apiURL: "https://testnet.blockscout.botanixlabs.com/api",
-          browserURL: "https://testnet.blockscout.botanixlabs.com",
+          apiURL: "https://explorer.datagram.network/api",
+          browserURL: "https://explorer.datagram.network",
         },
       },
     ],
