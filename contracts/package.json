@@ -16,7 +16,9 @@
     "clean": "HARDHAT_DISABLE_TELEMETRY_PROMPT=true hardhat clean",
     "deploy:bot-chain": "HARDHAT_DISABLE_TELEMETRY_PROMPT=true hardhat run scripts/deploy-escrow-bot.ts --network bot-chain",
     "deploy:bot-chain-testnet": "HARDHAT_DISABLE_TELEMETRY_PROMPT=true hardhat run scripts/deploy-escrow-bot.ts --network bot-chain-testnet",
-    "verify:bot-chain": "HARDHAT_DISABLE_TELEMETRY_PROMPT=true hardhat verify --network bot-chain"
+    "deploy:bot-chain-mainnet": "HARDHAT_DISABLE_TELEMETRY_PROMPT=true hardhat run scripts/deploy-all.ts --network bot-chain-mainnet",
+    "verify:bot-chain": "HARDHAT_DISABLE_TELEMETRY_PROMPT=true hardhat verify --network bot-chain",
+    "verify:bot-chain-mainnet": "HARDHAT_DISABLE_TELEMETRY_PROMPT=true hardhat verify --network bot-chain-mainnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",

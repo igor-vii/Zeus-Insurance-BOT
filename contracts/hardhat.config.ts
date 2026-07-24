@@ -146,8 +146,8 @@ const config: HardhatUserConfig = {
         network: "bot-chain-mainnet",
         chainId: 677,
         urls: {
-          apiURL: "https://explorer.botchain.ai/api",
-          browserURL: "https://explorer.botchain.ai",
+          apiURL: "https://scan.botchain.ai/api",
+          browserURL: "https://scan.botchain.ai",
         },
       },
     ],

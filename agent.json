@@ -31,7 +31,7 @@
     },
     {
       "name": "agentWallet-bot",
-      "endpoint": "eip155:3637:0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640"
+      "endpoint": "eip155:677:0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640"
     }
   ],
   "registrations": [
@@ -86,7 +86,21 @@
           "ZeusEscrowBOT": "",
           "USDT": ""
         },
-        "note": "Deploy addresses to be filled after mainnet deployment"
+        "note": "Botanix Labs mainnet (chain 3637) — deploy addresses to be filled after deployment"
+      },
+      "bot-chain-mainnet": {
+        "chainId": 677,
+        "addresses": {
+          "ZeusInsuranceV2": "0x8D10C2c6C92b613C1938fe532f0e391044e76188",
+          "ZeusReserveV2": "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c",
+          "ZeusEscrowBOT": "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5",
+          "USDT": "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C"
+        },
+        "explorer": "https://scan.botchain.ai",
+        "rpc": "https://rpc.botchain.ai",
+        "deployedAt": "2026-07-24",
+        "deployer": "0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640",
+        "verified": true
       },
       "bot-chain-testnet": {
         "chainId": 3636,
@@ -108,13 +122,13 @@
     }
   },
   "x402": {
-    "network": "eip155:3637",
-    "asset": "",
+    "network": "eip155:677",
+    "asset": "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C",
     "modes": {
       "automatic": "Server broadcasts transaction on behalf of agent (requires SERVER_PRIVATE_KEY + x402 payment)",
       "hybrid": "Server returns signed calldata; agent signs and broadcasts locally"
     },
-    "note": "USDT address on BOT Chain — fill after deployment"
+    "note": "USDT on BOT Chain mainnet (chain 677): 0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C"
   },
   "interfaces": {
     "buyInsurance": {
