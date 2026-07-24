@@ -47,6 +47,22 @@ export declare class ZeusInsurance {
      * @param observation  Signed observation struct from the watcher.
      */
     submitObservation(policyId: number, observation: Observation): Promise<TransactionResult>;
+    /**
+     * Purchase a SlashingProtection policy for a BOT Chain validator.
+     * Premium = 5% (500 bps) of amount.
+     */
+    createSlashingProtectionPolicy(validator: string, amount: bigint, timeout: number): Promise<{
+        policyId: number;
+        tx: TransactionResult;
+    }>;
+    /**
+     * Report a confirmed slashing event for a SlashingProtection policy.
+     * Only callable by registered watcher addresses.
+     *
+     * @param policyId      The policy to pay out.
+     * @param evidenceHash  keccak256 of the slashing tx hash / evidence (0x-prefixed bytes32).
+     */
+    reportSlashing(policyId: number, evidenceHash: string): Promise<TransactionResult>;
     /** Read policy state from chain. */
     getPolicy(policyId: number): Promise<Policy>;
 }

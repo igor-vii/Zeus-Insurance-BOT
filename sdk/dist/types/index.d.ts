@@ -1,5 +1,5 @@
 import { z } from "zod";
-export declare const NetworkSchema: z.ZodEnum<["mainnet", "base-mainnet", "base-sepolia", "sepolia", "localhost", "x-layer"]>;
+export declare const NetworkSchema: z.ZodEnum<["mainnet", "base-mainnet", "base-sepolia", "sepolia", "localhost", "x-layer", "bot-chain-mainnet"]>;
 export type Network = z.infer<typeof NetworkSchema>;
 export interface NetworkConfig {
     name: string;
@@ -66,6 +66,29 @@ export declare const CreatePolicySchema: z.ZodObject<{
     timeout: number;
     seller: string;
     retries: number;
+}>;
+export declare const CreateSlashingProtectionSchema: z.ZodObject<{
+    validator: z.ZodString;
+    amount: z.ZodBigInt;
+    timeout: z.ZodNumber;
+}, "strip", z.ZodTypeAny, {
+    amount: bigint;
+    timeout: number;
+    validator: string;
+}, {
+    amount: bigint;
+    timeout: number;
+    validator: string;
+}>;
+export declare const ReportSlashingSchema: z.ZodObject<{
+    policyId: z.ZodNumber;
+    evidenceHash: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    policyId: number;
+    evidenceHash: string;
+}, {
+    policyId: number;
+    evidenceHash: string;
 }>;
 export declare const ClaimPayoutSchema: z.ZodObject<{
     policyId: z.ZodNumber;
@@ -172,6 +195,14 @@ export declare enum PolicyStatus {
     Expired = 3
 }
 /**
+ * On-chain CoverageType enum (ZeusInsuranceV2).
+ * Mirrors `enum CoverageType { Standard, SlashingProtection }`.
+ */
+export declare enum CoverageType {
+    Standard = 0,
+    SlashingProtection = 1
+}
+/**
  * Off-chain observation submitted by a watcher node.
  * Mirrors the `Observation` struct in ZeusInsuranceV2.
  */
@@ -209,6 +240,8 @@ export interface Policy {
     isPaidOut: boolean;
     /** Derived: status === PolicyStatus.Expired */
     isExpired: boolean;
+    /** Coverage type (Standard or SlashingProtection). */
+    coverageType?: CoverageType;
 }
 export interface TransactionResult {
     hash: string;

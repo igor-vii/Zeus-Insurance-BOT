@@ -1,5 +1,5 @@
 import { Contract, Interface } from "ethers";
-import { CreatePolicySchema, ClaimPayoutSchema, GetPolicySchema, SubmitObservationSchema, ZeusError, ZeusNotConnectedError, ZeusValidationError, ZeusTransactionError, ZeusContractError, PolicyStatus, } from "../types/index.js";
+import { CreatePolicySchema, CreateSlashingProtectionSchema, ReportSlashingSchema, ClaimPayoutSchema, GetPolicySchema, SubmitObservationSchema, ZeusError, ZeusNotConnectedError, ZeusValidationError, ZeusTransactionError, ZeusContractError, PolicyStatus, } from "../types/index.js";
 /**
  * ZeusInsuranceV2 ABI — covers both the original timeout-based interface
  * and the new oracle/watcher observation interface.
@@ -13,6 +13,11 @@ const INSURANCE_ABI = [
     "function buyInsurance(address seller, uint256 amount, uint256 timeoutSeconds, uint256 maxRetries) external",
     "function claimPayout(uint256 policyId) external",
     "function getPolicy(uint256 policyId) external view returns (tuple(address buyer, address seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint256 maxRetries, uint8 status))",
+    // ── SlashingProtection ─────────────────────────────────────────────────────
+    "function buySlashingProtection(address validator, uint256 amount, uint256 timeoutSeconds) external",
+    "function reportSlashing(uint256 policyId, bytes32 evidenceHash) external",
+    "function getCoverageType(uint256 policyId) external view returns (uint8)",
+    "function policyCoverageType(uint256) external view returns (uint8)",
     // ── Oracle observation ─────────────────────────────────────────────────────
     "function submitObservation(uint256 policyId, tuple(bytes32 requestId, uint256 timestamp, uint8 status, bytes32 metadataHash, uint256 nonce, bytes signature) obs) external",
     // ── Watcher management (owner-only) ────────────────────────────────────────
@@ -22,6 +27,7 @@ const INSURANCE_ABI = [
     "function isWatcher(address) external view returns (bool)",
     // ── Events ─────────────────────────────────────────────────────────────────
     "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline)",
+    "event SlashingReported(uint256 indexed policyId, address indexed validator, bytes32 indexed evidenceHash)",
     "event PayoutExecuted(uint256 indexed policyId, uint256 amount)",
     "event PolicyExpired(uint256 indexed policyId)",
     "event ObservationSubmitted(bytes32 indexed requestId, address indexed watcher, uint8 status)",
@@ -220,6 +226,86 @@ export class ZeusInsurance {
             throw new ZeusTransactionError(`Failed to submit observation: ${err.message}`, undefined, err);
         }
     }
+    /**
+     * Purchase a SlashingProtection policy for a BOT Chain validator.
+     * Premium = 5% (500 bps) of amount.
+     */
+    async createSlashingProtectionPolicy(validator, amount, timeout) {
+        const parsed = CreateSlashingProtectionSchema.safeParse({ validator, amount, timeout });
+        if (!parsed.success) {
+            throw new ZeusValidationError("Invalid parameters for createSlashingProtectionPolicy", parsed.error.issues);
+        }
+        const network = this.client.getNetwork();
+        if (!network.usdcAddress) {
+            throw new ZeusContractError(`USDT address not configured for "${network.name}".`);
+        }
+        const contract = this.getContract();
+        // Slashing premium = 5% of amount
+        const premium = (parsed.data.amount * 500n) / 10000n;
+        try {
+            const usdt = new Contract(network.usdcAddress, USDC_ABI, this.client.getRunner());
+            const owner = this.client.getAddress();
+            const allowance = await usdt.allowance(owner, network.insuranceAddress);
+            if (allowance < premium) {
+                const approveTx = await usdt.approve(network.insuranceAddress, premium);
+                await approveTx.wait();
+            }
+        }
+        catch (err) {
+            if (err instanceof ZeusError)
+                throw err;
+            throw new ZeusTransactionError(`USDT approval failed: ${err.message}`, undefined, err);
+        }
+        try {
+            const tx = await contract.buySlashingProtection(parsed.data.validator, parsed.data.amount, BigInt(parsed.data.timeout));
+            const receipt = await tx.wait();
+            if (!receipt)
+                throw new ZeusTransactionError("No receipt received.");
+            if (receipt.status === 0)
+                throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+            const event = this.parseEvent(receipt, "PolicyCreated");
+            if (!event) {
+                throw new ZeusTransactionError("PolicyCreated event not found.", receipt.hash);
+            }
+            return {
+                policyId: Number(event.args["policyId"]),
+                tx: this.buildTxResult(receipt),
+            };
+        }
+        catch (err) {
+            if (err instanceof ZeusError)
+                throw err;
+            throw new ZeusTransactionError(`Failed to create slashing protection policy: ${err.message}`, undefined, err);
+        }
+    }
+    /**
+     * Report a confirmed slashing event for a SlashingProtection policy.
+     * Only callable by registered watcher addresses.
+     *
+     * @param policyId      The policy to pay out.
+     * @param evidenceHash  keccak256 of the slashing tx hash / evidence (0x-prefixed bytes32).
+     */
+    async reportSlashing(policyId, evidenceHash) {
+        const parsed = ReportSlashingSchema.safeParse({ policyId, evidenceHash });
+        if (!parsed.success) {
+            throw new ZeusValidationError("Invalid parameters for reportSlashing", parsed.error.issues);
+        }
+        const contract = this.getContract();
+        try {
+            const tx = await contract.reportSlashing(BigInt(parsed.data.policyId), parsed.data.evidenceHash);
+            const receipt = await tx.wait();
+            if (!receipt)
+                throw new ZeusTransactionError("No receipt received.");
+            if (receipt.status === 0)
+                throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+            return this.buildTxResult(receipt);
+        }
+        catch (err) {
+            if (err instanceof ZeusError)
+                throw err;
+            throw new ZeusTransactionError(`Failed to report slashing: ${err.message}`, undefined, err);
+        }
+    }
     /** Read policy state from chain. */
     async getPolicy(policyId) {
         const parsed = GetPolicySchema.safeParse({ policyId });
@@ -228,7 +314,10 @@ export class ZeusInsurance {
         }
         const contract = this.getContract();
         try {
-            const p = await contract.getPolicy(BigInt(parsed.data.policyId));
+            const [p, rawCovType] = await Promise.all([
+                contract.getPolicy(BigInt(parsed.data.policyId)),
+                contract.getCoverageType(BigInt(parsed.data.policyId)),
+            ]);
             const status = Number(p.status);
             return {
                 id: parsed.data.policyId,
@@ -242,6 +331,7 @@ export class ZeusInsurance {
                 isActive: status === PolicyStatus.Active,
                 isPaidOut: status === PolicyStatus.Claimed,
                 isExpired: status === PolicyStatus.Expired,
+                coverageType: Number(rawCovType),
             };
         }
         catch (err) {

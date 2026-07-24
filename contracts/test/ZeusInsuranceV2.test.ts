@@ -145,18 +145,18 @@ describe("ZeusInsuranceV2", function () {
 
   // ── Constructor ─────────────────────────────────────────────────────────────
   describe("constructor", function () {
-    it("sets usdc and reserve addresses", async function () {
+    it("sets usdt and reserve addresses", async function () {
       const { insurance, token, reserve } = await deploy();
-      expect(await insurance.usdc()).to.equal(await token.getAddress());
+      expect(await insurance.usdt()).to.equal(await token.getAddress());
       expect(await insurance.reserve()).to.equal(await reserve.getAddress());
     });
 
-    it("reverts on zero usdc address", async function () {
+    it("reverts on zero usdt address", async function () {
       const { reserve } = await deploy();
       const Insurance = await ethers.getContractFactory("ZeusInsuranceV2");
       await expect(
         Insurance.deploy(ZeroAddress, await reserve.getAddress())
-      ).to.be.revertedWith("Invalid USDC address");
+      ).to.be.revertedWith("Invalid USDT address");
     });
 
     it("reverts on zero reserve address", async function () {
@@ -488,6 +488,145 @@ describe("ZeusInsuranceV2", function () {
       await expect(
         insurance.submitObservation(policyId, { requestId, timestamp: ts, status: 1, metadataHash, nonce: 10, signature: sig })
       ).to.be.revertedWith("Request ID already resolved");
+    });
+  });
+
+  // ── buySlashingProtection ─────────────────────────────────────────────────
+  describe("buySlashingProtection", function () {
+    it("creates a SlashingProtection policy and emits PolicyCreated", async function () {
+      const { insurance, buyer, seller } = await deploy();
+      const amount = usdc(100);
+      await expect(
+        insurance.connect(buyer).buySlashingProtection(seller.address, amount, 3600)
+      )
+        .to.emit(insurance, "PolicyCreated")
+        .withArgs(0n, buyer.address, seller.address, amount, (v: bigint) => v > 0n, (v: bigint) => v > 0n);
+    });
+
+    it("sets coverageType to SlashingProtection (1)", async function () {
+      const { insurance, buyer, seller } = await deploy();
+      await insurance.connect(buyer).buySlashingProtection(seller.address, usdc(100), 3600);
+      expect(await insurance.getCoverageType(0n)).to.equal(1n); // SlashingProtection
+    });
+
+    it("standard buyInsurance has coverageType Standard (0)", async function () {
+      const { insurance, buyer, seller } = await deploy();
+      await insurance.connect(buyer).buyInsurance(seller.address, usdc(100), 3600, 1);
+      expect(await insurance.getCoverageType(0n)).to.equal(0n); // Standard
+    });
+
+    it("premium is 5% (500 bps) of amount", async function () {
+      const { insurance, reserve, token, buyer, seller } = await deploy();
+      const amount          = usdc(100);
+      const expectedPremium = (amount * 500n) / 10_000n; // 5 USDC
+
+      const reserveBefore = await token.balanceOf(await reserve.getAddress());
+      await insurance.connect(buyer).buySlashingProtection(seller.address, amount, 3600);
+      const reserveAfter = await token.balanceOf(await reserve.getAddress());
+
+      expect(reserveAfter - reserveBefore).to.equal(expectedPremium);
+    });
+
+    it("stores maxRetries = 1 and correct fields", async function () {
+      const { insurance, buyer, seller } = await deploy();
+      const ts = await currentTimestamp();
+      await insurance.connect(buyer).buySlashingProtection(seller.address, usdc(100), 3600);
+      const p = await insurance.getPolicy(0n);
+
+      expect(p.buyer).to.equal(buyer.address);
+      expect(p.seller).to.equal(seller.address);
+      expect(p.amount).to.equal(usdc(100));
+      expect(p.maxRetries).to.equal(1n);
+      expect(p.status).to.equal(0); // Active
+      expect(p.retryDeadline).to.be.gt(BigInt(ts));
+    });
+
+    it("reverts for zero validator address", async function () {
+      const { insurance, buyer } = await deploy();
+      await expect(
+        insurance.connect(buyer).buySlashingProtection(ZeroAddress, usdc(100), 3600)
+      ).to.be.revertedWith("Invalid validator");
+    });
+
+    it("reverts for zero amount", async function () {
+      const { insurance, buyer, seller } = await deploy();
+      await expect(
+        insurance.connect(buyer).buySlashingProtection(seller.address, 0n, 3600)
+      ).to.be.revertedWith("Amount must be > 0");
+    });
+  });
+
+  // ── reportSlashing ────────────────────────────────────────────────────────
+  describe("reportSlashing", function () {
+    const EVIDENCE = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+
+    async function buySlashing(
+      insurance: ZeusInsuranceV2,
+      buyer: HardhatEthersSigner,
+      seller: HardhatEthersSigner,
+    ) {
+      const tx      = await insurance.connect(buyer).buySlashingProtection(seller.address, usdc(100), 3600);
+      const receipt = await tx.wait();
+      const iface   = insurance.interface;
+      for (const log of receipt!.logs) {
+        try {
+          const parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
+          if (parsed?.name === "PolicyCreated") return Number(parsed.args[0]);
+        } catch { /* skip */ }
+      }
+      throw new Error("PolicyCreated not found");
+    }
+
+    it("watcher can reportSlashing and emits SlashingReported + PayoutExecuted", async function () {
+      const { insurance, token, owner, buyer, seller, w1 } = await deploy();
+      await insurance.connect(owner).addWatcher(w1.address);
+
+      const policyId     = await buySlashing(insurance, buyer, seller);
+      const balanceBefore = await token.balanceOf(buyer.address);
+
+      await expect(insurance.connect(w1).reportSlashing(policyId, EVIDENCE))
+        .to.emit(insurance, "SlashingReported")
+        .withArgs(policyId, seller.address, EVIDENCE)
+        .and.to.emit(insurance, "PayoutExecuted")
+        .withArgs(policyId, usdc(100));
+
+      expect(await token.balanceOf(buyer.address)).to.equal(balanceBefore + usdc(100));
+    });
+
+    it("sets policy status to Claimed after report", async function () {
+      const { insurance, owner, buyer, seller, w1 } = await deploy();
+      await insurance.connect(owner).addWatcher(w1.address);
+      const policyId = await buySlashing(insurance, buyer, seller);
+      await insurance.connect(w1).reportSlashing(policyId, EVIDENCE);
+      const p = await insurance.getPolicy(policyId);
+      expect(p.status).to.equal(1); // Claimed
+    });
+
+    it("reverts if caller is not a watcher", async function () {
+      const { insurance, buyer, seller, other } = await deploy();
+      const policyId = await buySlashing(insurance, buyer, seller);
+      await expect(
+        insurance.connect(other).reportSlashing(policyId, EVIDENCE)
+      ).to.be.revertedWith("Only watchers can report slashing");
+    });
+
+    it("reverts for a standard (non-slashing) policy", async function () {
+      const { insurance, owner, buyer, seller, w1 } = await deploy();
+      await insurance.connect(owner).addWatcher(w1.address);
+      const policyId = await buyPolicy(insurance, buyer, seller, usdc(100), 3600, 1);
+      await expect(
+        insurance.connect(w1).reportSlashing(policyId, EVIDENCE)
+      ).to.be.revertedWith("Not a slashing policy");
+    });
+
+    it("reverts for a non-active policy (already claimed)", async function () {
+      const { insurance, owner, buyer, seller, w1 } = await deploy();
+      await insurance.connect(owner).addWatcher(w1.address);
+      const policyId = await buySlashing(insurance, buyer, seller);
+      await insurance.connect(w1).reportSlashing(policyId, EVIDENCE);
+      await expect(
+        insurance.connect(w1).reportSlashing(policyId, EVIDENCE)
+      ).to.be.revertedWith("Policy not active");
     });
   });
 

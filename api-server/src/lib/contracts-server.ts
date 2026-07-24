@@ -49,6 +49,35 @@ export const ZEUS_INSURANCE_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  // ── SlashingProtection ────────────────────────────────────────────────────────
+  {
+    inputs: [
+      { internalType: "address", name: "validator",      type: "address" },
+      { internalType: "uint256", name: "amount",         type: "uint256" },
+      { internalType: "uint256", name: "timeoutSeconds", type: "uint256" },
+    ],
+    name: "buySlashingProtection",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "policyId",     type: "uint256" },
+      { internalType: "bytes32", name: "evidenceHash", type: "bytes32" },
+    ],
+    name: "reportSlashing",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
+    name: "getCoverageType",
+    outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
+    stateMutability: "view",
+    type: "function",
+  },
   // ── Events ────────────────────────────────────────────────────────────────────
   {
     anonymous: false,
@@ -61,6 +90,16 @@ export const ZEUS_INSURANCE_ABI = [
       { indexed: false, internalType: "uint256", name: "retryDeadline", type: "uint256" },
     ],
     name: "PolicyCreated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true,  internalType: "uint256", name: "policyId",     type: "uint256" },
+      { indexed: true,  internalType: "address", name: "validator",    type: "address" },
+      { indexed: true,  internalType: "bytes32", name: "evidenceHash", type: "bytes32" },
+    ],
+    name: "SlashingReported",
     type: "event",
   },
   {

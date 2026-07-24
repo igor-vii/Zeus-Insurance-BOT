@@ -10,6 +10,7 @@ export const NetworkSchema = z.enum([
   "sepolia",
   "localhost",
   "x-layer",
+  "bot-chain-mainnet",
 ]);
 export type Network = z.infer<typeof NetworkSchema>;
 
@@ -83,6 +84,15 @@ export const NETWORKS: Record<Network, NetworkConfig> = {
     usdcAddress: "0x74b7f16337b8972027f6196a17a631ac6de26d22",
     rpcUrl: "https://rpc.xlayer.tech",
   },
+  "bot-chain-mainnet": {
+    name: "bot-chain-mainnet",
+    chainId: 677,
+    escrowAddress:    "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5",
+    insuranceAddress: "0x8D10C2c6C92b613C1938fe532f0e391044e76188",
+    reserveAddress:   "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c",
+    usdcAddress:      "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C", // USDT on BOT Chain
+    rpcUrl: "https://rpc.botchain.ai",
+  },
 };
 
 /* ──────────────────────────── Validation Schemas ──────────────────────────── */
@@ -130,6 +140,25 @@ export const CreatePolicySchema = z.object({
     .number()
     .int("Retries must be an integer")
     .nonnegative("Retries must be non-negative"),
+});
+
+export const CreateSlashingProtectionSchema = z.object({
+  validator: z.string().regex(ADDRESS_REGEX, "Invalid Ethereum address for validator"),
+  amount: z.bigint().positive("Amount must be a positive bigint (in token base units)"),
+  timeout: z
+    .number()
+    .int("Timeout must be an integer")
+    .positive("Timeout must be positive (seconds)"),
+});
+
+export const ReportSlashingSchema = z.object({
+  policyId: z
+    .number()
+    .int("Policy ID must be an integer")
+    .nonnegative("Policy ID must be non-negative"),
+  evidenceHash: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{64}$/, "evidenceHash must be a 0x-prefixed 32-byte hex string"),
 });
 
 export const ClaimPayoutSchema = z.object({
@@ -215,6 +244,15 @@ export enum PolicyStatus {
 }
 
 /**
+ * On-chain CoverageType enum (ZeusInsuranceV2).
+ * Mirrors `enum CoverageType { Standard, SlashingProtection }`.
+ */
+export enum CoverageType {
+  Standard           = 0,
+  SlashingProtection = 1,
+}
+
+/**
  * Off-chain observation submitted by a watcher node.
  * Mirrors the `Observation` struct in ZeusInsuranceV2.
  */
@@ -253,6 +291,8 @@ export interface Policy {
   isPaidOut: boolean;
   /** Derived: status === PolicyStatus.Expired */
   isExpired: boolean;
+  /** Coverage type (Standard or SlashingProtection). */
+  coverageType?: CoverageType;
 }
 
 export interface TransactionResult {

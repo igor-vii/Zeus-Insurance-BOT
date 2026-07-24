@@ -33,6 +33,9 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
     /// @notice On-chain lifecycle status for each policy.
     enum PolicyStatus { Active, Claimed, Rejected, Expired }
 
+    /// @notice Coverage type — Standard (API/uptime) or SlashingProtection (validator).
+    enum CoverageType { Standard, SlashingProtection }
+
     // ── Structs ───────────────────────────────────────────────────────────────
 
     struct Policy {
@@ -84,6 +87,12 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
     address[]                     public watcherList;
     mapping(address => bool)      public isWatcher;
 
+    // Coverage type per policy
+    mapping(uint256 => CoverageType)          public  policyCoverageType;
+
+    /// @dev Slashing protection premium: 5 % of coverage amount.
+    uint256 public constant SLASHING_PREMIUM_BPS = 500;
+
     // Oracle voting
     mapping(bytes32 => VoteTally)             public  pendingVotes;
     mapping(bytes32 => mapping(address => bool)) public hasVoted;
@@ -105,6 +114,13 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
 
     event WatcherAdded(address indexed watcher);
     event WatcherRemoved(address indexed watcher);
+
+    /// @notice Emitted when a watcher reports a slashing event for a SlashingProtection policy.
+    event SlashingReported(
+        uint256 indexed policyId,
+        address indexed validator,
+        bytes32 indexed evidenceHash
+    );
 
     event ObservationSubmitted(
         bytes32 indexed requestId,
@@ -176,6 +192,79 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
 
         emit PolicyCreated(nextPolicyId, msg.sender, seller, amount, premium, retryDeadline);
         nextPolicyId++;
+    }
+
+    /**
+     * @notice Purchase a SlashingProtection policy for a BOT Chain validator.
+     *
+     * Premium = amount × 500 bps / 10 000 (5 %).
+     * Sets coverageType = SlashingProtection; claim is triggered by a watcher
+     * calling reportSlashing() rather than by a timeout.
+     *
+     * @param validator       Validator address being protected against slashing.
+     * @param amount          Coverage amount in USDT (6-decimal units).
+     * @param timeoutSeconds  Maximum window in seconds (policy expires if no slashing occurs).
+     */
+    function buySlashingProtection(
+        address validator,
+        uint256 amount,
+        uint256 timeoutSeconds
+    ) external nonReentrant {
+        require(validator     != address(0), "Invalid validator");
+        require(amount         > 0,          "Amount must be > 0");
+        require(timeoutSeconds > 0,          "Timeout must be > 0");
+
+        uint256 premium       = (amount * SLASHING_PREMIUM_BPS) / 10_000;
+        uint256 retryDeadline = block.timestamp + timeoutSeconds;
+
+        require(
+            usdt.transferFrom(msg.sender, address(reserve), premium),
+            "Premium transfer failed"
+        );
+
+        policies[nextPolicyId] = Policy({
+            buyer:         msg.sender,
+            seller:        validator,
+            amount:        amount,
+            premium:       premium,
+            retryDeadline: retryDeadline,
+            maxRetries:    1,
+            status:        PolicyStatus.Active
+        });
+        policyCoverageType[nextPolicyId] = CoverageType.SlashingProtection;
+
+        emit PolicyCreated(nextPolicyId, msg.sender, validator, amount, premium, retryDeadline);
+        nextPolicyId++;
+    }
+
+    /**
+     * @notice Watcher reports a confirmed on-chain slashing event for a protected validator.
+     *
+     * Only registered watchers can call this. Immediately triggers a full payout
+     * to the policy buyer — no voting quorum needed (slashing evidence is deterministic).
+     *
+     * @param policyId      SlashingProtection policy to pay out.
+     * @param evidenceHash  keccak256 of the slashing transaction hash / evidence.
+     */
+    function reportSlashing(
+        uint256 policyId,
+        bytes32 evidenceHash
+    ) external nonReentrant {
+        require(isWatcher[msg.sender],                                  "Only watchers can report slashing");
+        Policy storage p = policies[policyId];
+        require(p.buyer  != address(0),                                 "Policy does not exist");
+        require(p.status == PolicyStatus.Active,                        "Policy not active");
+        require(policyCoverageType[policyId] == CoverageType.SlashingProtection, "Not a slashing policy");
+
+        address validator   = p.seller;
+        uint256 payoutAmount = p.amount;
+        address buyer        = p.buyer;
+
+        p.status = PolicyStatus.Claimed; // CEI
+
+        emit SlashingReported(policyId, validator, evidenceHash);
+        reserve.payClaim(policyId, buyer, payoutAmount);
+        emit PayoutExecuted(policyId, payoutAmount);
     }
 
     /**
@@ -324,6 +413,11 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
 
     function getPolicy(uint256 policyId) external view returns (Policy memory) {
         return policies[policyId];
+    }
+
+    /// @notice Returns the coverage type of a policy (0 = Standard, 1 = SlashingProtection).
+    function getCoverageType(uint256 policyId) external view returns (CoverageType) {
+        return policyCoverageType[policyId];
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────

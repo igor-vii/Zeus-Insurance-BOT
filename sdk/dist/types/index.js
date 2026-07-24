@@ -7,6 +7,7 @@ export const NetworkSchema = z.enum([
     "sepolia",
     "localhost",
     "x-layer",
+    "bot-chain-mainnet",
 ]);
 export const NETWORKS = {
     mainnet: {
@@ -64,6 +65,15 @@ export const NETWORKS = {
         usdcAddress: "0x74b7f16337b8972027f6196a17a631ac6de26d22",
         rpcUrl: "https://rpc.xlayer.tech",
     },
+    "bot-chain-mainnet": {
+        name: "bot-chain-mainnet",
+        chainId: 677,
+        escrowAddress: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5",
+        insuranceAddress: "0x8D10C2c6C92b613C1938fe532f0e391044e76188",
+        reserveAddress: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c",
+        usdcAddress: "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C", // USDT on BOT Chain
+        rpcUrl: "https://rpc.botchain.ai",
+    },
 };
 /* ──────────────────────────── Validation Schemas ──────────────────────────── */
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
@@ -105,6 +115,23 @@ export const CreatePolicySchema = z.object({
         .number()
         .int("Retries must be an integer")
         .nonnegative("Retries must be non-negative"),
+});
+export const CreateSlashingProtectionSchema = z.object({
+    validator: z.string().regex(ADDRESS_REGEX, "Invalid Ethereum address for validator"),
+    amount: z.bigint().positive("Amount must be a positive bigint (in token base units)"),
+    timeout: z
+        .number()
+        .int("Timeout must be an integer")
+        .positive("Timeout must be positive (seconds)"),
+});
+export const ReportSlashingSchema = z.object({
+    policyId: z
+        .number()
+        .int("Policy ID must be an integer")
+        .nonnegative("Policy ID must be non-negative"),
+    evidenceHash: z
+        .string()
+        .regex(/^0x[a-fA-F0-9]{64}$/, "evidenceHash must be a 0x-prefixed 32-byte hex string"),
 });
 export const ClaimPayoutSchema = z.object({
     policyId: z
@@ -167,6 +194,15 @@ export var PolicyStatus;
     PolicyStatus[PolicyStatus["Rejected"] = 2] = "Rejected";
     PolicyStatus[PolicyStatus["Expired"] = 3] = "Expired";
 })(PolicyStatus || (PolicyStatus = {}));
+/**
+ * On-chain CoverageType enum (ZeusInsuranceV2).
+ * Mirrors `enum CoverageType { Standard, SlashingProtection }`.
+ */
+export var CoverageType;
+(function (CoverageType) {
+    CoverageType[CoverageType["Standard"] = 0] = "Standard";
+    CoverageType[CoverageType["SlashingProtection"] = 1] = "SlashingProtection";
+})(CoverageType || (CoverageType = {}));
 /* ──────────────────────────── Error Classes ──────────────────────────── */
 export class ZeusError extends Error {
     code;

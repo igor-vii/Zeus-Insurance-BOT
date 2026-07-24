@@ -4,6 +4,7 @@ import { encodeFunctionData, isAddress } from "viem";
 import {
   isAutomaticModeAvailable,
   createPolicyFromServer,
+  createSlashingProtectionFromServer,
 } from "../services/insurance.js";
 import { getSellerHistory } from "../services/sellerHistory.js";
 import { calculateRiskScore, calculatePremium } from "../services/pricing.js";
@@ -362,6 +363,127 @@ router.post("/observation", async (req, res) => {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Failed to encode calldata", detail: msg });
   }
+});
+
+// ─── POST /api/slashing-protection ───────────────────────────────────────────
+// Purchase a SlashingProtection policy for a BOT Chain validator.
+// Premium = 5% (500 bps) of coverage amount.
+const slashingBuySchema = z.object({
+  validator:      z.string().refine(isAddress, "Invalid validator address"),
+  amount:         z.string().regex(/^\d+$/, "amount must be a non-negative integer string"),
+  timeoutSeconds: z.coerce.number().int().min(60).optional().default(86400),
+});
+
+router.post("/slashing-protection", async (req, res) => {
+  const parsed = slashingBuySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  const { validator, amount, timeoutSeconds } = parsed.data;
+  const amountBigInt = BigInt(amount);
+  // Premium: 5% of coverage
+  const premiumAmount = (amountBigInt * 500n) / 10_000n;
+
+  if (isAutomaticModeAvailable()) {
+    try {
+      const result = await createSlashingProtectionFromServer({
+        validator,
+        amount: amountBigInt,
+        timeout: timeoutSeconds,
+      });
+      res.json({
+        mode: "automatic",
+        policyId: result.policyId,
+        txHash: result.txHash,
+        coverageType: "SlashingProtection",
+        premiumAmount: premiumAmount.toString(),
+      });
+      return;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(502).json({ error: "Automatic mode failed", detail: msg });
+      return;
+    }
+  }
+
+  // Hybrid mode: return calldata for the caller to sign and broadcast
+  const data = encodeFunctionData({
+    abi: ZEUS_INSURANCE_ABI,
+    functionName: "buySlashingProtection",
+    args: [validator as `0x${string}`, amountBigInt, BigInt(timeoutSeconds)],
+  });
+
+  res.json({
+    mode: "hybrid",
+    to: ZEUS_INSURANCE_ADDRESS,
+    data,
+    coverageType: "SlashingProtection",
+    premiumAmount: premiumAmount.toString(),
+  });
+});
+
+// ─── POST /api/report-slashing ────────────────────────────────────────────────
+// Watcher reports a confirmed slashing event for a SlashingProtection policy.
+// In automatic mode the server broadcasts the tx; in hybrid mode returns calldata.
+const reportSlashingSchema = z.object({
+  policyId:     z.coerce.number().int().nonnegative(),
+  evidenceHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, "evidenceHash must be a 0x-prefixed 32-byte hex string"),
+});
+
+const REPORT_SLASHING_ABI = [
+  {
+    name: "reportSlashing",
+    type: "function",
+    inputs: [
+      { name: "policyId",     type: "uint256" },
+      { name: "evidenceHash", type: "bytes32" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+router.post("/report-slashing", async (req, res) => {
+  const parsed = reportSlashingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  const { policyId, evidenceHash } = parsed.data;
+
+  if (isAutomaticModeAvailable()) {
+    try {
+      const { ethers: ethersLib } = await import("ethers");
+      const { ZeusSDK } = await import("@zeus/sdk");
+      const rpcUrl = process.env["BOT_CHAIN_MAINNET_RPC_URL"] ??
+                     process.env["BASE_SEPOLIA_RPC_URL"] ?? "https://sepolia.base.org";
+      const provider = new ethersLib.JsonRpcProvider(rpcUrl);
+      const signer = new ethersLib.Wallet(process.env["SERVER_PRIVATE_KEY"]!, provider);
+      const sdk = new ZeusSDK();
+      await sdk.connect(
+        process.env["ZEUS_INSURANCE_NETWORK"] ?? process.env["ZEUS_NETWORK"] ?? "base-sepolia",
+        signer,
+      );
+      const result = await sdk.insurance.reportSlashing(policyId, evidenceHash);
+      res.json({ mode: "automatic", txHash: result.hash, policyId });
+      return;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(502).json({ error: "Automatic relay failed", detail: msg });
+      return;
+    }
+  }
+
+  const data = encodeFunctionData({
+    abi: REPORT_SLASHING_ABI,
+    functionName: "reportSlashing",
+    args: [BigInt(policyId), evidenceHash as `0x${string}`],
+  });
+
+  res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data, policyId });
 });
 
 export default router;

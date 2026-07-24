@@ -63,6 +63,34 @@ export async function createPolicyFromServer(params: {
 }
 
 /**
+ * Automatic mode — create a SlashingProtection policy on behalf of the agent.
+ */
+export async function createSlashingProtectionFromServer(params: {
+  validator: string;
+  amount: bigint;
+  timeout: number;
+}): Promise<{ policyId: number; txHash: string }> {
+  if (!SERVER_PRIVATE_KEY) {
+    throw new Error("SERVER_PRIVATE_KEY is not configured — automatic mode unavailable");
+  }
+
+  const rpcUrl = RPC_URLS[ZEUS_NETWORK] ?? RPC_URLS["base-sepolia"]!;
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const signer = new ethers.Wallet(SERVER_PRIVATE_KEY, provider);
+
+  const sdk = new ZeusSDK();
+  await sdk.connect(ZEUS_NETWORK, signer);
+
+  const result = await sdk.insurance.createSlashingProtectionPolicy(
+    params.validator,
+    params.amount,
+    params.timeout,
+  );
+
+  return { policyId: result.policyId, txHash: result.tx.hash };
+}
+
+/**
  * Hybrid mode — encode calldata for claimPayout so the agent can sign and
  * broadcast the transaction itself.
  *
