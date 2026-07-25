@@ -141,7 +141,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
             {/* Right: CTA + chain badge */}
             <div className="flex items-center gap-4">
-              <span className="text-xs font-mono text-white/25">X Layer Mainnet · Chain 196</span>
+              <span className="text-xs font-mono text-white/25">X Layer · Chain 196 &nbsp;·&nbsp; BOT Chain · Chain 677</span>
               <Link href="/dashboard">
                 <button className="flex items-center gap-1.5 px-4 py-2 rounded-full font-mono text-sm font-semibold text-black bg-primary hover:bg-primary/90 transition-colors">
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -152,11 +152,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="mt-8 pt-6 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <p className="text-xs text-white/20">© 2025 Zeus Insurance. All rights reserved.</p>
-            <a href="https://www.netlify.com" target="_blank" rel="noreferrer"
-              className="text-xs text-white/20 hover:text-white/50 transition-colors">
-              This site is powered by Netlify
-            </a>
+            <p className="text-xs text-white/20">© 2026 Zeus Insurance Protocol. All rights reserved.</p>
           </div>
         </div>
       </footer>
