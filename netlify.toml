@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm install && pnpm --filter @workspace/frontend run build"
+  command = "cd frontend && pnpm install && pnpm run build"
   publish = "frontend/dist/public"
 
 [build.environment]
