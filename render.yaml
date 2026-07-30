@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: zeus-insurance-frontend
+    runtime: static
+    buildCommand: cd frontend && pnpm install --no-frozen-lockfile && pnpm build
+    staticPublishPath: frontend/dist/public
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://zeus-insurance-bot-api.onrender.com/api
