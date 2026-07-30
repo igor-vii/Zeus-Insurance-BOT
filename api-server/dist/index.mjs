@@ -71430,7 +71430,7 @@ var init_lib2 = __esm({
 });
 
 // ../sdk/dist/types/index.js
-var NetworkSchema2, NETWORKS, ADDRESS_REGEX, DepositAndCreateAgreementSchema, ConfirmExecutionSchema, RequestRefundSchema, CreatePolicySchema, ClaimPayoutSchema, GetPolicySchema, BYTES32_REGEX, BYTES_HEX_REGEX, SubmitObservationSchema, AgreementStatus, PolicyStatus, ZeusError, ZeusNotConnectedError, ZeusValidationError, ZeusTransactionError, ZeusContractError;
+var NetworkSchema2, NETWORKS, ADDRESS_REGEX, DepositAndCreateAgreementSchema, ConfirmExecutionSchema, RequestRefundSchema, CreatePolicySchema, CreateSlashingProtectionSchema, ReportSlashingSchema, ClaimPayoutSchema, GetPolicySchema, BYTES32_REGEX, BYTES_HEX_REGEX, SubmitObservationSchema, AgreementStatus, PolicyStatus, CoverageType, ZeusError, ZeusNotConnectedError, ZeusValidationError, ZeusTransactionError, ZeusContractError;
 var init_types2 = __esm({
   "../sdk/dist/types/index.js"() {
     "use strict";
@@ -71441,7 +71441,8 @@ var init_types2 = __esm({
       "base-sepolia",
       "sepolia",
       "localhost",
-      "x-layer"
+      "x-layer",
+      "bot-chain-mainnet"
     ]);
     NETWORKS = {
       mainnet: {
@@ -71506,6 +71507,16 @@ var init_types2 = __esm({
         reserveAddress: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c",
         usdcAddress: "0x74b7f16337b8972027f6196a17a631ac6de26d22",
         rpcUrl: "https://rpc.xlayer.tech"
+      },
+      "bot-chain-mainnet": {
+        name: "bot-chain-mainnet",
+        chainId: 677,
+        escrowAddress: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5",
+        insuranceAddress: "0x8D10C2c6C92b613C1938fe532f0e391044e76188",
+        reserveAddress: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c",
+        usdcAddress: "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C",
+        // USDT on BOT Chain
+        rpcUrl: "https://rpc.botchain.ai"
       }
     };
     ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
@@ -71527,6 +71538,15 @@ var init_types2 = __esm({
       amount: external_exports.bigint().positive("Amount must be a positive bigint (in token base units)"),
       timeout: external_exports.number().int("Timeout must be an integer").positive("Timeout must be positive (seconds)"),
       retries: external_exports.number().int("Retries must be an integer").nonnegative("Retries must be non-negative")
+    });
+    CreateSlashingProtectionSchema = external_exports.object({
+      validator: external_exports.string().regex(ADDRESS_REGEX, "Invalid Ethereum address for validator"),
+      amount: external_exports.bigint().positive("Amount must be a positive bigint (in token base units)"),
+      timeout: external_exports.number().int("Timeout must be an integer").positive("Timeout must be positive (seconds)")
+    });
+    ReportSlashingSchema = external_exports.object({
+      policyId: external_exports.number().int("Policy ID must be an integer").nonnegative("Policy ID must be non-negative"),
+      evidenceHash: external_exports.string().regex(/^0x[a-fA-F0-9]{64}$/, "evidenceHash must be a 0x-prefixed 32-byte hex string")
     });
     ClaimPayoutSchema = external_exports.object({
       policyId: external_exports.number().int("Policy ID must be an integer").nonnegative("Policy ID must be non-negative")
@@ -71570,6 +71590,10 @@ var init_types2 = __esm({
       PolicyStatus2[PolicyStatus2["Rejected"] = 2] = "Rejected";
       PolicyStatus2[PolicyStatus2["Expired"] = 3] = "Expired";
     })(PolicyStatus || (PolicyStatus = {}));
+    (function(CoverageType2) {
+      CoverageType2[CoverageType2["Standard"] = 0] = "Standard";
+      CoverageType2[CoverageType2["SlashingProtection"] = 1] = "SlashingProtection";
+    })(CoverageType || (CoverageType = {}));
     ZeusError = class extends Error {
       code;
       details;
@@ -71915,6 +71939,11 @@ var init_insurance = __esm({
       "function buyInsurance(address seller, uint256 amount, uint256 timeoutSeconds, uint256 maxRetries) external",
       "function claimPayout(uint256 policyId) external",
       "function getPolicy(uint256 policyId) external view returns (tuple(address buyer, address seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint256 maxRetries, uint8 status))",
+      // ── SlashingProtection ─────────────────────────────────────────────────────
+      "function buySlashingProtection(address validator, uint256 amount, uint256 timeoutSeconds) external",
+      "function reportSlashing(uint256 policyId, bytes32 evidenceHash) external",
+      "function getCoverageType(uint256 policyId) external view returns (uint8)",
+      "function policyCoverageType(uint256) external view returns (uint8)",
       // ── Oracle observation ─────────────────────────────────────────────────────
       "function submitObservation(uint256 policyId, tuple(bytes32 requestId, uint256 timestamp, uint8 status, bytes32 metadataHash, uint256 nonce, bytes signature) obs) external",
       // ── Watcher management (owner-only) ────────────────────────────────────────
@@ -71924,6 +71953,7 @@ var init_insurance = __esm({
       "function isWatcher(address) external view returns (bool)",
       // ── Events ─────────────────────────────────────────────────────────────────
       "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline)",
+      "event SlashingReported(uint256 indexed policyId, address indexed validator, bytes32 indexed evidenceHash)",
       "event PayoutExecuted(uint256 indexed policyId, uint256 amount)",
       "event PolicyExpired(uint256 indexed policyId)",
       "event ObservationSubmitted(bytes32 indexed requestId, address indexed watcher, uint8 status)",
@@ -72105,6 +72135,82 @@ var init_insurance = __esm({
           throw new ZeusTransactionError(`Failed to submit observation: ${err2.message}`, void 0, err2);
         }
       }
+      /**
+       * Purchase a SlashingProtection policy for a BOT Chain validator.
+       * Premium = 5% (500 bps) of amount.
+       */
+      async createSlashingProtectionPolicy(validator, amount, timeout) {
+        const parsed = CreateSlashingProtectionSchema.safeParse({ validator, amount, timeout });
+        if (!parsed.success) {
+          throw new ZeusValidationError("Invalid parameters for createSlashingProtectionPolicy", parsed.error.issues);
+        }
+        const network = this.client.getNetwork();
+        if (!network.usdcAddress) {
+          throw new ZeusContractError(`USDT address not configured for "${network.name}".`);
+        }
+        const contract = this.getContract();
+        const premium = parsed.data.amount * 500n / 10000n;
+        try {
+          const usdt = new Contract(network.usdcAddress, USDC_ABI, this.client.getRunner());
+          const owner = this.client.getAddress();
+          const allowance = await usdt.allowance(owner, network.insuranceAddress);
+          if (allowance < premium) {
+            const approveTx = await usdt.approve(network.insuranceAddress, premium);
+            await approveTx.wait();
+          }
+        } catch (err2) {
+          if (err2 instanceof ZeusError)
+            throw err2;
+          throw new ZeusTransactionError(`USDT approval failed: ${err2.message}`, void 0, err2);
+        }
+        try {
+          const tx = await contract.buySlashingProtection(parsed.data.validator, parsed.data.amount, BigInt(parsed.data.timeout));
+          const receipt = await tx.wait();
+          if (!receipt)
+            throw new ZeusTransactionError("No receipt received.");
+          if (receipt.status === 0)
+            throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+          const event = this.parseEvent(receipt, "PolicyCreated");
+          if (!event) {
+            throw new ZeusTransactionError("PolicyCreated event not found.", receipt.hash);
+          }
+          return {
+            policyId: Number(event.args["policyId"]),
+            tx: this.buildTxResult(receipt)
+          };
+        } catch (err2) {
+          if (err2 instanceof ZeusError)
+            throw err2;
+          throw new ZeusTransactionError(`Failed to create slashing protection policy: ${err2.message}`, void 0, err2);
+        }
+      }
+      /**
+       * Report a confirmed slashing event for a SlashingProtection policy.
+       * Only callable by registered watcher addresses.
+       *
+       * @param policyId      The policy to pay out.
+       * @param evidenceHash  keccak256 of the slashing tx hash / evidence (0x-prefixed bytes32).
+       */
+      async reportSlashing(policyId, evidenceHash) {
+        const parsed = ReportSlashingSchema.safeParse({ policyId, evidenceHash });
+        if (!parsed.success) {
+          throw new ZeusValidationError("Invalid parameters for reportSlashing", parsed.error.issues);
+        }
+        const contract = this.getContract();
+        try {
+          const tx = await contract.reportSlashing(BigInt(parsed.data.policyId), parsed.data.evidenceHash);
+          const receipt = await tx.wait();
+          if (!receipt)
+            throw new ZeusTransactionError("No receipt received.");
+          if (receipt.status === 0)
+            throw new ZeusTransactionError("Transaction reverted.", receipt.hash);
+          return this.buildTxResult(receipt);
+        } catch (err2) {
+          if (err2 instanceof ZeusError)
+            throw err2;
+          throw new ZeusTransactionError(`Failed to report slashing: ${err2.message}`, void 0, err2);
+        }
+      }
       /** Read policy state from chain. */
       async getPolicy(policyId) {
         const parsed = GetPolicySchema.safeParse({ policyId });
@@ -72113,7 +72219,10 @@ var init_insurance = __esm({
         }
         const contract = this.getContract();
         try {
-          const p = await contract.getPolicy(BigInt(parsed.data.policyId));
+          const [p, rawCovType] = await Promise.all([
+            contract.getPolicy(BigInt(parsed.data.policyId)),
+            contract.getCoverageType(BigInt(parsed.data.policyId))
+          ]);
           const status = Number(p.status);
           return {
             id: parsed.data.policyId,
@@ -72126,7 +72235,8 @@ var init_insurance = __esm({
             status,
             isActive: status === PolicyStatus.Active,
             isPaidOut: status === PolicyStatus.Claimed,
-            isExpired: status === PolicyStatus.Expired
+            isExpired: status === PolicyStatus.Expired,
+            coverageType: Number(rawCovType)
           };
         } catch (err2) {
           if (err2 instanceof ZeusError)
@@ -100558,6 +100668,35 @@ var ZEUS_INSURANCE_ABI = [
     stateMutability: "view",
     type: "function"
   },
+  // ── SlashingProtection ────────────────────────────────────────────────────────
+  {
+    inputs: [
+      { internalType: "address", name: "validator", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+      { internalType: "uint256", name: "timeoutSeconds", type: "uint256" }
+    ],
+    name: "buySlashingProtection",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function"
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "policyId", type: "uint256" },
+      { internalType: "bytes32", name: "evidenceHash", type: "bytes32" }
+    ],
+    name: "reportSlashing",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function"
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
+    name: "getCoverageType",
+    outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
+    stateMutability: "view",
+    type: "function"
+  },
   // ── Events ────────────────────────────────────────────────────────────────────
   {
     anonymous: false,
@@ -100570,6 +100709,16 @@ var ZEUS_INSURANCE_ABI = [
       { indexed: false, internalType: "uint256", name: "retryDeadline", type: "uint256" }
     ],
     name: "PolicyCreated",
+    type: "event"
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "policyId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "validator", type: "address" },
+      { indexed: true, internalType: "bytes32", name: "evidenceHash", type: "bytes32" }
+    ],
+    name: "SlashingReported",
     type: "event"
   },
   {
@@ -100650,6 +100799,22 @@ async function createPolicyFromServer(params) {
     policyId: result.policyId,
     txHash: result.tx.hash
   };
+}
+async function createSlashingProtectionFromServer(params) {
+  if (!SERVER_PRIVATE_KEY) {
+    throw new Error("SERVER_PRIVATE_KEY is not configured \u2014 automatic mode unavailable");
+  }
+  const rpcUrl = RPC_URLS[ZEUS_NETWORK] ?? RPC_URLS["base-sepolia"];
+  const provider = new ethers_exports.JsonRpcProvider(rpcUrl);
+  const signer = new ethers_exports.Wallet(SERVER_PRIVATE_KEY, provider);
+  const sdk = new ZeusSDK();
+  await sdk.connect(ZEUS_NETWORK, signer);
+  const result = await sdk.insurance.createSlashingProtectionPolicy(
+    params.validator,
+    params.amount,
+    params.timeout
+  );
+  return { policyId: result.policyId, txHash: result.tx.hash };
 }
 function prepareClaimCalldata(policyId) {
   const data4 = encodeFunctionData({
@@ -107923,6 +108088,37 @@ async function getSellerHistory(sellerAddress) {
 }
 
 // src/services/pricing.ts
+async function fetchHumi(address2) {
+  const TIMEOUT_MS = 5e3;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const url = `https://api.globalscoreagent.com/v1/humi/${address2}`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`GSA API ${res.status}`);
+    const data4 = await res.json();
+    const humi = typeof data4.humi === "number" ? data4.humi : NaN;
+    if (isNaN(humi) || humi < 0 || humi > 100)
+      throw new Error("Invalid HUMI value");
+    return humi;
+  } catch {
+    return 50;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function getHumiMultiplier(humi) {
+  if (humi >= 80) return 0.7;
+  if (humi >= 60) return 0.85;
+  if (humi >= 40) return 1;
+  if (humi >= 20) return 1.5;
+  return 2;
+}
+function getHumiWeight(humi) {
+  if (humi > 50) return 0.25;
+  if (humi >= 30) return 0.2;
+  return 0.15;
+}
 async function calculateRiskScore(sellerAddress, _amount, retries, history) {
   if (!sellerAddress.startsWith("0x") || sellerAddress.length !== 42) {
     throw new Error("Invalid seller address format");
@@ -107940,7 +108136,12 @@ async function calculateRiskScore(sellerAddress, _amount, retries, history) {
   } else {
     modelRisk = Math.min(5, 1 + retries * 0.5);
   }
-  const rawScore = oracleRisk * 0.4 + executionRisk * 0.3 + modelRisk * 0.2 + gasVolatility * 0.1;
+  const humi = await fetchHumi(sellerAddress);
+  const humiMultiplier = getHumiMultiplier(humi);
+  const humiWeight = getHumiWeight(humi);
+  const existingWeight = 1 - humiWeight;
+  const baseScore = oracleRisk * 0.4 + executionRisk * 0.3 + modelRisk * 0.2 + gasVolatility * 0.1;
+  const rawScore = baseScore * existingWeight + humiMultiplier * humiWeight;
   return Math.max(0.1, Math.min(5, rawScore));
 }
 async function calculatePremium(amount, riskScore) {
@@ -108465,6 +108666,105 @@ router2.post("/observation", async (req, res) => {
     const msg = err2 instanceof Error ? err2.message : String(err2);
     res.status(500).json({ error: "Failed to encode calldata", detail: msg });
   }
+});
+var slashingBuySchema = external_exports.object({
+  validator: external_exports.string().refine(isAddress, "Invalid validator address"),
+  amount: external_exports.string().regex(/^\d+$/, "amount must be a non-negative integer string"),
+  timeoutSeconds: external_exports.coerce.number().int().min(60).optional().default(86400)
+});
+router2.post("/slashing-protection", async (req, res) => {
+  const parsed = slashingBuySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+  const { validator, amount, timeoutSeconds } = parsed.data;
+  const amountBigInt = BigInt(amount);
+  const premiumAmount = amountBigInt * 500n / 10000n;
+  if (isAutomaticModeAvailable()) {
+    try {
+      const result = await createSlashingProtectionFromServer({
+        validator,
+        amount: amountBigInt,
+        timeout: timeoutSeconds
+      });
+      res.json({
+        mode: "automatic",
+        policyId: result.policyId,
+        txHash: result.txHash,
+        coverageType: "SlashingProtection",
+        premiumAmount: premiumAmount.toString()
+      });
+      return;
+    } catch (err2) {
+      const msg = err2 instanceof Error ? err2.message : String(err2);
+      res.status(502).json({ error: "Automatic mode failed", detail: msg });
+      return;
+    }
+  }
+  const data4 = encodeFunctionData({
+    abi: ZEUS_INSURANCE_ABI,
+    functionName: "buySlashingProtection",
+    args: [validator, amountBigInt, BigInt(timeoutSeconds)]
+  });
+  res.json({
+    mode: "hybrid",
+    to: ZEUS_INSURANCE_ADDRESS,
+    data: data4,
+    coverageType: "SlashingProtection",
+    premiumAmount: premiumAmount.toString()
+  });
+});
+var reportSlashingSchema = external_exports.object({
+  policyId: external_exports.coerce.number().int().nonnegative(),
+  evidenceHash: external_exports.string().regex(/^0x[a-fA-F0-9]{64}$/, "evidenceHash must be a 0x-prefixed 32-byte hex string")
+});
+var REPORT_SLASHING_ABI = [
+  {
+    name: "reportSlashing",
+    type: "function",
+    inputs: [
+      { name: "policyId", type: "uint256" },
+      { name: "evidenceHash", type: "bytes32" }
+    ],
+    outputs: [],
+    stateMutability: "nonpayable"
+  }
+];
+router2.post("/report-slashing", async (req, res) => {
+  const parsed = reportSlashingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+  const { policyId, evidenceHash } = parsed.data;
+  if (isAutomaticModeAvailable()) {
+    try {
+      const { ethers: ethersLib } = await Promise.resolve().then(() => (init_lib2(), lib_exports));
+      const { ZeusSDK: ZeusSDK2 } = await Promise.resolve().then(() => (init_dist2(), dist_exports));
+      const rpcUrl = process.env["BOT_CHAIN_MAINNET_RPC_URL"] ?? process.env["BASE_SEPOLIA_RPC_URL"] ?? "https://sepolia.base.org";
+      const provider = new ethersLib.JsonRpcProvider(rpcUrl);
+      const signer = new ethersLib.Wallet(process.env["SERVER_PRIVATE_KEY"], provider);
+      const sdk = new ZeusSDK2();
+      await sdk.connect(
+        process.env["ZEUS_INSURANCE_NETWORK"] ?? process.env["ZEUS_NETWORK"] ?? "base-sepolia",
+        signer
+      );
+      const result = await sdk.insurance.reportSlashing(policyId, evidenceHash);
+      res.json({ mode: "automatic", txHash: result.hash, policyId });
+      return;
+    } catch (err2) {
+      const msg = err2 instanceof Error ? err2.message : String(err2);
+      res.status(502).json({ error: "Automatic relay failed", detail: msg });
+      return;
+    }
+  }
+  const data4 = encodeFunctionData({
+    abi: REPORT_SLASHING_ABI,
+    functionName: "reportSlashing",
+    args: [BigInt(policyId), evidenceHash]
+  });
+  res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data: data4, policyId });
 });
 var insurance_default = router2;
 
