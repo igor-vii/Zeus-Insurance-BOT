@@ -21,18 +21,18 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
   677: {
     insurance:   "0x8D10C2c6C92b613C1938fe532f0e391044e76188" as `0x${string}`,
     reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
-    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain
+    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain Mainnet
     escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
     deployBlock: 44_268_060n,
   },
 };
 
-/** Returns addresses for the given chainId, falling back to BOT Chain. */
+/** Returns addresses for the given chainId, falling back to BOT Chain Mainnet. */
 export function getContracts(chainId?: number) {
   return CONTRACT_ADDRESSES[(chainId as SupportedChainId) ?? 677] ?? CONTRACT_ADDRESSES[677];
 }
 
-// ─── Legacy single-chain exports (BOT Chain defaults) ─────────────────────────
+// ─── Legacy single-chain exports (BOT Chain Mainnet defaults) ─────────────────────────
 export const ZEUS_INSURANCE_ADDRESS = CONTRACT_ADDRESSES[677].insurance;
 export const ZEUS_RESERVE_ADDRESS   = CONTRACT_ADDRESSES[677].reserve;
 export const USDC_ADDRESS           = CONTRACT_ADDRESSES[677].token; // kept for compat
