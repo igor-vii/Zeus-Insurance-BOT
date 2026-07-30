@@ -6,9 +6,9 @@ import { ZeusSDK } from "@zeus/sdk";
 /** Maps wagmi chainId to Zeus SDK network name */
 function chainIdToNetwork(chainId: number): string {
   switch (chainId) {
-    case 677:  return "bot-chain";
-    case 196:  return "x-layer";
-    default:   return "bot-chain";
+    case 677:  return "bot-chain-mainnet"; // ← ИСПРАВЛЕНО
+    case 196:  return "x-layer";           // ← УТОЧНИ, КАК НАЗЫВАЕТСЯ В SDK
+    default:   return "bot-chain-mainnet"; // ← ИСПРАВЛЕНО
   }
 }
 
@@ -43,7 +43,10 @@ export function useZeusSDK() {
       .getSigner()
       .then((signer) => sdk.connect(network, signer))
       .then(() => { if (!cancelled) setIsReady(true); })
-      .catch(() => { if (!cancelled) setIsReady(false); });
+      .catch((err) => { 
+        console.error("SDK connection error:", err);
+        if (!cancelled) setIsReady(false); 
+      });
 
     return () => { cancelled = true; };
   }, [walletClient, chainId]);
