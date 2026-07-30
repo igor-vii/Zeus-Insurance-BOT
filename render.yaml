@@ -7,3 +7,14 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://zeus-insurance-bot-api.onrender.com/api
+
+  - type: web
+    name: zeus-insurance-bot-api
+    runtime: node
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @zeus/sdk build && pnpm --filter @workspace/api-server build
+    startCommand: node --enable-source-maps ./api-server/dist/index.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: DATABASE_URL
+        sync: false
