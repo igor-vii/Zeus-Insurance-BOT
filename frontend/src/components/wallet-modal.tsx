@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useConnect, useAccount, useSwitchChain } from "wagmi";
 import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
-import { baseSepolia } from "wagmi/chains";
+import { SUPPORTED_CHAINS } from "@/lib/wagmi";
 import { Wallet, X, Loader2, ExternalLink, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const wcProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined;
+
+const SUPPORTED_IDS = SUPPORTED_CHAINS.map((c) => c.id);
 
 function MetaMaskIcon() {
   return (
@@ -57,7 +59,7 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
   const { isConnected, chainId } = useAccount();
   const { switchChain, isPending: isSwitching, error: switchError } = useSwitchChain();
 
-  const isWrongNetwork = isConnected && chainId !== baseSepolia.id;
+  const isWrongNetwork = isConnected && !SUPPORTED_IDS.includes(chainId as typeof SUPPORTED_IDS[number]);
 
   const connectingId = variables?.connector
     ? (variables.connector as { id?: string }).id
@@ -84,6 +86,7 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
       description: "Any injected wallet (MetaMask, Brave, etc.)",
       icon: <MetaMaskIcon />,
       connector: injected({ shimDisconnect: true }),
+      installUrl: "https://metamask.io/download/",
     },
     {
       id: "coinbaseWallet",
@@ -91,6 +94,7 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
       description: "Coinbase Wallet app or extension",
       icon: <CoinbaseIcon />,
       connector: coinbaseWallet({ appName: "Zeus Insurance", appLogoUrl: "/favicon.svg" }),
+      installUrl: "https://www.coinbase.com/wallet/downloads",
     },
     ...(wcProjectId
       ? [{
@@ -102,11 +106,12 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
             projectId: wcProjectId,
             metadata: {
               name: "Zeus Insurance",
-              description: "Decentralized insurance for AI agent payments",
-              url: "https://zeus-insurance-v2.netlify.app",
-              icons: ["https://zeus-insurance-v2.netlify.app/favicon.svg"],
+              description: "Decentralized insurance for AI agents",
+              url: "https://zeus-insurance-bot.netlify.app",
+              icons: ["https://zeus-insurance-bot.netlify.app/favicon.svg"],
             },
           }),
+          installUrl: null,
         }]
       : []),
   ] as const;
@@ -116,7 +121,7 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
       { connector: option.connector },
       {
         onSuccess: (data) => {
-          if (data.chainId !== baseSepolia.id) {
+          if (!SUPPORTED_IDS.includes(data.chainId as typeof SUPPORTED_IDS[number])) {
             setView("switch-network");
           } else {
             closeModal();
@@ -125,15 +130,6 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
         onError: () => {
           setView("pick");
         },
-      },
-    );
-  }
-
-  function handleSwitchNetwork() {
-    switchChain(
-      { chainId: baseSepolia.id },
-      {
-        onSuccess: () => closeModal(),
       },
     );
   }
@@ -207,7 +203,7 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
 
                 <div className="px-5 py-3 border-t border-border/50 text-center">
                   <p className="text-[10px] text-muted-foreground/60 font-mono">
-                    Base Sepolia Testnet · Chain ID 84532
+                    X Layer (196) · BOT Chain (677)
                   </p>
                 </div>
               </>
@@ -230,26 +226,29 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
                 </div>
 
                 <div className="px-5 py-6 flex flex-col items-center gap-4 text-center">
-                  {/* Chain badge */}
                   <div className="w-16 h-16 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center">
                     <AlertTriangle className="w-8 h-8 text-yellow-500" />
                   </div>
 
                   <div>
                     <p className="font-semibold text-sm text-foreground mb-1">
-                      Wallet connected to wrong network
+                      Wallet connected to unsupported network
                     </p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Zeus Insurance runs on <span className="text-foreground font-medium">Base Sepolia</span> (chain ID 84532).
-                      Switch your wallet to continue.
+                      Zeus Insurance runs on{" "}
+                      <span className="text-foreground font-medium">X Layer Mainnet</span> or{" "}
+                      <span className="text-foreground font-medium">BOT Chain Mainnet</span>.
                     </p>
                   </div>
 
-                  {/* Target network pill */}
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-xs font-mono">
-                    <div className="w-2 h-2 rounded-full bg-primary" />
-                    Base Sepolia · Chain 84532
-                    <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-1" />
+                  <div className="flex flex-col gap-2 w-full">
+                    {SUPPORTED_CHAINS.map((chain) => (
+                      <div key={chain.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-xs font-mono">
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                        {chain.name} · Chain {chain.id}
+                        <CheckCircle2 className="w-3.5 h-3.5 text-primary ml-auto" />
+                      </div>
+                    ))}
                   </div>
 
                   {switchError && (
@@ -258,15 +257,22 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
                     </p>
                   )}
 
-                  <Button
-                    className="w-full font-mono uppercase tracking-wider text-xs"
-                    onClick={handleSwitchNetwork}
-                    disabled={isSwitching}
-                  >
-                    {isSwitching
-                      ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Switching…</>
-                      : "Switch to Base Sepolia"}
-                  </Button>
+                  <div className="flex gap-2 w-full">
+                    {SUPPORTED_CHAINS.map((chain) => (
+                      <Button
+                        key={chain.id}
+                        className="flex-1 font-mono uppercase tracking-wider text-xs"
+                        onClick={() => switchChain({ chainId: chain.id }, { onSuccess: () => closeModal() })}
+                        disabled={isSwitching}
+                        variant={chain.id === 677 ? "default" : "outline"}
+                      >
+                        {isSwitching
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : chain.id === 677 ? "BOT Chain" : "X Layer"
+                        }
+                      </Button>
+                    ))}
+                  </div>
 
                   <button
                     onClick={() => setView("pick")}

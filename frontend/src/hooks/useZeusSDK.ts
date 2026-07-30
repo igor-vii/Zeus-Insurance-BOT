@@ -1,21 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { useWalletClient } from "wagmi";
+import { useWalletClient, useChainId } from "wagmi";
 import { BrowserProvider, type Eip1193Provider } from "ethers";
 import { ZeusSDK } from "@zeus/sdk";
 
+/** Maps wagmi chainId to Zeus SDK network name */
+function chainIdToNetwork(chainId: number): string {
+  switch (chainId) {
+    case 677:  return "bot-chain";
+    case 196:  return "x-layer";
+    default:   return "bot-chain";
+  }
+}
+
 /**
  * Provides a connected ZeusSDK instance backed by the active wagmi wallet.
- *
- * The SDK is kept stable across renders (useRef) and re-connected whenever
- * the wagmi WalletClient changes (account switch, network switch).
- *
- * Usage:
- *   const { sdk, isReady } = useZeusSDK();
- *   if (isReady) await sdk.insurance.createPolicy(...);
+ * Re-connects whenever the wallet or chain changes.
  */
 export function useZeusSDK() {
   const { data: walletClient } = useWalletClient();
-  // Stable SDK instance — never recreated
+  const chainId = useChainId();
   const sdkRef = useRef<ZeusSDK>(new ZeusSDK());
   const [isReady, setIsReady] = useState(false);
 
@@ -30,19 +33,20 @@ export function useZeusSDK() {
 
     let cancelled = false;
 
-    // viem WalletClient.transport is EIP-1193 compatible — use it as the ethers provider
     const provider = new BrowserProvider(
       walletClient.transport as unknown as Eip1193Provider,
     );
 
+    const network = chainIdToNetwork(chainId);
+
     provider
       .getSigner()
-      .then((signer) => sdk.connect("base-sepolia", signer))
+      .then((signer) => sdk.connect(network, signer))
       .then(() => { if (!cancelled) setIsReady(true); })
       .catch(() => { if (!cancelled) setIsReady(false); });
 
     return () => { cancelled = true; };
-  }, [walletClient]);
+  }, [walletClient, chainId]);
 
   return { sdk: sdkRef.current, isReady };
 }

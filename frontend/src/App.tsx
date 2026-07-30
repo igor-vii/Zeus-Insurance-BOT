@@ -16,6 +16,7 @@ import Docs from '@/pages/docs';
 import Contacts from '@/pages/contacts';
 import Dashboard from '@/pages/dashboard';
 import BuyInsurance from '@/pages/buy';
+import SlashingProtection from '@/pages/slashing';
 import Policies from '@/pages/policies';
 import Reserve from '@/pages/reserve';
 import EscrowPage from '@/pages/escrow';
@@ -43,12 +44,15 @@ function Router() {
         <PublicLayout><Contacts /></PublicLayout>
       </Route>
 
-      {/* App pages — existing sidebar layout */}
+      {/* App pages */}
       <Route path="/dashboard">
         <Layout><Dashboard /></Layout>
       </Route>
       <Route path="/buy">
         <Layout><BuyInsurance /></Layout>
+      </Route>
+      <Route path="/slashing">
+        <Layout><SlashingProtection /></Layout>
       </Route>
       <Route path="/policies">
         <Layout><Policies /></Layout>

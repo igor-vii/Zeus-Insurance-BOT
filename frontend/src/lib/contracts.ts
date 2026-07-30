@@ -1,16 +1,42 @@
-// ─── Deployed contract addresses (Base Sepolia testnet) ──────────────────────
-export const ZEUS_INSURANCE_ADDRESS =
-  "0x1d9D90d2652296A2c89E3802d45B1F2132b30076" as const;
+import type { SupportedChainId } from "@/lib/wagmi";
 
-/** First block to scan for PolicyCreated logs (ZeusInsuranceV2 deploy block on Base Sepolia). */
-export const INSURANCE_DEPLOY_BLOCK = 44_313_000n;
+// ─── Per-network contract addresses ──────────────────────────────────────────
 
-export const ZEUS_RESERVE_ADDRESS =
-  "0xF5010Afe1856be1F447f962Dfa8AA30c2Ed19a47" as const;
+export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
+  insurance: `0x${string}`;
+  reserve:   `0x${string}`;
+  token:     `0x${string}`;
+  escrow:    `0x${string}`;
+  deployBlock: bigint;
+}> = {
+  // X Layer Mainnet (chain 196)
+  196: {
+    insurance:   "0x8D10C2c6C92b613C1938fe532f0e391044e76188" as `0x${string}`,
+    reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
+    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on X Layer
+    escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
+    deployBlock: 1_000_000n,
+  },
+  // BOT Chain Mainnet (chain 677)
+  677: {
+    insurance:   "0x8D10C2c6C92b613C1938fe532f0e391044e76188" as `0x${string}`,
+    reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
+    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain
+    escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
+    deployBlock: 44_268_060n,
+  },
+};
 
-// USDC on Base Sepolia (6 decimals) — 0x036CbD53842c5426634e7929541eC2318f3dCF7e
-export const USDC_ADDRESS =
-  "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const;
+/** Returns addresses for the given chainId, falling back to BOT Chain. */
+export function getContracts(chainId?: number) {
+  return CONTRACT_ADDRESSES[(chainId as SupportedChainId) ?? 677] ?? CONTRACT_ADDRESSES[677];
+}
+
+// ─── Legacy single-chain exports (BOT Chain defaults) ─────────────────────────
+export const ZEUS_INSURANCE_ADDRESS = CONTRACT_ADDRESSES[677].insurance;
+export const ZEUS_RESERVE_ADDRESS   = CONTRACT_ADDRESSES[677].reserve;
+export const USDC_ADDRESS           = CONTRACT_ADDRESSES[677].token; // kept for compat
+export const INSURANCE_DEPLOY_BLOCK = CONTRACT_ADDRESSES[677].deployBlock;
 
 // ─── ZeusInsuranceV2 ABI ─────────────────────────────────────────────────────
 export const ZEUS_INSURANCE_ABI = [
@@ -349,7 +375,7 @@ export const ZEUS_RESERVE_ABI = [
   },
 ] as const;
 
-// ─── ERC-20 minimal ABI (for USDC approve / allowance / balanceOf) ────────────
+// ─── ERC-20 minimal ABI ───────────────────────────────────────────────────────
 export const ERC20_ABI = [
   {
     inputs: [{ internalType: "address", name: "spender", type: "address" }, { internalType: "uint256", name: "amount", type: "uint256" }],
@@ -382,27 +408,56 @@ export const ERC20_ABI = [
 ] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-export const USDC_DECIMALS = 6;
 
-/** Format a raw USDC bigint (6 decimals) to a human-readable string. */
+/** USDT uses 6 decimals on both X Layer and BOT Chain */
+export const TOKEN_DECIMALS = 6;
+/** @deprecated use TOKEN_DECIMALS */
+export const USDC_DECIMALS = TOKEN_DECIMALS;
+
+/** Format a raw token amount (6 decimals) to a human-readable string. */
 export function formatUsdc(raw: bigint | undefined, decimals = 2): string {
   if (raw === undefined) return "–";
-  const divisor = 10n ** BigInt(USDC_DECIMALS);
+  const divisor = 10n ** BigInt(TOKEN_DECIMALS);
   const whole = raw / divisor;
   const frac = raw % divisor;
-  const fracStr = frac.toString().padStart(USDC_DECIMALS, "0").slice(0, decimals);
+  const fracStr = frac.toString().padStart(TOKEN_DECIMALS, "0").slice(0, decimals);
   return `${whole.toLocaleString()}.${fracStr}`;
 }
+/** Alias */
+export const formatToken = formatUsdc;
 
-/** Parse a human-readable USDC string (e.g. "100.50") to a bigint. */
+/** Parse a human-readable token string (e.g. "100.50") to a bigint (6 decimals). */
 export function parseUsdc(value: string): bigint {
   const [whole = "0", frac = ""] = value.split(".");
-  const fracPadded = frac.padEnd(USDC_DECIMALS, "0").slice(0, USDC_DECIMALS);
-  return BigInt(whole) * 10n ** BigInt(USDC_DECIMALS) + BigInt(fracPadded || "0");
+  const fracPadded = frac.padEnd(TOKEN_DECIMALS, "0").slice(0, TOKEN_DECIMALS);
+  return BigInt(whole) * 10n ** BigInt(TOKEN_DECIMALS) + BigInt(fracPadded || "0");
 }
+/** Alias */
+export const parseToken = parseUsdc;
 
-/** Premium = (7% + 2%×(retries−1)) of amount */
+/** Standard policy premium: base 7% + 2% per extra retry */
 export function computePremium(amount: bigint, retries: number): bigint {
   const bps = BigInt(700 + (retries - 1) * 200);
+  return (amount * bps) / 10_000n;
+}
+
+// ─── Slashing protection premium ──────────────────────────────────────────────
+
+export type ValidatorRisk = "active" | "new" | "slashed";
+
+/**
+ * Returns the premium rate in basis points for slashing protection.
+ * BOT Chain (677): base 15%, +3% for new validators, +5% for previously slashed.
+ * X Layer (196):   base 12%, +3% for new validators, +5% for previously slashed.
+ */
+export function computeSlashingPremiumBps(chainId: number, risk: ValidatorRisk): number {
+  const base = chainId === 677 ? 1500 : 1200;
+  if (risk === "slashed") return base + 500;
+  if (risk === "new")     return base + 300;
+  return base;
+}
+
+export function computeSlashingPremium(amount: bigint, chainId: number, risk: ValidatorRisk): bigint {
+  const bps = BigInt(computeSlashingPremiumBps(chainId, risk));
   return (amount * bps) / 10_000n;
 }

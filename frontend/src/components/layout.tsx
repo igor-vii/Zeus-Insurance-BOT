@@ -1,6 +1,6 @@
 import { useLocation, Link } from "wouter";
 import { useAccount, useDisconnect } from "wagmi";
-import { LayoutDashboard, FileText, Database, LogOut, Wallet, ArrowLeft, Handshake } from "lucide-react";
+import { LayoutDashboard, FileText, Database, LogOut, Wallet, ArrowLeft, Handshake, ShieldAlert } from "lucide-react";
 import { buttonVariants, Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ApiModeToggle } from "@/components/api-mode-toggle";
@@ -21,11 +21,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/buy", label: "Buy Policy", icon: Shield },
-    { href: "/policies", label: "My Policies", icon: FileText },
-    { href: "/reserve", label: "Reserve", icon: Database },
-    { href: "/escrow", label: "Escrow", icon: Handshake },
+    { href: "/dashboard",  label: "Dashboard",          icon: LayoutDashboard },
+    { href: "/buy",        label: "Buy Policy",          icon: Shield },
+    { href: "/slashing",   label: "Slashing Protection", icon: ShieldAlert },
+    { href: "/policies",   label: "My Policies",         icon: FileText },
+    { href: "/reserve",    label: "Reserve",             icon: Database },
+    { href: "/escrow",     label: "Escrow",              icon: Handshake },
   ];
 
   return (

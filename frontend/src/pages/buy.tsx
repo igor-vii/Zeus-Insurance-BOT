@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
-  useAccount, useWaitForTransactionReceipt, useSendTransaction,
+  useAccount, useWaitForTransactionReceipt, useSendTransaction, useChainId,
 } from "wagmi";
 import { isAddress } from "viem";
 import { Shield, ArrowRight, Loader2, AlertTriangle, ShieldCheck, ServerCrash } from "lucide-react";
@@ -30,13 +30,14 @@ const isEthAddress = (val: string): boolean => isAddress(val);
 
 const formSchema = z.object({
   sellerAddress: z.string().refine(isEthAddress, { message: "Invalid Ethereum address" }),
-  amount: z.coerce.number().min(1, "Amount must be at least 1 USDC"),
+  amount: z.coerce.number().min(0.001, "Amount must be at least 0.001 USDT"),
   timeoutSeconds: z.coerce.number().min(60, "Timeout must be at least 60 seconds"),
   retries: z.coerce.number().min(1).max(10),
 });
 
 export default function BuyInsurance() {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const { toast } = useToast();
   const { isApiMode } = useApiMode();
   const { sdk, isReady: isSdkReady } = useZeusSDK();
@@ -46,21 +47,22 @@ export default function BuyInsurance() {
   const [amountBigInt, setAmountBigInt] = useState(0n);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Direct mode — SDK handles both USDC approval and buyInsurance in one call
   const [isBuyingSdk, setIsBuyingSdk] = useState(false);
 
-  // API mode — server-prepared calldata
   const { sendTransactionAsync, isPending: isBuyingApi } = useSendTransaction();
   const [apiBuyHash, setApiBuyHash] = useState<`0x${string}` | undefined>();
   const { isLoading: isWaitingApiBuy, isSuccess: isApiBuySuccess } = useWaitForTransactionReceipt({ hash: apiBuyHash });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { sellerAddress: "", amount: 100, timeoutSeconds: 86400, retries: 1 },
+    defaultValues: { sellerAddress: "", amount: 10, timeoutSeconds: 86400, retries: 1 },
   });
 
   const watchAmount = form.watch("amount");
   const watchRetries = form.watch("retries");
+
+  // Network label
+  const networkLabel = chainId === 677 ? "BOT Chain" : chainId === 196 ? "X Layer" : "Unknown";
 
   // Premium preview — computed locally (same formula as contract)
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function BuyInsurance() {
   }, [isApiBuySuccess, form, toast]);
 
   const isBuying = isApiMode ? isBuyingApi : isBuyingSdk;
-  const isWaiting = isApiMode ? isWaitingApiBuy : false; // SDK awaits receipt internally
+  const isWaiting = isApiMode ? isWaitingApiBuy : false;
   const totalCost = amountBigInt > 0 ? premiumAmount : 0n;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -97,7 +99,6 @@ export default function BuyInsurance() {
     setApiError(null);
 
     if (isApiMode) {
-      // API mode: server builds calldata, user signs raw tx
       try {
         const result = await fetchPrepareBuy({
           seller: values.sellerAddress,
@@ -117,7 +118,6 @@ export default function BuyInsurance() {
         }
       }
     } else {
-      // Direct mode: SDK handles USDC approval + buyInsurance in one call
       if (!isSdkReady) {
         toast({ variant: "destructive", title: "SDK not ready", description: "Wallet connection still initialising, please wait." });
         return;
@@ -152,11 +152,10 @@ export default function BuyInsurance() {
         <ShieldCheck className="w-8 h-8 text-primary" />
         <div>
           <h1 className="text-3xl font-brand font-bold tracking-tight">Issue Policy</h1>
-          {isApiMode && (
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Calldata via API · signed locally
-            </span>
-          )}
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            {networkLabel} · USDT
+            {isApiMode && " · Calldata via API"}
+          </span>
         </div>
       </div>
 
@@ -208,10 +207,17 @@ export default function BuyInsurance() {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-mono uppercase text-xs tracking-wider text-muted-foreground">Insured Amount (USDC)</FormLabel>
+                      <FormLabel className="font-mono uppercase text-xs tracking-wider text-muted-foreground">Insured Amount (USDT)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="1" className="font-mono bg-background/50" {...field} />
+                        <Input
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          className="font-mono bg-background/50"
+                          {...field}
+                        />
                       </FormControl>
+                      <FormDescription className="text-xs">Min: 0.001 USDT</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -264,12 +270,12 @@ export default function BuyInsurance() {
                 </div>
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">Insured Value</span>
-                  <span className="font-mono text-sm">${watchAmount || 0} USDC</span>
+                  <span className="font-mono text-sm">{watchAmount || 0} USDT</span>
                 </div>
                 <div className="w-full h-px bg-primary/20 my-2" />
                 <div className="flex justify-between items-center">
                   <span className="font-mono text-sm uppercase tracking-wider text-primary font-bold">Total Cost</span>
-                  <span className="font-mono text-xl font-bold">${formatUsdc(totalCost)} USDC</span>
+                  <span className="font-mono text-xl font-bold">{formatUsdc(totalCost)} USDT</span>
                 </div>
               </div>
             </CardContent>

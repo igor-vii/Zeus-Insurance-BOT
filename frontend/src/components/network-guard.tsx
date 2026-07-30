@@ -1,15 +1,17 @@
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
-import { baseSepolia } from "wagmi/chains";
+import { SUPPORTED_CHAINS } from "@/lib/wagmi";
 import { AlertTriangle, ArrowRightLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+
+const SUPPORTED_IDS = SUPPORTED_CHAINS.map((c) => c.id);
 
 export function NetworkGuard() {
   const { isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain, isPending } = useSwitchChain();
 
-  const isWrongNetwork = isConnected && chainId !== baseSepolia.id;
+  const isWrongNetwork = isConnected && !SUPPORTED_IDS.includes(chainId as typeof SUPPORTED_IDS[number]);
 
   return (
     <AnimatePresence>
@@ -30,25 +32,31 @@ export function NetworkGuard() {
                 </p>
                 <p className="text-sm text-foreground/90">
                   Zeus Insurance requires{" "}
-                  <span className="font-semibold font-mono">Base Sepolia</span>.
+                  <span className="font-semibold font-mono">X Layer</span> or{" "}
+                  <span className="font-semibold font-mono">BOT Chain</span>.
                   Your wallet is on chain&nbsp;
                   <span className="font-mono text-muted-foreground">{chainId}</span>.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="destructive"
-                className="shrink-0 font-mono text-[10px] uppercase tracking-wider h-8 gap-1.5"
-                onClick={() => switchChain({ chainId: baseSepolia.id })}
-                disabled={isPending}
-              >
-                {isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <ArrowRightLeft className="w-3 h-3" />
-                )}
-                {isPending ? "Switching…" : "Switch Network"}
-              </Button>
+              <div className="flex gap-2 shrink-0">
+                {SUPPORTED_CHAINS.map((chain) => (
+                  <Button
+                    key={chain.id}
+                    size="sm"
+                    variant="destructive"
+                    className="font-mono text-[10px] uppercase tracking-wider h-8 gap-1.5"
+                    onClick={() => switchChain({ chainId: chain.id })}
+                    disabled={isPending}
+                  >
+                    {isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <ArrowRightLeft className="w-3 h-3" />
+                    )}
+                    {chain.id === 677 ? "BOT Chain" : "X Layer"}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
         </motion.div>
