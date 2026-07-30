@@ -62,7 +62,7 @@ export default function BuyInsurance() {
   const watchRetries = form.watch("retries");
 
   // Network label
-  const networkLabel = chainId === 677 ? "BOT Chain" : chainId === 196 ? "X Layer" : "Unknown";
+  const networkLabel = chainId === 677 ? "BOT Chain mainnet" : chainId === 196 ? "X Layer mainnet" : "Unknown";
 
   // Premium preview — computed locally (same formula as contract)
   useEffect(() => {
