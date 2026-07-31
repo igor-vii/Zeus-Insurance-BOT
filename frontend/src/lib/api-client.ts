@@ -102,3 +102,18 @@ export type ReserveStats = {
 export function fetchReserve(): Promise<ReserveStats> {
   return apiFetch("/reserve");
 }
+
+// ─── Slashing Premium ─────────────────────────────────────────────────────────
+
+export type SlashingPremiumResult = {
+  premium: number; // absolute amount in token units
+  rate: number;    // percentage, e.g. 15 / 18 / 20
+};
+
+export function fetchSlashingPremium(params: {
+  validator: string;
+  amount: number;
+  chainId: number;
+}): Promise<SlashingPremiumResult> {
+  return apiFetch("/slashing/premium", { method: "POST", body: JSON.stringify(params) });
+}
