@@ -7,7 +7,14 @@ import {
   createSlashingProtectionFromServer,
 } from "../services/insurance.js";
 import { getSellerHistory } from "../services/sellerHistory.js";
-import { calculateRiskScore, calculatePremium } from "../services/pricing.js";
+import {
+  calculateRiskScore,
+  calculatePremium,
+  getAgentMultiplier,
+  type AgentStatus,
+  type ErrorHistory,
+  DAILY_ERROR_HARD_THRESHOLD,
+} from "../services/pricing.js";
 import { publicClient } from "../lib/chain.js";
 import {
   ZEUS_INSURANCE_ADDRESS,
@@ -27,6 +34,66 @@ import {
 import { syncAllBuyers } from "../lib/background-sync.js";
 
 const router = Router();
+
+// ── Agent status + rolling daily error store ──────────────────────────────────
+
+const DAY_MS            = 24 * 60 * 60 * 1000;
+const COOLDOWN_EXTRA_MS = 24 * 60 * 60 * 1000; // additional cooldown after the block period
+
+const agentStatusMap = new Map<string, AgentStatus>();
+
+// Per-agent sorted list of error timestamps (Unix ms).
+// Entries older than DAY_MS are pruned on every read/write, giving a true
+// rolling 24-hour window instead of a fixed/tumbling bucket.
+const dailyErrorTimestamps = new Map<string, number[]>();
+
+function getAgentStatus(address: string): AgentStatus {
+  return agentStatusMap.get(address.toLowerCase()) ?? {
+    blockedUntil: 0,
+    cooldownEnd: 0,
+    currentMultiplier: 1.0,
+  };
+}
+
+/**
+ * Return the number of errors recorded for this agent in the last 24 hours.
+ * Prunes stale timestamps as a side-effect to keep memory bounded.
+ */
+function getDailyErrorCount(address: string): number {
+  const key    = address.toLowerCase();
+  const cutoff = Date.now() - DAY_MS;
+  const ts     = dailyErrorTimestamps.get(key);
+  if (!ts) return 0;
+  const pruned = ts.filter(t => t > cutoff);
+  dailyErrorTimestamps.set(key, pruned);
+  return pruned.length;
+}
+
+/**
+ * Record one error for an agent in the rolling 24-hour window.
+ * Automatically writes block + cooldown to agentStatusMap when the count
+ * exceeds DAILY_ERROR_HARD_THRESHOLD — this is the state-transition write
+ * path for the getAgentMultiplier 403 / cooldown logic.
+ */
+function recordDailyError(address: string): number {
+  const key    = address.toLowerCase();
+  const now    = Date.now();
+  const cutoff = now - DAY_MS;
+  const existing = dailyErrorTimestamps.get(key) ?? [];
+  const pruned   = existing.filter(t => t > cutoff);
+  pruned.push(now);
+  dailyErrorTimestamps.set(key, pruned);
+  const count = pruned.length;
+  // Auto-block when threshold is exceeded; cooldown starts when block ends
+  if (count > DAILY_ERROR_HARD_THRESHOLD) {
+    agentStatusMap.set(key, {
+      blockedUntil:      now + DAY_MS,
+      cooldownEnd:       now + DAY_MS + COOLDOWN_EXTRA_MS,
+      currentMultiplier: 2.0,
+    });
+  }
+  return count;
+}
 
 // ─── GET /api/quote ───────────────────────────────────────────────────────────
 const quoteSchema = z.object({
@@ -74,8 +141,27 @@ router.post("/prepare-buy", async (req, res) => {
   let premiumAmount: bigint;
   try {
     const history = await getSellerHistory(seller);
+
+    // Hard block: too many errors in the rolling 24-hour window → 429
+    const dailyErrors = getDailyErrorCount(seller);
+    const errorHistory: ErrorHistory = { errors: dailyErrors };
+    if (dailyErrors > DAILY_ERROR_HARD_THRESHOLD) {
+      res.status(429).json({ error: "Agent blocked", detail: `Daily error count ${dailyErrors} exceeds limit of ${DAILY_ERROR_HARD_THRESHOLD}` });
+      return;
+    }
+
+    // Agent status multiplier check
+    const agentStatus: AgentStatus = getAgentStatus(seller);
+    const agentMultiplier = getAgentMultiplier(agentStatus, errorHistory);
+    if (agentMultiplier === null) {
+      res.status(403).json({ error: "Agent is currently blocked", detail: `Blocked until ${new Date(agentStatus.blockedUntil).toISOString()}` });
+      return;
+    }
+
     riskScore = await calculateRiskScore(seller, amountBigInt, maxRetries, history);
-    premiumAmount = await calculatePremium(amountBigInt, riskScore);
+    const basePremium = await calculatePremium(amountBigInt, riskScore);
+    // Apply agent multiplier using fixed-point bigint arithmetic (scale ×100, no Number conversion)
+    premiumAmount = (basePremium * BigInt(Math.round(agentMultiplier * 100))) / 100n;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Failed to calculate risk score", detail: msg });
@@ -526,6 +612,74 @@ router.post("/report-slashing", async (req, res) => {
   });
 
   res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data, policyId });
+});
+
+// ─── POST /api/agent-error ────────────────────────────────────────────────────
+// Record a daily error for an agent address.
+// Trusted watcher / oracle services call this when they confirm an agent failure.
+// Requires Authorization: Bearer <AGENT_ERROR_SECRET>.
+//
+// Idempotency: supply an `eventId` string to prevent double-counting replayed
+// events. Duplicate eventIds are acknowledged but do not mutate state.
+//
+// Automatically blocks the agent (via agentStatusMap) when daily errors exceed
+// DAILY_ERROR_HARD_THRESHOLD — this is the write path that makes the
+// getAgentMultiplier 403 / cooldown checks operational.
+
+// Bounded idempotency store — max 10 000 event IDs to cap memory usage.
+const seenEventIds = new Set<string>();
+const MAX_SEEN_EVENT_IDS = 10_000;
+
+const agentErrorSchema = z.object({
+  agent:   z.string().refine(isAddress, "Invalid agent address"),
+  eventId: z.string().min(1).max(128).optional(),
+});
+
+router.post("/agent-error", (req, res) => {
+  // ── Bearer-token authentication ────────────────────────────────────────────
+  const secret = process.env["AGENT_ERROR_SECRET"];
+  if (!secret) {
+    res.status(503).json({ error: "agent-error endpoint not configured (AGENT_ERROR_SECRET not set)" });
+    return;
+  }
+  const authHeader = req.headers["authorization"];
+  const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!provided || provided !== secret) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  // ── Input validation ───────────────────────────────────────────────────────
+  const parsed = agentErrorSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+  const { agent, eventId } = parsed.data;
+
+  // ── Idempotency check ──────────────────────────────────────────────────────
+  if (eventId) {
+    if (seenEventIds.has(eventId)) {
+      res.json({ agent, duplicate: true });
+      return;
+    }
+    if (seenEventIds.size >= MAX_SEEN_EVENT_IDS) {
+      // Evict oldest entries to stay bounded (Set preserves insertion order)
+      const first = seenEventIds.values().next().value;
+      if (first !== undefined) seenEventIds.delete(first);
+    }
+    seenEventIds.add(eventId);
+  }
+
+  // ── Record error + auto-block ──────────────────────────────────────────────
+  const count = recordDailyError(agent);
+  const blocked = count > DAILY_ERROR_HARD_THRESHOLD;
+  res.json({
+    agent,
+    dailyErrors: count,
+    blocked,
+    blockedUntil: blocked ? getAgentStatus(agent).blockedUntil : null,
+  });
 });
 
 export default router;

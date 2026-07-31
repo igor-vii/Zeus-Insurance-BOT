@@ -139,6 +139,63 @@ export async function calculatePremium(amount: bigint, riskScore: number): Promi
   return (amount * BigInt(multiplier)) / 10_000n;
 }
 
+// ── Error Penalty ─────────────────────────────────────────────────────────────
+
+/** Errors above this threshold are handled at the route layer (429 / block). */
+export const DAILY_ERROR_HARD_THRESHOLD = 5;
+
+export interface ErrorHistory {
+  errors: number;
+}
+
+export interface AgentStatus {
+  /** Unix-ms timestamp until which the agent is hard-blocked (0 = not blocked). */
+  blockedUntil: number;
+  /** Unix-ms timestamp until which the agent is in post-block cooldown (0 = none). */
+  cooldownEnd: number;
+  /** Multiplier value stored at the moment the cooldown period began. */
+  currentMultiplier: number;
+}
+
+/**
+ * Calculate a penalty multiplier for 0–DAILY_ERROR_HARD_THRESHOLD errors.
+ * Errors above the threshold are capped before calculation.
+ * 0 errors → 1.0 | 5 errors → 2.0 (linear scale).
+ */
+export function calculatePenaltyScore(errorHistory: ErrorHistory): number {
+  const cappedErrors = Math.min(errorHistory.errors, DAILY_ERROR_HARD_THRESHOLD);
+  return 1.0 + cappedErrors / DAILY_ERROR_HARD_THRESHOLD;
+}
+
+/**
+ * Return the current premium multiplier for an agent.
+ *
+ * - blockedUntil > now  → null   (caller should return 403)
+ * - cooldownEnd  > now  → 2.0
+ * - past cooldown       → decays 0.1 per 12 h, floor 1.0
+ * - no cooldown history → penalty score from calculatePenaltyScore (1.0–2.0)
+ */
+export function getAgentMultiplier(
+  agent: AgentStatus,
+  history: ErrorHistory,
+): number | null {
+  const now = Date.now();
+
+  if (agent.blockedUntil > now) return null;
+
+  if (agent.cooldownEnd > now) return 2.0;
+
+  if (agent.cooldownEnd === 0) {
+    // Normal operation — apply error-count penalty (1.0 at 0 errors, 2.0 at 5)
+    return calculatePenaltyScore(history);
+  }
+
+  // Past cooldown: decay 0.1 every 12 h, floor at 1.0
+  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+  const steps = Math.floor((now - agent.cooldownEnd) / TWELVE_HOURS_MS);
+  return Math.max(1.0, agent.currentMultiplier - steps * 0.1);
+}
+
 // ── Risk Score Update ─────────────────────────────────────────────────────────
 
 /**

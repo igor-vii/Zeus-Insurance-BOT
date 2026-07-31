@@ -108154,6 +108154,22 @@ async function calculatePremium(amount, riskScore) {
   const multiplier = Math.round((5 + riskScore) * 100);
   return amount * BigInt(multiplier) / 10000n;
 }
+var DAILY_ERROR_HARD_THRESHOLD = 5;
+function calculatePenaltyScore(errorHistory) {
+  const cappedErrors = Math.min(errorHistory.errors, DAILY_ERROR_HARD_THRESHOLD);
+  return 1 + cappedErrors / DAILY_ERROR_HARD_THRESHOLD;
+}
+function getAgentMultiplier(agent, history) {
+  const now = Date.now();
+  if (agent.blockedUntil > now) return null;
+  if (agent.cooldownEnd > now) return 2;
+  if (agent.cooldownEnd === 0) {
+    return calculatePenaltyScore(history);
+  }
+  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1e3;
+  const steps = Math.floor((now - agent.cooldownEnd) / TWELVE_HOURS_MS);
+  return Math.max(1, agent.currentMultiplier - steps * 0.1);
+}
 async function updateRiskScore(sellerAddress, payoutFactor, currentRiskScore) {
   if (!sellerAddress.startsWith("0x") || sellerAddress.length !== 42) {
     throw new Error("Invalid seller address format");
@@ -108392,6 +108408,44 @@ function startBackgroundSync() {
 
 // src/routes/insurance.ts
 var router2 = (0, import_express2.Router)();
+var DAY_MS = 24 * 60 * 60 * 1e3;
+var COOLDOWN_EXTRA_MS = 24 * 60 * 60 * 1e3;
+var agentStatusMap = /* @__PURE__ */ new Map();
+var dailyErrorTimestamps = /* @__PURE__ */ new Map();
+function getAgentStatus(address2) {
+  return agentStatusMap.get(address2.toLowerCase()) ?? {
+    blockedUntil: 0,
+    cooldownEnd: 0,
+    currentMultiplier: 1
+  };
+}
+function getDailyErrorCount(address2) {
+  const key = address2.toLowerCase();
+  const cutoff = Date.now() - DAY_MS;
+  const ts = dailyErrorTimestamps.get(key);
+  if (!ts) return 0;
+  const pruned = ts.filter((t) => t > cutoff);
+  dailyErrorTimestamps.set(key, pruned);
+  return pruned.length;
+}
+function recordDailyError(address2) {
+  const key = address2.toLowerCase();
+  const now = Date.now();
+  const cutoff = now - DAY_MS;
+  const existing = dailyErrorTimestamps.get(key) ?? [];
+  const pruned = existing.filter((t) => t > cutoff);
+  pruned.push(now);
+  dailyErrorTimestamps.set(key, pruned);
+  const count2 = pruned.length;
+  if (count2 > DAILY_ERROR_HARD_THRESHOLD) {
+    agentStatusMap.set(key, {
+      blockedUntil: now + DAY_MS,
+      cooldownEnd: now + DAY_MS + COOLDOWN_EXTRA_MS,
+      currentMultiplier: 2
+    });
+  }
+  return count2;
+}
 var quoteSchema = external_exports.object({
   amount: external_exports.string().regex(/^\d+$/, "amount must be a non-negative integer string"),
   maxRetries: external_exports.coerce.number().int().min(1).max(10)
@@ -108431,8 +108485,21 @@ router2.post("/prepare-buy", async (req, res) => {
   let premiumAmount;
   try {
     const history = await getSellerHistory(seller);
+    const dailyErrors = getDailyErrorCount(seller);
+    const errorHistory = { errors: dailyErrors };
+    if (dailyErrors > DAILY_ERROR_HARD_THRESHOLD) {
+      res.status(429).json({ error: "Agent blocked", detail: `Daily error count ${dailyErrors} exceeds limit of ${DAILY_ERROR_HARD_THRESHOLD}` });
+      return;
+    }
+    const agentStatus = getAgentStatus(seller);
+    const agentMultiplier = getAgentMultiplier(agentStatus, errorHistory);
+    if (agentMultiplier === null) {
+      res.status(403).json({ error: "Agent is currently blocked", detail: `Blocked until ${new Date(agentStatus.blockedUntil).toISOString()}` });
+      return;
+    }
     riskScore = await calculateRiskScore(seller, amountBigInt, maxRetries, history);
-    premiumAmount = await calculatePremium(amountBigInt, riskScore);
+    const basePremium = await calculatePremium(amountBigInt, riskScore);
+    premiumAmount = basePremium * BigInt(Math.round(agentMultiplier * 100)) / 100n;
   } catch (err2) {
     const msg = err2 instanceof Error ? err2.message : String(err2);
     res.status(500).json({ error: "Failed to calculate risk score", detail: msg });
@@ -108715,6 +108782,32 @@ router2.post("/slashing-protection", async (req, res) => {
     premiumAmount: premiumAmount.toString()
   });
 });
+var slashingPremiumSchema = external_exports.object({
+  validator: external_exports.string().refine(isAddress, "Invalid validator address"),
+  amount: external_exports.coerce.number().positive("amount must be positive"),
+  chainId: external_exports.coerce.number().int().positive()
+});
+router2.post("/slashing/premium", async (req, res) => {
+  const parsed = slashingPremiumSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+  const { validator, amount, chainId } = parsed.data;
+  let rate = chainId === 677 ? 15 : 15;
+  try {
+    const history = await getSellerHistory(validator);
+    const isNew = !history || history.totalPolicies === 0;
+    const hasSlash = history && history.failedPolicies > 0;
+    if (hasSlash) rate = 20;
+    else if (isNew) rate = 18;
+    else rate = 15;
+  } catch {
+    rate = 18;
+  }
+  const premium = amount * rate / 100;
+  res.json({ premium, rate });
+});
 var reportSlashingSchema = external_exports.object({
   policyId: external_exports.coerce.number().int().nonnegative(),
   evidenceHash: external_exports.string().regex(/^0x[a-fA-F0-9]{64}$/, "evidenceHash must be a 0x-prefixed 32-byte hex string")
@@ -108765,6 +108858,50 @@ router2.post("/report-slashing", async (req, res) => {
     args: [BigInt(policyId), evidenceHash]
   });
   res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data: data4, policyId });
+});
+var seenEventIds = /* @__PURE__ */ new Set();
+var MAX_SEEN_EVENT_IDS = 1e4;
+var agentErrorSchema = external_exports.object({
+  agent: external_exports.string().refine(isAddress, "Invalid agent address"),
+  eventId: external_exports.string().min(1).max(128).optional()
+});
+router2.post("/agent-error", (req, res) => {
+  const secret = process.env["AGENT_ERROR_SECRET"];
+  if (!secret) {
+    res.status(503).json({ error: "agent-error endpoint not configured (AGENT_ERROR_SECRET not set)" });
+    return;
+  }
+  const authHeader = req.headers["authorization"];
+  const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!provided || provided !== secret) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const parsed = agentErrorSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+  const { agent, eventId } = parsed.data;
+  if (eventId) {
+    if (seenEventIds.has(eventId)) {
+      res.json({ agent, duplicate: true });
+      return;
+    }
+    if (seenEventIds.size >= MAX_SEEN_EVENT_IDS) {
+      const first = seenEventIds.values().next().value;
+      if (first !== void 0) seenEventIds.delete(first);
+    }
+    seenEventIds.add(eventId);
+  }
+  const count2 = recordDailyError(agent);
+  const blocked = count2 > DAILY_ERROR_HARD_THRESHOLD;
+  res.json({
+    agent,
+    dailyErrors: count2,
+    blocked,
+    blockedUntil: blocked ? getAgentStatus(agent).blockedUntil : null
+  });
 });
 var insurance_default = router2;
 
