@@ -1,2 +1,44 @@
 Zeus_Insurance_Pitch_Deck.pdf
 Zeus_Insurance_Pitch_Deck.pdf
+
+# --- Зависимости ---
+node_modules/
+.pnpm-store/
+
+# --- Сборка ---
+dist/
+build/
+*.tsbuildinfo
+
+# --- Переменные окружения ---
+.env
+.env.local
+.env.*.local
+*.env
+
+# --- Логи ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Системные файлы ---
+.DS_Store
+Thumbs.db
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Кэш ---
+.cache/
+.parcel-cache/
+
+# --- Конфиги для деплоя (если содержат секреты) ---
+watcher/.env
+api-server/.env
+frontend/.env
+
+# --- PDF (можно оставить) ---
+Zeus_Insurance_Pitch_Deck.pdf
