@@ -88,7 +88,7 @@ export async function calculateRiskScore(
   return Math.max(0.1, Math.min(5.0, rawScore));
 }
 
-// ── Premium ───────────────────────────────────────────────────────────────────
+// ── Seller Premium ─────────────────────────────────────────────────────────────
 
 export async function calculateSellerPremium(amount: bigint, riskScore: number): Promise<bigint> {
   if (amount <= 0n) throw new Error("Amount must be greater than 0");
@@ -135,6 +135,7 @@ export function calculatePenaltyScore(errorHistory: ErrorHistory): bigint {
 }
 
 export function getAgentMultiplier(
+  agentAddress: string,
   agent: AgentStatus,
   history: ErrorHistory,
 ): bigint | null {
@@ -142,13 +143,27 @@ export function getAgentMultiplier(
 
   if (agent.blockedUntil > now) return null;
   if (agent.cooldownEnd > now) return 200n;
-  if (agent.cooldownEnd === 0) return calculatePenaltyScore(history);
 
-  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
-  const steps = Math.floor((now - agent.cooldownEnd) / TWELVE_HOURS_MS);
-  const currentBigInt = BigInt(Math.round(agent.currentMultiplier * 100));
-  
-  return Math.max(100n, currentBigInt - BigInt(steps * 10));
+  if (agent.cooldownEnd > 0 && agent.cooldownEnd < now) {
+    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+    const steps = Math.floor((now - agent.cooldownEnd) / TWELVE_HOURS_MS);
+    const currentBigInt = BigInt(Math.round(agent.currentMultiplier * 100));
+    const decayedMultiplier = currentBigInt - BigInt(steps * 10);
+
+    // Полная реабилитация: очищаем историю ошибок
+    if (decayedMultiplier <= 100n) {
+      clearAgentErrors(agentAddress);
+      return 100n; 
+    }
+    
+    return decayedMultiplier;
+  }
+
+  if (agent.cooldownEnd === 0) {
+    return calculatePenaltyScore(history);
+  }
+
+  return 100n;
 }
 
 export function calculatePremium(amount: bigint, retries: number, multiplier: bigint): bigint {
@@ -204,7 +219,7 @@ export function getAgentErrorHistory(agent: string): ErrorHistory {
   const recentErrors = errors.filter(t => t > twentyFourHoursAgo);
 
   return {
-    total: 10, // ИСПРАВЛЕНИЕ: Базовый знаменатель, чтобы errorRate не был всегда 100%
+    total: 10, // Фиксированный знаменатель, чтобы errorRate не был всегда 100%
     errors: recentErrors.length,
     windowHours: 24,
   };
@@ -212,5 +227,20 @@ export function getAgentErrorHistory(agent: string): ErrorHistory {
 
 export function clearAgentErrors(agent: string): void {
   if (!agent || !agent.startsWith("0x")) throw new Error("Invalid agent address");
+  agentErrorStore.delete(agent);
+}
+
+/**
+ * Clear all error history and penalty state for a specific agent.
+ * This effectively rehabilitates the agent, allowing them to operate without penalties.
+ * 
+ * @param agent - Agent address
+ */
+export function resetAgentStatus(agent: string): void {
+  if (!agent || !agent.startsWith("0x")) {
+    throw new Error("Invalid agent address");
+  }
+  
+  // Удаляем историю ошибок из in-memory хранилища pricing.ts
   agentErrorStore.delete(agent);
 }
