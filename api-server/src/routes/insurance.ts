@@ -424,6 +424,48 @@ router.post("/slashing-protection", async (req, res) => {
   });
 });
 
+// ─── POST /api/slashing/premium ──────────────────────────────────────────────
+// Calculate slashing protection premium for a validator.
+// Rate logic:
+//   chainId 677 (BOT Chain) → base 15 %
+//   validator history clean  → 15 %
+//   validator new (no data)  → 18 %
+//   validator had slashes    → 20 %
+const slashingPremiumSchema = z.object({
+  validator: z.string().refine(isAddress, "Invalid validator address"),
+  amount:    z.coerce.number().positive("amount must be positive"),
+  chainId:   z.coerce.number().int().positive(),
+});
+
+router.post("/slashing/premium", async (req, res) => {
+  const parsed = slashingPremiumSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  const { validator, amount, chainId } = parsed.data;
+
+  // Start from BOT Chain base or generic default
+  let rate = chainId === 677 ? 15 : 15;
+
+  try {
+    const history = await getSellerHistory(validator);
+    const isNew     = !history || history.totalPolicies === 0;
+    const hasSlash  = history && history.failedPolicies > 0;
+
+    if (hasSlash)  rate = 20;
+    else if (isNew) rate = 18;
+    else            rate = 15; // clean history
+  } catch {
+    // Cannot fetch history → treat as new validator
+    rate = 18;
+  }
+
+  const premium = (amount * rate) / 100;
+  res.json({ premium, rate });
+});
+
 // ─── POST /api/report-slashing ────────────────────────────────────────────────
 // Watcher reports a confirmed slashing event for a SlashingProtection policy.
 // In automatic mode the server broadcasts the tx; in hybrid mode returns calldata.
