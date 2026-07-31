@@ -420,6 +420,26 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
         return policyCoverageType[policyId];
     }
 
+    /**
+     * @notice Check whether a policy is currently claimable.
+     *
+     * Returns true only when ALL of the following hold:
+     *   1. Policy exists (buyer != address(0)).
+     *   2. Policy status is Active (not already Claimed / Rejected / Expired).
+     *   3. The retry deadline has been reached (block.timestamp >= retryDeadline).
+     *   4. The reserve holds at least the policy coverage amount in USDT.
+     *
+     * @param policyId  ID of the policy to check.
+     */
+    function canClaim(uint256 policyId) external view returns (bool) {
+        Policy storage p = policies[policyId];
+        if (p.buyer == address(0))                  return false; // does not exist
+        if (p.status != PolicyStatus.Active)        return false; // not active
+        if (block.timestamp < p.retryDeadline)      return false; // timeout not yet reached
+        if (usdt.balanceOf(address(reserve)) < p.amount) return false; // reserve insufficient
+        return true;
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     function _verifyObservation(Observation calldata obs) internal pure returns (address) {

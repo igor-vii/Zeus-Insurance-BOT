@@ -64,6 +64,8 @@ contract ZeusReserveV2 is ReentrancyGuard, Ownable {
     error ZeroAddress();
     error NotAContract(address addr);
     error InsufficientReserve(uint256 available, uint256 required);
+    /// @notice Emitted by payClaim when the reserve balance is less than the requested payout.
+    error InsufficientReserveBalance(uint256 requested, uint256 available);
     error ReserveBelowThreshold(uint256 remaining, uint256 threshold);
     error DailyPayoutLimitExceeded(uint256 attempted, uint256 remaining);
     error ClaimAlreadyFulfilled(uint256 claimId);
@@ -192,7 +194,7 @@ contract ZeusReserveV2 is ReentrancyGuard, Ownable {
 
         uint256 balance = usdt.balanceOf(address(this));
         if (balance < amount)
-            revert InsufficientReserve(balance, amount);
+            revert InsufficientReserveBalance(amount, balance);
         if (balance - amount < minReserveThreshold)
             revert ReserveBelowThreshold(balance - amount, minReserveThreshold);
 
