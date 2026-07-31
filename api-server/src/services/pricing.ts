@@ -31,16 +31,6 @@ export async function fetchHumi(address: string): Promise<number> {
   }
 }
 
-/**
- * Convert HUMI score (0–100) to a risk multiplier.
- * Higher HUMI = more reliable seller = lower risk.
- *
- * HUMI ≥ 80 → 0.70  (very reliable)
- * HUMI ≥ 60 → 0.85
- * HUMI ≥ 40 → 1.00  (neutral)
- * HUMI ≥ 20 → 1.50
- * HUMI < 20  → 2.00  (high risk)
- */
 export function getHumiMultiplier(humi: number): number {
   if (humi >= 80) return 0.70;
   if (humi >= 60) return 0.85;
@@ -49,30 +39,14 @@ export function getHumiMultiplier(humi: number): number {
   return 2.00;
 }
 
-/**
- * Dynamic HUMI weight in the risk score formula.
- * Higher HUMI confidence → higher weight given to HUMI data.
- */
 function getHumiWeight(humi: number): number {
-  if (humi > 50)  return 0.25; // HUMI_WEIGHT_HIGH
-  if (humi >= 30) return 0.20; // HUMI_WEIGHT_MEDIUM
-  return 0.15;                 // HUMI_WEIGHT_LOW
+  if (humi > 50)  return 0.25; 
+  if (humi >= 30) return 0.20; 
+  return 0.15;                 
 }
 
 // ── Risk Score ────────────────────────────────────────────────────────────────
 
-/**
- * Calculate Risk Score for a seller.
- * Range: 0.1 – 5.0
- *
- * Base formula (weighted by existingWeight = 1 − humiWeight):
- *   oracleRisk × 0.40 + executionRisk × 0.30 + modelRisk × 0.20 + gasVolatility × 0.10
- *
- * Plus HUMI component (weighted by humiWeight):
- *   getHumiMultiplier(humi) × humiWeight
- *
- * Total weights always sum to 1.0.
- */
 export async function calculateRiskScore(
   sellerAddress: string,
   _amount: bigint,
@@ -83,20 +57,15 @@ export async function calculateRiskScore(
     throw new Error("Invalid seller address format");
   }
 
-  // 1. Oracle_Risk (base 40%) — constant 2.0 until GSA oracle is integrated
   const oracleRisk = 2.0;
-
-  // 2. Gas_Volatility (base 10%) — constant 2.0 until gas oracle is integrated
   const gasVolatility = 2.0;
 
-  // 3. Execution_Risk (base 30%) — derived from seller's on-chain failure rate
   let executionRisk = 2.0;
   if (history.totalPolicies > 0) {
     const failureRate = history.failedPolicies / history.totalPolicies;
-    executionRisk = 1.0 + failureRate * 4.0; // 1.0 – 5.0
+    executionRisk = 1.0 + failureRate * 4.0;
   }
 
-  // 4. Model_Risk (base 20%) — from historical avg score if available, else from retries
   let modelRisk = 2.0;
   if (history.avgRiskScore > 0) {
     modelRisk = history.avgRiskScore;
@@ -104,7 +73,6 @@ export async function calculateRiskScore(
     modelRisk = Math.min(5.0, 1.0 + retries * 0.5);
   }
 
-  // 5. HUMI factor — fetched from GSA with fallback to 50
   const humi = await fetchHumi(sellerAddress);
   const humiMultiplier = getHumiMultiplier(humi);
   const humiWeight = getHumiWeight(humi);
@@ -122,86 +90,77 @@ export async function calculateRiskScore(
 
 // ── Premium ───────────────────────────────────────────────────────────────────
 
-/**
- * Calculate premium based on amount and Risk Score.
- * Formula: amount × (0.05 + 0.01 × riskScore)
- */
-export async function calculatePremium(amount: bigint, riskScore: number): Promise<bigint> {
-  if (amount <= 0n) {
-    throw new Error("Amount must be greater than 0");
-  }
-  if (riskScore < 0.1 || riskScore > 5.0) {
-    throw new Error("Risk score must be between 0.1 and 5.0");
-  }
+export async function calculateSellerPremium(amount: bigint, riskScore: number): Promise<bigint> {
+  if (amount <= 0n) throw new Error("Amount must be greater than 0");
+  if (riskScore < 0.1 || riskScore > 5.0) throw new Error("Risk score must be between 0.1 and 5.0");
 
-  // (0.05 + 0.01 * riskScore) * 10000 → integer multiplier for BigInt arithmetic
   const multiplier = Math.round((5 + riskScore) * 100);
   return (amount * BigInt(multiplier)) / 10_000n;
 }
 
 // ── Error Penalty ─────────────────────────────────────────────────────────────
 
-/** Errors above this threshold are handled at the route layer (429 / block). */
 export const DAILY_ERROR_HARD_THRESHOLD = 5;
+export const DAILY_ERROR_SOFT_THRESHOLD = 3;
+export const PER_ERROR_PENALTY_BPS = 1000;
 
 export interface ErrorHistory {
+  total: number;
   errors: number;
+  windowHours: number;
 }
 
 export interface AgentStatus {
-  /** Unix-ms timestamp until which the agent is hard-blocked (0 = not blocked). */
   blockedUntil: number;
-  /** Unix-ms timestamp until which the agent is in post-block cooldown (0 = none). */
   cooldownEnd: number;
-  /** Multiplier value stored at the moment the cooldown period began. */
-  currentMultiplier: number;
+  currentMultiplier: number; 
 }
 
-/**
- * Calculate a penalty multiplier for 0–DAILY_ERROR_HARD_THRESHOLD errors.
- * Errors above the threshold are capped before calculation.
- * 0 errors → 1.0 | 5 errors → 2.0 (linear scale).
- */
-export function calculatePenaltyScore(errorHistory: ErrorHistory): number {
-  const cappedErrors = Math.min(errorHistory.errors, DAILY_ERROR_HARD_THRESHOLD);
-  return 1.0 + cappedErrors / DAILY_ERROR_HARD_THRESHOLD;
+export function calculatePenaltyScore(errorHistory: ErrorHistory): bigint {
+  if (errorHistory.total === 0) return 100n;
+
+  const errorRate = errorHistory.errors / errorHistory.total;
+
+  let multiplier: bigint;
+  if (errorRate > 0.30) multiplier = 200n;
+  else if (errorRate > 0.15) multiplier = 150n;
+  else multiplier = 100n;
+
+  const capped = Math.min(errorHistory.errors, DAILY_ERROR_HARD_THRESHOLD);
+  const extra = Math.max(0, capped - DAILY_ERROR_SOFT_THRESHOLD);
+  
+  multiplier += BigInt(extra * 100);
+
+  return multiplier;
 }
 
-/**
- * Return the current premium multiplier for an agent.
- *
- * - blockedUntil > now  → null   (caller should return 403)
- * - cooldownEnd  > now  → 2.0
- * - past cooldown       → decays 0.1 per 12 h, floor 1.0
- * - no cooldown history → penalty score from calculatePenaltyScore (1.0–2.0)
- */
 export function getAgentMultiplier(
   agent: AgentStatus,
   history: ErrorHistory,
-): number | null {
+): bigint | null {
   const now = Date.now();
 
   if (agent.blockedUntil > now) return null;
+  if (agent.cooldownEnd > now) return 200n;
+  if (agent.cooldownEnd === 0) return calculatePenaltyScore(history);
 
-  if (agent.cooldownEnd > now) return 2.0;
-
-  if (agent.cooldownEnd === 0) {
-    // Normal operation — apply error-count penalty (1.0 at 0 errors, 2.0 at 5)
-    return calculatePenaltyScore(history);
-  }
-
-  // Past cooldown: decay 0.1 every 12 h, floor at 1.0
   const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
   const steps = Math.floor((now - agent.cooldownEnd) / TWELVE_HOURS_MS);
-  return Math.max(1.0, agent.currentMultiplier - steps * 0.1);
+  const currentBigInt = BigInt(Math.round(agent.currentMultiplier * 100));
+  
+  return Math.max(100n, currentBigInt - BigInt(steps * 10));
+}
+
+export function calculatePremium(amount: bigint, retries: number, multiplier: bigint): bigint {
+  if (amount <= 0n) throw new Error("Amount must be greater than 0");
+
+  const baseBps = 700 + (retries - 1) * 200;
+  const effectiveBps = (BigInt(baseBps) * multiplier) / 100n;
+  return (amount * effectiveBps) / 10_000n;
 }
 
 // ── Risk Score Update ─────────────────────────────────────────────────────────
 
-/**
- * Bayesian update of Risk Score after a payout event.
- * Formula: newScore = (currentScore × N + payoutFactor) / (N + 1), N = 10
- */
 export async function updateRiskScore(
   sellerAddress: string,
   payoutFactor: number,
@@ -217,4 +176,41 @@ export async function updateRiskScore(
   const N = 10;
   const newScore = (currentRiskScore * N + payoutFactor) / (N + 1);
   return Math.max(0.1, Math.min(5.0, newScore));
+}
+
+// ── Rolling Window Error Tracker ─────────────────────────────────────────────
+
+const agentErrorStore = new Map<string, number[]>();
+
+export function recordAgentError(agent: string, timestamp: number = Date.now()): void {
+  if (!agent || !agent.startsWith("0x")) throw new Error("Invalid agent address");
+
+  const now = Date.now();
+  const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+
+  let errors = agentErrorStore.get(agent) || [];
+  errors = errors.filter(t => t > twentyFourHoursAgo);
+  errors.push(timestamp);
+  agentErrorStore.set(agent, errors);
+}
+
+export function getAgentErrorHistory(agent: string): ErrorHistory {
+  if (!agent || !agent.startsWith("0x")) throw new Error("Invalid agent address");
+
+  const now = Date.now();
+  const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+
+  const errors = agentErrorStore.get(agent) || [];
+  const recentErrors = errors.filter(t => t > twentyFourHoursAgo);
+
+  return {
+    total: 10, // ИСПРАВЛЕНИЕ: Базовый знаменатель, чтобы errorRate не был всегда 100%
+    errors: recentErrors.length,
+    windowHours: 24,
+  };
+}
+
+export function clearAgentErrors(agent: string): void {
+  if (!agent || !agent.startsWith("0x")) throw new Error("Invalid agent address");
+  agentErrorStore.delete(agent);
 }
