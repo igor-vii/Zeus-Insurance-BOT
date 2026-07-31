@@ -1,20 +1,81 @@
+## Render Blueprint — Zeus Insurance API Server
+## Docs: https://render.com/docs/blueprint-spec
+##
+## To deploy:
+## 1. Push this file to GitHub
+## 2. Go to render.com → New → Blueprint
+## 3. Connect your repo — Render reads this file automatically
+## 4. Set secret env vars marked "sync: false" in the Render dashboard after creation
+
 services:
   - type: web
-    name: zeus-insurance-frontend
-    runtime: static
-    buildCommand: cd frontend && pnpm install --no-frozen-lockfile && pnpm build
-    staticPublishPath: frontend/dist/public
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: https://zeus-insurance-bot-api.onrender.com/api
-
-  - type: web
-    name: zeus-insurance-bot-api
+    name: zeus-insurance-api
     runtime: node
-    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @zeus/sdk build && pnpm --filter @workspace/api-server build
+    region: oregon           # closest to Base/X Layer RPCs; change to frankfurt for EU
+    plan: free               # upgrade to starter ($7/mo) for always-on + custom domain
+    rootDir: .
+    buildCommand: >
+      npm install -g pnpm@10.28.0 &&
+      pnpm install --no-frozen-lockfile &&
+      pnpm --filter @zeus/sdk build &&
+      pnpm --filter @workspace/api-server build
     startCommand: node --enable-source-maps ./api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
     envVars:
       - key: NODE_VERSION
-        value: "24"
+        value: "20"
+      - key: PORT
+        value: "10000"       # Render assigns this port automatically; keep in sync
+      - key: NODE_ENV
+        value: production
+
+      # ── Network ────────────────────────────────────────────────────────────
+      - key: ZEUS_NETWORK
+        value: base-sepolia
+      - key: ZEUS_INSURANCE_NETWORK
+        value: base-sepolia
+
+      # ── Base Sepolia ────────────────────────────────────────────────────────
+      - key: ZEUS_INSURANCE_ADDRESS
+        value: "0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4"
+      - key: ZEUS_ESCROW_BOT_ADDRESS
+        value: "0x87365462353bCBAB2CF0DF57c7Cb15519C5B7c76"
+      - key: BASE_SEPOLIA_RPC_URL
+        value: "https://sepolia.base.org"
+
+      # ── X Layer Mainnet ─────────────────────────────────────────────────────
+      - key: ZEUS_INSURANCE_ADDRESS_XLAYER
+        value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
+      - key: ZEUS_ESCROW_ADDRESS_XLAYER
+        value: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5"
+      - key: ZEUS_ESCROW_BOT_ADDRESS_XLAYER
+        value: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5"
+      - key: ZEUS_RESERVE_ADDRESS_XLAYER
+        value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
+      - key: XLAYER_MAINNET_RPC_URL
+        value: "https://rpc.xlayer.tech"
+
+      # ── Database (injected automatically by Render from the DB below) ───────
       - key: DATABASE_URL
+        fromDatabase:
+          name: zeus-insurance-db
+          property: connectionString
+
+      # ── Comma-separated extra allowed CORS origins (e.g. your Vercel URL) ──
+      # Example: https://zeus-insurance.vercel.app,https://zeus-insurance.xyz
+      - key: CORS_ORIGINS
+        value: ""            # fill in after deploy
+
+      # ── Secrets — set these manually in the Render dashboard ───────────────
+      - key: SESSION_SECRET
+        sync: false          # never committed; set in Render dashboard
+      - key: SERVER_PRIVATE_KEY
         sync: false
+      - key: OKLINK_API_KEY
+        sync: false
+
+databases:
+  - name: zeus-insurance-db
+    databaseName: zeus_insurance
+    plan: free               # 1 GB storage; upgrade to starter for persistence SLA
+    region: oregon
