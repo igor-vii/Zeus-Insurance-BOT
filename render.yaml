@@ -1,17 +1,51 @@
-## Render Blueprint — Zeus Insurance API Server
+## Render Blueprint — Zeus Insurance (3 services + DB)
 ## Docs: https://render.com/docs/blueprint-spec
 ##
-## To deploy:
-## 1. Push this file to GitHub
-## 2. Go to render.com → New → Blueprint
-## 3. Connect your repo — Render reads this file automatically
-## 4. Set secret env vars marked "sync: false" in the Render dashboard after creation
+## Deploy steps:
+##   1. Push this file to GitHub
+##   2. Go to render.com → New → Blueprint → connect your repo
+##   3. Render reads this file and creates all services automatically
+##   4. After first deploy, fill in the CORS_ORIGINS and VITE_API_BASE_URL
+##      values (see comments) and redeploy
+##   5. Set all secrets marked "sync: false" in the Render dashboard
 
 services:
+
+  # ── 1. Frontend — Static Site ────────────────────────────────────────────
+  - type: static
+    name: zeus-frontend
+    region: oregon
+    buildCommand: >
+      npm install -g pnpm@10.28.0 &&
+      pnpm install --no-frozen-lockfile &&
+      pnpm --filter @zeus/sdk build &&
+      cd frontend && pnpm build
+    staticPublishPath: ./frontend/dist/public
+    # SPA routing — all paths fall back to index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    buildFilter:
+      paths:
+        - frontend/**
+        - sdk/**
+        - pnpm-lock.yaml
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # After first deploy copy the zeus-insurance-api URL here and redeploy:
+      #   https://zeus-insurance-api.onrender.com/api
+      - key: VITE_API_BASE_URL
+        value: ""             # ← fill with https://<your-api>.onrender.com/api
+      - key: VITE_WATCHER_API_URL
+        value: ""             # ← fill with https://<your-watcher>.onrender.com  (optional)
+
+  # ── 2. API Server — Web Service ──────────────────────────────────────────
   - type: web
     name: zeus-insurance-api
     runtime: node
-    region: oregon           # closest to Base/X Layer RPCs; change to frankfurt for EU
+    region: oregon
     plan: free               # upgrade to starter ($7/mo) for always-on + custom domain
     rootDir: .
     buildCommand: >
@@ -21,21 +55,27 @@ services:
       pnpm --filter @workspace/api-server build
     startCommand: node --enable-source-maps ./api-server/dist/index.mjs
     healthCheckPath: /api/healthz
+    buildFilter:
+      paths:
+        - api-server/**
+        - sdk/**
+        - lib/**
+        - pnpm-lock.yaml
     envVars:
       - key: NODE_VERSION
         value: "20"
       - key: PORT
-        value: "10000"       # Render assigns this port automatically; keep in sync
+        value: "10000"       # Render injects PORT automatically; keep in sync
       - key: NODE_ENV
         value: production
 
-      # ── Network ────────────────────────────────────────────────────────────
+      # ── Network ───────────────────────────────────────────────────────────
       - key: ZEUS_NETWORK
         value: base-sepolia
       - key: ZEUS_INSURANCE_NETWORK
         value: base-sepolia
 
-      # ── Base Sepolia ────────────────────────────────────────────────────────
+      # ── Base Sepolia contracts ─────────────────────────────────────────────
       - key: ZEUS_INSURANCE_ADDRESS
         value: "0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4"
       - key: ZEUS_ESCROW_BOT_ADDRESS
@@ -43,7 +83,7 @@ services:
       - key: BASE_SEPOLIA_RPC_URL
         value: "https://sepolia.base.org"
 
-      # ── X Layer Mainnet ─────────────────────────────────────────────────────
+      # ── X Layer Mainnet contracts ──────────────────────────────────────────
       - key: ZEUS_INSURANCE_ADDRESS_XLAYER
         value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
       - key: ZEUS_ESCROW_ADDRESS_XLAYER
@@ -55,27 +95,66 @@ services:
       - key: XLAYER_MAINNET_RPC_URL
         value: "https://rpc.xlayer.tech"
 
-      # ── Database (injected automatically by Render from the DB below) ───────
+      # ── Database (auto-injected by Render from the DB below) ──────────────
       - key: DATABASE_URL
         fromDatabase:
           name: zeus-insurance-db
           property: connectionString
 
-      # ── Comma-separated extra allowed CORS origins (e.g. your Vercel URL) ──
-      # Example: https://zeus-insurance.vercel.app,https://zeus-insurance.xyz
+      # ── CORS — add your frontend URL after first deploy ───────────────────
+      # Example: https://zeus-frontend.onrender.com
       - key: CORS_ORIGINS
-        value: ""            # fill in after deploy
+        value: ""             # ← fill after first deploy
 
-      # ── Secrets — set these manually in the Render dashboard ───────────────
+      # ── Secrets — set in Render dashboard, never commit ───────────────────
       - key: SESSION_SECRET
-        sync: false          # never committed; set in Render dashboard
-      - key: SERVER_PRIVATE_KEY
         sync: false
+      - key: SERVER_PRIVATE_KEY
+        sync: false           # enables automatic mode (optional)
       - key: OKLINK_API_KEY
         sync: false
 
+  # ── 3. Watcher — Background Worker ──────────────────────────────────────
+  - type: worker
+    name: zeus-watcher
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: .
+    buildCommand: >
+      npm install -g pnpm@10.28.0 &&
+      pnpm install --no-frozen-lockfile
+    startCommand: node --import tsx/esm ./watcher/src/index.ts
+    buildFilter:
+      paths:
+        - watcher/**
+        - pnpm-lock.yaml
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      # Point to the API server deployed above
+      - key: API_SERVER_URL
+        value: "https://zeus-insurance-api.onrender.com"
+      - key: BASE_SEPOLIA_RPC_URL
+        value: "https://sepolia.base.org"
+      - key: ZEUS_INSURANCE_ADDRESS
+        value: "0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4"
+      - key: POLL_INTERVAL_MS
+        value: "15000"
+      - key: MAX_POLICY_SCAN
+        value: "200"
+      - key: WATCHER_INDEX
+        value: "0"
+      # ── Secret ────────────────────────────────────────────────────────────
+      - key: WATCHER_PRIVATE_KEY
+        sync: false           # registered watcher address key; set in Render dashboard
+
+# ── PostgreSQL ──────────────────────────────────────────────────────────────
 databases:
   - name: zeus-insurance-db
     databaseName: zeus_insurance
-    plan: free               # 1 GB storage; upgrade to starter for persistence SLA
+    user: zeus_user
+    plan: free               # 1 GB; upgrade to starter for persistence SLA
     region: oregon
