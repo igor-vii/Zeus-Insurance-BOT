@@ -233,3 +233,26 @@ export function resetAgentStatus(agent: string): void {
 
   agentErrorStore.delete(agent);
 }
+
+// ── Risk Score Update ─────────────────────────────────────────────────────────
+
+/**
+ * Bayesian update of Risk Score after a payout event.
+ * Formula: newScore = (currentScore × N + payoutFactor) / (N + 1), N = 10
+ */
+export async function updateRiskScore(
+  sellerAddress: string,
+  payoutFactor: number,
+  currentRiskScore: number,
+): Promise<number> {
+  if (!sellerAddress || !sellerAddress.startsWith("0x")) {
+    throw new Error("Invalid seller address");
+  }
+  if (payoutFactor < 0 || payoutFactor > 5.0) {
+    throw new Error("Payout factor must be between 0 and 5.0");
+  }
+
+  const N = 10;
+  const newScore = (currentRiskScore * N + payoutFactor) / (N + 1);
+  return Math.max(0.1, Math.min(5.0, newScore));
+}
