@@ -1,4 +1,4 @@
-## Render Blueprint — Zeus Insurance (3 services + DB)
+## Render Blueprint — Zeus Insurance BOT (3 services + DB)
 ## Docs: https://render.com/docs/blueprint-spec
 ##
 ## Deploy steps:
@@ -34,8 +34,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # After first deploy copy the zeus-insurance-api URL here and redeploy:
-      #   https://zeus-insurance-api.onrender.com/api
+      # After first deploy copy the zeus-insurance-bot-api URL here and redeploy:
+      #   https://zeus-insurance-bot-api.onrender.com/api
       - key: VITE_API_BASE_URL
         value: ""             # ← fill with https://<your-api>.onrender.com/api
       - key: VITE_WATCHER_API_URL
@@ -47,13 +47,12 @@ services:
     runtime: node
     region: oregon
     plan: free               # upgrade to starter ($7/mo) for always-on + custom domain
-    rootDir: .
+    rootDir: api-server
     buildCommand: >
       npm install -g pnpm@10.28.0 &&
       pnpm install --no-frozen-lockfile &&
-      pnpm --filter @zeus/sdk build &&
-      pnpm --filter @workspace/api-server build
-    startCommand: node --enable-source-maps ./api-server/dist/index.mjs
+      pnpm build
+    startCommand: node ./dist/index.mjs
     healthCheckPath: /api/healthz
     buildFilter:
       paths:
@@ -71,17 +70,17 @@ services:
 
       # ── Network ───────────────────────────────────────────────────────────
       - key: ZEUS_NETWORK
-        value: base-sepolia
+        value: bot-chain
       - key: ZEUS_INSURANCE_NETWORK
-        value: base-sepolia
+        value: bot-chain
 
-      # ── Base Sepolia contracts ─────────────────────────────────────────────
+      # ── BOT Chain contracts (chain 677) ────────────────────────────────────
       - key: ZEUS_INSURANCE_ADDRESS
-        value: "0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4"
+        value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
       - key: ZEUS_ESCROW_BOT_ADDRESS
-        value: "0x87365462353bCBAB2CF0DF57c7Cb15519C5B7c76"
-      - key: BASE_SEPOLIA_RPC_URL
-        value: "https://sepolia.base.org"
+        value: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5"
+      - key: ZEUS_RESERVE_ADDRESS
+        value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
 
       # ── X Layer Mainnet contracts ──────────────────────────────────────────
       - key: ZEUS_INSURANCE_ADDRESS_XLAYER
@@ -94,6 +93,10 @@ services:
         value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
       - key: XLAYER_MAINNET_RPC_URL
         value: "https://rpc.xlayer.tech"
+
+      # ── Payment token ──────────────────────────────────────────────────────
+      - key: ZEUS_PAYMENT_TOKEN
+        value: "USDT"
 
       # ── Database (auto-injected by Render from the DB below) ──────────────
       - key: DATABASE_URL
@@ -120,11 +123,12 @@ services:
     runtime: node
     region: oregon
     plan: free
-    rootDir: .
+    rootDir: watcher
     buildCommand: >
       npm install -g pnpm@10.28.0 &&
-      pnpm install --no-frozen-lockfile
-    startCommand: node --import tsx/esm ./watcher/src/index.ts
+      pnpm install --no-frozen-lockfile &&
+      pnpm build
+    startCommand: node ./dist/index.js
     buildFilter:
       paths:
         - watcher/**
@@ -134,13 +138,12 @@ services:
         value: "20"
       - key: NODE_ENV
         value: production
-      # Point to the API server deployed above
       - key: API_SERVER_URL
-        value: "https://zeus-insurance-api.onrender.com"
-      - key: BASE_SEPOLIA_RPC_URL
-        value: "https://sepolia.base.org"
+        value: "https://zeus-insurance-bot-api.onrender.com"
       - key: ZEUS_INSURANCE_ADDRESS
-        value: "0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4"
+        value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
+      - key: ZEUS_RESERVE_ADDRESS
+        value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
       - key: POLL_INTERVAL_MS
         value: "15000"
       - key: MAX_POLICY_SCAN
