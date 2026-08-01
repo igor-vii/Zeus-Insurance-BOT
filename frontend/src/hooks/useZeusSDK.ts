@@ -7,7 +7,7 @@ import { ZeusSDK } from "@zeus/sdk";
 function chainIdToNetwork(chainId: number): string {
   switch (chainId) {
     case 677:  return "bot-chain-mainnet"; // ← ИСПРАВЛЕНО
-    case 196:  return "x-layer-mainnet";           // ← УТОЧНИ, КАК НАЗЫВАЕТСЯ В SDK
+    case 196:  return "x-layer";                   // matches SDK NetworkSchema
     default:   return "bot-chain-mainnet"; // ← ИСПРАВЛЕНО
   }
 }
