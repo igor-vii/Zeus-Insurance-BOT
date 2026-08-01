@@ -32,10 +32,14 @@ app.use(
   }),
 );
 const replitDomain = process.env["REPLIT_DEV_DOMAIN"];
+const corsOriginsEnv = process.env["CORS_ORIGINS"];
 const allowedOrigins = new Set([
   "http://localhost:3000",
   "http://localhost:5173",
   ...(replitDomain ? [`https://${replitDomain}`] : []),
+  ...(corsOriginsEnv
+    ? corsOriginsEnv.split(",").map((o) => o.trim()).filter(Boolean)
+    : []),
 ]);
 
 app.use(

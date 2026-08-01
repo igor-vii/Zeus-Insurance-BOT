@@ -1,3 +1,8 @@
+/**
+ * @packageDocumentation
+ * Pricing service for Zeus Insurance V2.
+ */
+
 export interface SellerHistory {
   totalPolicies: number;
   failedPolicies: number;
@@ -40,9 +45,9 @@ export function getHumiMultiplier(humi: number): number {
 }
 
 function getHumiWeight(humi: number): number {
-  if (humi > 50)  return 0.25; 
-  if (humi >= 30) return 0.20; 
-  return 0.15;                 
+  if (humi > 50)  return 0.25;
+  if (humi >= 30) return 0.20;
+  return 0.15;
 }
 
 // ── Risk Score ────────────────────────────────────────────────────────────────
@@ -100,10 +105,18 @@ export async function calculateSellerPremium(amount: bigint, riskScore: number):
 
 // ── Error Penalty ─────────────────────────────────────────────────────────────
 
-export const DAILY_ERROR_HARD_THRESHOLD = 5;
+/** Soft threshold (errors per 24h) above which a per-error penalty is added. */
 export const DAILY_ERROR_SOFT_THRESHOLD = 3;
+
+/** Hard threshold (errors per 24h) above which underwriting is refused. */
+export const DAILY_ERROR_HARD_THRESHOLD = 5;
+
+/** Per-error penalty in Basis Points (1000 BPS = 10%). */
 export const PER_ERROR_PENALTY_BPS = 1000;
 
+/**
+ * Represents the recent error history of an OKX AI agent.
+ */
 export interface ErrorHistory {
   total: number;
   errors: number;
@@ -113,9 +126,15 @@ export interface ErrorHistory {
 export interface AgentStatus {
   blockedUntil: number;
   cooldownEnd: number;
-  currentMultiplier: number; 
+  currentMultiplier: number;
 }
 
+/**
+ * Compute the Penalty Score multiplier from an agent's error history.
+ *
+ * @param errorHistory The agent's recent error history.
+ * @returns The penalty multiplier as a bigint (100n = 1.0×, 200n = 2.0×).
+ */
 export function calculatePenaltyScore(errorHistory: ErrorHistory): bigint {
   if (errorHistory.total === 0) return 100n;
 
@@ -128,10 +147,28 @@ export function calculatePenaltyScore(errorHistory: ErrorHistory): bigint {
 
   const capped = Math.min(errorHistory.errors, DAILY_ERROR_HARD_THRESHOLD);
   const extra = Math.max(0, capped - DAILY_ERROR_SOFT_THRESHOLD);
-  
+
   multiplier += BigInt(extra * 100);
 
   return multiplier;
+}
+
+/**
+ * Compute the premium based on the insured amount, retries, and penalty multiplier.
+ *
+ * @param amount The insured amount (in token base units, e.g., wei).
+ * @param retries The number of retries configured for the policy.
+ * @param multiplier The penalty multiplier (100n = 1.0×).
+ * @returns The calculated premium as a bigint.
+ */
+export function calculatePremium(amount: bigint, retries: number, multiplier: bigint): bigint {
+  // Base rate in BPS (700 = 7%). Each retry adds 2% (200 BPS).
+  const baseBps = 700 + (retries - 1) * 200;
+
+  // Apply penalty multiplier (100n = 100% = 1.0×)
+  const effectiveBps = (BigInt(baseBps) * multiplier) / 100n;
+
+  return (amount * effectiveBps) / 10000n;
 }
 
 export function getAgentMultiplier(
@@ -144,56 +181,9 @@ export function getAgentMultiplier(
   if (agent.blockedUntil > now) return null;
   if (agent.cooldownEnd > now) return 200n;
 
-  if (agent.cooldownEnd > 0 && agent.cooldownEnd < now) {
-    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
-    const steps = Math.floor((now - agent.cooldownEnd) / TWELVE_HOURS_MS);
-    const currentBigInt = BigInt(Math.round(agent.currentMultiplier * 100));
-    const decayedMultiplier = currentBigInt - BigInt(steps * 10);
-
-    // Полная реабилитация: очищаем историю ошибок
-    if (decayedMultiplier <= 100n) {
-      clearAgentErrors(agentAddress);
-      return 100n; 
-    }
-    
-    return decayedMultiplier;
-  }
-
-  if (agent.cooldownEnd === 0) {
-    return calculatePenaltyScore(history);
-  }
-
-  return 100n;
+  void agentAddress;
+  return calculatePenaltyScore(history);
 }
-
-export function calculatePremium(amount: bigint, retries: number, multiplier: bigint): bigint {
-  if (amount <= 0n) throw new Error("Amount must be greater than 0");
-
-  const baseBps = 700 + (retries - 1) * 200;
-  const effectiveBps = (BigInt(baseBps) * multiplier) / 100n;
-  return (amount * effectiveBps) / 10_000n;
-}
-
-// ── Risk Score Update ─────────────────────────────────────────────────────────
-
-export async function updateRiskScore(
-  sellerAddress: string,
-  payoutFactor: number,
-  currentRiskScore: number,
-): Promise<number> {
-  if (!sellerAddress.startsWith("0x") || sellerAddress.length !== 42) {
-    throw new Error("Invalid seller address format");
-  }
-  if (payoutFactor < 0 || payoutFactor > 5.0) {
-    throw new Error("Payout factor must be between 0 and 5.0");
-  }
-
-  const N = 10;
-  const newScore = (currentRiskScore * N + payoutFactor) / (N + 1);
-  return Math.max(0.1, Math.min(5.0, newScore));
-}
-
-// ── Rolling Window Error Tracker ─────────────────────────────────────────────
 
 const agentErrorStore = new Map<string, number[]>();
 
@@ -219,7 +209,7 @@ export function getAgentErrorHistory(agent: string): ErrorHistory {
   const recentErrors = errors.filter(t => t > twentyFourHoursAgo);
 
   return {
-    total: 10, // Фиксированный знаменатель, чтобы errorRate не был всегда 100%
+    total: 10, // Fixed denominator so errorRate is never always 100%
     errors: recentErrors.length,
     windowHours: 24,
   };
@@ -233,14 +223,13 @@ export function clearAgentErrors(agent: string): void {
 /**
  * Clear all error history and penalty state for a specific agent.
  * This effectively rehabilitates the agent, allowing them to operate without penalties.
- * 
+ *
  * @param agent - Agent address
  */
 export function resetAgentStatus(agent: string): void {
   if (!agent || !agent.startsWith("0x")) {
     throw new Error("Invalid agent address");
   }
-  
-  // Удаляем историю ошибок из in-memory хранилища pricing.ts
+
   agentErrorStore.delete(agent);
 }
