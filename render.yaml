@@ -13,7 +13,7 @@ services:
 
   # ── 1. Frontend — Static Site ────────────────────────────────────────────
   - type: static
-    name: zeus-frontend
+    name: Zeus-Insurance-BOT
     region: oregon
     buildCommand: >
       npm install -g pnpm@10.28.0 &&
@@ -43,7 +43,7 @@ services:
 
   # ── 2. API Server — Web Service ──────────────────────────────────────────
   - type: web
-    name: zeus-insurance-api
+    name: Zeus-Insurance-BOT-API
     runtime: node
     region: oregon
     plan: free               # upgrade to starter ($7/mo) for always-on + custom domain
@@ -116,7 +116,7 @@ services:
 
   # ── 3. Watcher — Background Worker ──────────────────────────────────────
   - type: worker
-    name: zeus-watcher
+    name: Zeus-watcher-BOT
     runtime: node
     region: oregon
     plan: free
