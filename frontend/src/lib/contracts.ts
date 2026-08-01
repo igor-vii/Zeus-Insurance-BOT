@@ -463,11 +463,8 @@ export function computeSlashingPremium(amount: bigint, chainId: number, risk: Va
 }
 
 /** Returns the payment token symbol for a given chainId. */
-export function getTokenSymbol(chainId?: number): string {
-  // All supported chains use USDT
-  switch (chainId) {
-    case 677:  return "USDT"; // BOT Chain Mainnet
-    case 196:  return "USDT"; // X Layer Mainnet
-    default:   return "USDT";
-  }
+export function getTokenSymbol(chainId: number): string {
+  if (chainId === 677) return "USDT"; // BOT Chain
+  if (chainId === 196) return "USDC"; // X Layer
+  return "USDC";                       // default
 }
