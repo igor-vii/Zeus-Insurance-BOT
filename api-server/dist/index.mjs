@@ -108144,35 +108144,48 @@ async function calculateRiskScore(sellerAddress, _amount, retries, history) {
   const rawScore = baseScore * existingWeight + humiMultiplier * humiWeight;
   return Math.max(0.1, Math.min(5, rawScore));
 }
-async function calculatePremium(amount, riskScore) {
-  if (amount <= 0n) {
-    throw new Error("Amount must be greater than 0");
-  }
-  if (riskScore < 0.1 || riskScore > 5) {
-    throw new Error("Risk score must be between 0.1 and 5.0");
-  }
+async function calculateSellerPremium(amount, riskScore) {
+  if (amount <= 0n) throw new Error("Amount must be greater than 0");
+  if (riskScore < 0.1 || riskScore > 5) throw new Error("Risk score must be between 0.1 and 5.0");
   const multiplier = Math.round((5 + riskScore) * 100);
   return amount * BigInt(multiplier) / 10000n;
 }
+var DAILY_ERROR_SOFT_THRESHOLD = 3;
 var DAILY_ERROR_HARD_THRESHOLD = 5;
 function calculatePenaltyScore(errorHistory) {
-  const cappedErrors = Math.min(errorHistory.errors, DAILY_ERROR_HARD_THRESHOLD);
-  return 1 + cappedErrors / DAILY_ERROR_HARD_THRESHOLD;
+  if (errorHistory.total === 0) return 100n;
+  const errorRate = errorHistory.errors / errorHistory.total;
+  let multiplier;
+  if (errorRate > 0.3) multiplier = 200n;
+  else if (errorRate > 0.15) multiplier = 150n;
+  else multiplier = 100n;
+  const capped = Math.min(errorHistory.errors, DAILY_ERROR_HARD_THRESHOLD);
+  const extra = Math.max(0, capped - DAILY_ERROR_SOFT_THRESHOLD);
+  multiplier += BigInt(extra * 100);
+  return multiplier;
 }
-function getAgentMultiplier(agent, history) {
+function calculatePremium(amount, retries, multiplier) {
+  const baseBps = 700 + (retries - 1) * 200;
+  const effectiveBps = BigInt(baseBps) * multiplier / 100n;
+  return amount * effectiveBps / 10000n;
+}
+function getAgentMultiplier(agentAddress, agent, history) {
   const now = Date.now();
   if (agent.blockedUntil > now) return null;
-  if (agent.cooldownEnd > now) return 2;
-  if (agent.cooldownEnd === 0) {
-    return calculatePenaltyScore(history);
+  if (agent.cooldownEnd > now) return 200n;
+  void agentAddress;
+  return calculatePenaltyScore(history);
+}
+var agentErrorStore = /* @__PURE__ */ new Map();
+function resetAgentStatus(agent) {
+  if (!agent || !agent.startsWith("0x")) {
+    throw new Error("Invalid agent address");
   }
-  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1e3;
-  const steps = Math.floor((now - agent.cooldownEnd) / TWELVE_HOURS_MS);
-  return Math.max(1, agent.currentMultiplier - steps * 0.1);
+  agentErrorStore.delete(agent);
 }
 async function updateRiskScore(sellerAddress, payoutFactor, currentRiskScore) {
-  if (!sellerAddress.startsWith("0x") || sellerAddress.length !== 42) {
-    throw new Error("Invalid seller address format");
+  if (!sellerAddress || !sellerAddress.startsWith("0x")) {
+    throw new Error("Invalid seller address");
   }
   if (payoutFactor < 0 || payoutFactor > 5) {
     throw new Error("Payout factor must be between 0 and 5.0");
@@ -108437,14 +108450,21 @@ function recordDailyError(address2) {
   pruned.push(now);
   dailyErrorTimestamps.set(key, pruned);
   const count2 = pruned.length;
+  let blockedUntil = null;
   if (count2 > DAILY_ERROR_HARD_THRESHOLD) {
+    blockedUntil = now + DAY_MS;
     agentStatusMap.set(key, {
-      blockedUntil: now + DAY_MS,
+      blockedUntil,
       cooldownEnd: now + DAY_MS + COOLDOWN_EXTRA_MS,
       currentMultiplier: 2
     });
   }
-  return count2;
+  return { count: count2, blockedUntil };
+}
+function clearAgentErrors(address2) {
+  const key = address2.toLowerCase();
+  dailyErrorTimestamps.delete(key);
+  agentStatusMap.delete(key);
 }
 var quoteSchema = external_exports.object({
   amount: external_exports.string().regex(/^\d+$/, "amount must be a non-negative integer string"),
@@ -108464,7 +108484,6 @@ router2.get("/quote", (req, res) => {
 var prepareBuySchema = external_exports.object({
   seller: external_exports.string().refine(isAddress, "Invalid seller address"),
   amount: external_exports.string().regex(/^\d+$/, "amount must be a non-negative integer string"),
-  // Accept both "timeout" and "timeoutSeconds" for ergonomics
   timeoutSeconds: external_exports.coerce.number().int().min(60).optional(),
   timeout: external_exports.coerce.number().int().min(60).optional(),
   maxRetries: external_exports.coerce.number().int().min(1).max(10),
@@ -108479,29 +108498,46 @@ router2.post("/prepare-buy", async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const { seller, amount, timeoutSeconds, maxRetries } = parsed.data;
+  const { seller, amount, timeoutSeconds, maxRetries, apiEndpoint } = parsed.data;
   const amountBigInt = BigInt(amount);
   let riskScore;
   let premiumAmount;
   try {
     const history = await getSellerHistory(seller);
     const dailyErrors = getDailyErrorCount(seller);
-    const errorHistory = { errors: dailyErrors };
+    const errorHistory = {
+      total: history.totalErrors ?? history.errors?.length ?? dailyErrors,
+      errors: dailyErrors,
+      windowHours: 24
+    };
     if (dailyErrors > DAILY_ERROR_HARD_THRESHOLD) {
-      res.status(429).json({ error: "Agent blocked", detail: `Daily error count ${dailyErrors} exceeds limit of ${DAILY_ERROR_HARD_THRESHOLD}` });
+      res.status(429).json({
+        error: "Agent temporarily blocked",
+        detail: `Daily error count ${dailyErrors} exceeds limit of ${DAILY_ERROR_HARD_THRESHOLD}`
+      });
       return;
     }
     const agentStatus = getAgentStatus(seller);
-    const agentMultiplier = getAgentMultiplier(agentStatus, errorHistory);
+    const agentMultiplier = getAgentMultiplier(seller, agentStatus, errorHistory);
     if (agentMultiplier === null) {
-      res.status(403).json({ error: "Agent is currently blocked", detail: `Blocked until ${new Date(agentStatus.blockedUntil).toISOString()}` });
+      res.status(403).json({
+        error: "Agent is currently blocked",
+        detail: `Blocked until ${new Date(agentStatus.blockedUntil).toISOString()}`
+      });
       return;
     }
+    if (agentStatus.cooldownEnd > 0 && agentStatus.cooldownEnd < Date.now() && agentMultiplier === 100n) {
+      clearAgentErrors(seller);
+    }
     riskScore = await calculateRiskScore(seller, amountBigInt, maxRetries, history);
-    const basePremium = await calculatePremium(amountBigInt, riskScore);
-    premiumAmount = basePremium * BigInt(Math.round(agentMultiplier * 100)) / 100n;
+    const basePremium = await calculateSellerPremium(amountBigInt, riskScore);
+    premiumAmount = basePremium * agentMultiplier / 100n;
+    if (apiEndpoint) {
+      console.log(`[Agent ${seller}] Using custom endpoint: ${apiEndpoint}`);
+    }
   } catch (err2) {
     const msg = err2 instanceof Error ? err2.message : String(err2);
+    recordDailyError(seller);
     res.status(500).json({ error: "Failed to calculate risk score", detail: msg });
     return;
   }
@@ -108523,6 +108559,7 @@ router2.post("/prepare-buy", async (req, res) => {
       return;
     } catch (err2) {
       const msg = err2 instanceof Error ? err2.message : String(err2);
+      recordDailyError(seller);
       res.status(502).json({ error: "Automatic mode failed", detail: msg });
       return;
     }
@@ -108784,7 +108821,7 @@ router2.post("/slashing-protection", async (req, res) => {
 });
 var slashingPremiumSchema = external_exports.object({
   validator: external_exports.string().refine(isAddress, "Invalid validator address"),
-  amount: external_exports.coerce.number().positive("amount must be positive"),
+  amount: external_exports.string().regex(/^\d+$/, "amount must be a non-negative integer string"),
   chainId: external_exports.coerce.number().int().positive()
 });
 router2.post("/slashing/premium", async (req, res) => {
@@ -108794,6 +108831,7 @@ router2.post("/slashing/premium", async (req, res) => {
     return;
   }
   const { validator, amount, chainId } = parsed.data;
+  const amountBigInt = BigInt(amount);
   let rate = chainId === 677 ? 15 : 15;
   try {
     const history = await getSellerHistory(validator);
@@ -108805,8 +108843,14 @@ router2.post("/slashing/premium", async (req, res) => {
   } catch {
     rate = 18;
   }
-  const premium = amount * rate / 100;
-  res.json({ premium, rate });
+  const premiumAmount = amountBigInt * BigInt(rate) / 100n;
+  res.json({
+    premiumAmount: premiumAmount.toString(),
+    rate,
+    amount,
+    validator,
+    chainId
+  });
 });
 var reportSlashingSchema = external_exports.object({
   policyId: external_exports.coerce.number().int().nonnegative(),
@@ -108894,13 +108938,71 @@ router2.post("/agent-error", (req, res) => {
     }
     seenEventIds.add(eventId);
   }
-  const count2 = recordDailyError(agent);
+  const { count: count2, blockedUntil } = recordDailyError(agent);
   const blocked = count2 > DAILY_ERROR_HARD_THRESHOLD;
   res.json({
     agent,
     dailyErrors: count2,
     blocked,
-    blockedUntil: blocked ? getAgentStatus(agent).blockedUntil : null
+    blockedUntil: blockedUntil ?? null
+  });
+});
+var resetAgentSchema = external_exports.object({
+  agent: external_exports.string().refine(isAddress, "Invalid agent address")
+});
+router2.post("/admin/reset-agent", (req, res) => {
+  const secret = process.env["ADMIN_SECRET"];
+  if (!secret) {
+    res.status(503).json({ error: "Admin endpoint not configured (ADMIN_SECRET not set)" });
+    return;
+  }
+  const authHeader = req.headers["authorization"];
+  const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!provided || provided !== secret) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const parsed = resetAgentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+  const { agent } = parsed.data;
+  const agentLower = agent.toLowerCase();
+  try {
+    resetAgentStatus(agent);
+  } catch (err2) {
+    const msg = err2 instanceof Error ? err2.message : String(err2);
+    res.status(500).json({ error: "Failed to reset agent status in pricing service", detail: msg });
+    return;
+  }
+  dailyErrorTimestamps.delete(agentLower);
+  agentStatusMap.delete(agentLower);
+  res.json({
+    success: true,
+    agent,
+    message: "Agent status reset successfully"
+  });
+});
+router2.get("/agent-status/:agent", (req, res) => {
+  const { agent } = req.params;
+  if (!agent || !isAddress(agent)) {
+    res.status(400).json({ error: "Invalid agent address" });
+    return;
+  }
+  const status = getAgentStatus(agent);
+  const dailyErrors = getDailyErrorCount(agent);
+  const now = Date.now();
+  const isBlocked = status.blockedUntil > now || dailyErrors > DAILY_ERROR_HARD_THRESHOLD;
+  res.json({
+    address: agent,
+    blockedUntil: status.blockedUntil,
+    cooldownEnd: status.cooldownEnd,
+    currentMultiplier: status.currentMultiplier,
+    dailyErrors,
+    isBlocked,
+    threshold: DAILY_ERROR_HARD_THRESHOLD,
+    isInCooldown: status.cooldownEnd > now && status.blockedUntil <= now
   });
 });
 var insurance_default = router2;
@@ -121372,10 +121474,12 @@ app.use(
   })
 );
 var replitDomain = process.env["REPLIT_DEV_DOMAIN"];
+var corsOriginsEnv = process.env["CORS_ORIGINS"];
 var allowedOrigins = /* @__PURE__ */ new Set([
   "http://localhost:3000",
   "http://localhost:5173",
-  ...replitDomain ? [`https://${replitDomain}`] : []
+  ...replitDomain ? [`https://${replitDomain}`] : [],
+  ...corsOriginsEnv ? corsOriginsEnv.split(",").map((o3) => o3.trim()).filter(Boolean) : []
 ]);
 app.use(
   (0, import_cors.default)({
