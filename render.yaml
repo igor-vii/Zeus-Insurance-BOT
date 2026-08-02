@@ -119,16 +119,13 @@ services:
 
   # ── 3. Watcher — Background Worker ──────────────────────────────────────
   - type: worker
-    name: Zeus-watcher-BOT
+    name: zeus-watcher-bot
     runtime: node
     region: oregon
     plan: free
     rootDir: watcher
-    buildCommand: >
-      npm install -g pnpm@10.28.0 &&
-      pnpm install --no-frozen-lockfile &&
-      pnpm build
-    startCommand: node ./dist/index.js
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm build
+    startCommand: node dist/index.js
     buildFilter:
       paths:
         - watcher/**
@@ -144,13 +141,16 @@ services:
         value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
       - key: ZEUS_RESERVE_ADDRESS
         value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
+      # BOT Chain Mainnet RPC (overrides the default Sepolia fallback in src/index.ts)
+      - key: BASE_SEPOLIA_RPC_URL
+        value: "https://rpc.botchain.ai"
       - key: POLL_INTERVAL_MS
         value: "15000"
       - key: MAX_POLICY_SCAN
         value: "200"
       - key: WATCHER_INDEX
         value: "0"
-      # ── Secret ────────────────────────────────────────────────────────────
+      # ── Secrets — set in Render dashboard, never commit ───────────────────
       - key: WATCHER_PRIVATE_KEY
         sync: false           # registered watcher address key; set in Render dashboard
 
