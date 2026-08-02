@@ -6,10 +6,11 @@
  * and submits an Observation to ZeusInsuranceV2 via the API server.
  *
  * Environment variables:
- *   WATCHER_PRIVATE_KEY   — private key of a registered watcher address (required)
- *   API_SERVER_URL        — base URL of the api-server (default: http://localhost:8080)
- *   BASE_SEPOLIA_RPC_URL  — RPC URL (default: https://sepolia.base.org)
- *   INSURANCE_ADDRESS     — override contract address (reads ZEUS_INSURANCE_ADDRESS fallback)
+ *   WATCHER_PRIVATE_KEY        — private key of a registered watcher address (required)
+ *   API_SERVER_URL             — base URL of the api-server (default: http://localhost:8080)
+ *   BOT_CHAIN_MAINNET_RPC_URL  — RPC URL (default: https://rpc.botchain.ai)
+ *   X_LAYER_RPC_URL            — X Layer RPC URL (default: https://rpc.xlayer.tech)
+ *   INSURANCE_ADDRESS          — override contract address (reads ZEUS_INSURANCE_ADDRESS fallback)
  *   POLL_INTERVAL_MS      — polling interval in ms (default: 15000)
  *   MAX_POLICY_SCAN       — how many recent policyIds to scan (default: 200)
  *   WATCHER_INDEX         — log prefix for this watcher instance (default: 0)
@@ -27,7 +28,7 @@ import { ethers } from "ethers";
 
 const WATCHER_PRIVATE_KEY  = process.env["WATCHER_PRIVATE_KEY"];
 const API_SERVER_URL       = (process.env["API_SERVER_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
-const RPC_URL              = process.env["BASE_SEPOLIA_RPC_URL"] ?? "https://sepolia.base.org";
+const RPC_URL              = process.env["BOT_CHAIN_MAINNET_RPC_URL"] ?? "https://rpc.botchain.ai";
 const INSURANCE_ADDRESS    = process.env["INSURANCE_ADDRESS"] ?? process.env["ZEUS_INSURANCE_ADDRESS"] ?? "";
 const POLL_INTERVAL_MS     = Number(process.env["POLL_INTERVAL_MS"] ?? "15000");
 const MAX_POLICY_SCAN      = Number(process.env["MAX_POLICY_SCAN"] ?? "200");

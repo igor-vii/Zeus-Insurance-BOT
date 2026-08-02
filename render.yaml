@@ -141,9 +141,10 @@ services:
         value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
       - key: ZEUS_RESERVE_ADDRESS
         value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
-      # BOT Chain Mainnet RPC (overrides the default Sepolia fallback in src/index.ts)
-      - key: BASE_SEPOLIA_RPC_URL
+      - key: BOT_CHAIN_MAINNET_RPC_URL
         value: "https://rpc.botchain.ai"
+      - key: X_LAYER_RPC_URL
+        value: "https://rpc.xlayer.tech"
       - key: POLL_INTERVAL_MS
         value: "15000"
       - key: MAX_POLICY_SCAN
