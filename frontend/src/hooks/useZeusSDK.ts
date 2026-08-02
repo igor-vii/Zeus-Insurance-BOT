@@ -26,13 +26,17 @@ function walletClientToSigner(
   walletClient: WalletClient,
   chainId: number,
 ): JsonRpcSigner {
-  const { account, chain, transport } = walletClient;
+  const { account, chain } = walletClient;
   if (!account) throw new Error("Wallet account not available");
   const network = {
     chainId,
     name: chain?.name ?? String(chainId),
   };
-  const provider = new BrowserProvider(transport as unknown as Eip1193Provider, network);
+  // Pass walletClient itself (not walletClient.transport) as the EIP-1193 provider.
+  // wagmi's HTTP transport is for read-only RPC; walletClient.request correctly
+  // routes writes (eth_sendTransaction, eth_sign, etc.) through the connected
+  // wallet (MetaMask), while reads still go through the configured RPC.
+  const provider = new BrowserProvider(walletClient as unknown as Eip1193Provider, network);
   return new JsonRpcSigner(provider, account.address);
 }
 
