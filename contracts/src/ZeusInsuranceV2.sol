@@ -94,6 +94,12 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
 
     uint256 public constant SLASHING_PREMIUM_BPS = 500;
 
+    /// @notice Bitmask representing all coverage types simultaneously.
+    uint256 public constant ALL_INCLUSIVE_MASK = type(uint256).max;
+
+    // Coverage mask per policy (bitmask of covered risk types)
+    mapping(uint256 => uint256)               public  policyCoverageMask;
+
     mapping(bytes32 => VoteTally)             public  pendingVotes;
     mapping(bytes32 => mapping(address => bool)) public hasVoted;
     mapping(bytes32 => bool)                  public  usedRequestIds;
@@ -128,25 +134,51 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
         uint256 timeoutSeconds,
         uint256 maxRetries
     ) external nonReentrant returns (uint256) {
-        return _buyInternal(msg.sender, seller, amount, timeoutSeconds, maxRetries);
+        if (seller == address(0)) revert InvalidSeller();
+        if (amount == 0) revert InvalidAmount();
+        if (maxRetries == 0 || maxRetries > 10) revert InvalidRetries();
+        if (timeoutSeconds == 0) revert InvalidTimeout();
+
+        uint256 premiumBps    = 700 + (maxRetries - 1) * 200;
+        uint256 premium       = (amount * premiumBps) / 10_000;
+        uint256 retryDeadline = block.timestamp + timeoutSeconds * maxRetries;
+
+        if (!usdt.transferFrom(msg.sender, address(reserve), premium)) revert PremiumTransferFailed();
+
+        uint256 policyId = nextPolicyId;
+        policies[policyId] = Policy({
+            buyer:         msg.sender,
+            seller:        seller,
+            amount:        amount,
+            premium:       premium,
+            retryDeadline: retryDeadline,
+            maxRetries:    maxRetries,
+            status:        PolicyStatus.Active
+        });
+
+        emit PolicyCreated(policyId, msg.sender, seller, amount, premium, retryDeadline);
+        nextPolicyId++;
+        return policyId;
     }
 
     function buyPolicy(
         address seller,
         uint256 amount,
+        uint256 coverageMask,
         uint256 timeoutSeconds,
-        uint256 maxRetries
+        string calldata metadata
     ) external nonReentrant returns (uint256) {
-        return _buyInternal(msg.sender, seller, amount, timeoutSeconds, maxRetries);
+        require(coverageMask != 0, "Coverage mask must not be zero");
+        return _buyInternal(msg.sender, seller, amount, coverageMask, timeoutSeconds, metadata);
     }
 
     function buyAllInclusivePolicy(
         address seller,
         uint256 amount,
         uint256 timeoutSeconds,
-        uint256 maxRetries
+        string calldata metadata
     ) external nonReentrant returns (uint256) {
-        return _buyInternal(msg.sender, seller, amount, timeoutSeconds, maxRetries);
+        return _buyInternal(msg.sender, seller, amount, ALL_INCLUSIVE_MASK, timeoutSeconds, metadata);
     }
 
     function buySlashingProtection(
@@ -330,20 +362,18 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
         address buyer,
         address seller,
         uint256 amount,
+        uint256 coverageMask,
         uint256 timeoutSeconds,
-        uint256 maxRetries
+        string calldata metadata
     ) internal returns (uint256 policyId) {
         if (seller == address(0)) revert InvalidSeller();
         if (amount == 0) revert InvalidAmount();
-        if (maxRetries == 0 || maxRetries > 10) revert InvalidRetries();
         if (timeoutSeconds == 0) revert InvalidTimeout();
 
-        uint256 premiumBps = 700 + (maxRetries - 1) * 200;
-        uint256 premium    = (amount * premiumBps) / 10_000;
+        uint256 premium       = (amount * 700) / 10_000; // 7 % base rate
+        uint256 retryDeadline = block.timestamp + timeoutSeconds;
 
         if (!usdt.transferFrom(buyer, address(reserve), premium)) revert PremiumTransferFailed();
-
-        uint256 retryDeadline = block.timestamp + timeoutSeconds * maxRetries;
 
         policyId = nextPolicyId;
         policies[policyId] = Policy({
@@ -352,12 +382,17 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
             amount:        amount,
             premium:       premium,
             retryDeadline: retryDeadline,
-            maxRetries:    maxRetries,
+            maxRetries:    1,
             status:        PolicyStatus.Active
         });
 
+        policyCoverageMask[policyId] = coverageMask;
+
         emit PolicyCreated(policyId, buyer, seller, amount, premium, retryDeadline);
         nextPolicyId++;
+
+        // metadata not stored on-chain; suppress unused-variable warning
+        metadata;
     }
 
     function _verifyObservation(Observation calldata obs) internal pure returns (address) {

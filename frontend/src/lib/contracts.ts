@@ -1,386 +1,470 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+import type { SupportedChainId } from "@/lib/wagmi";
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import "./ZeusReserveV2.sol";
-import "./interfaces/IInsuranceContract.sol";
+// ─── Per-network contract addresses ──────────────────────────────────────────
+
+export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
+  insurance: `0x${string}`;
+  reserve:   `0x${string}`;
+  token:     `0x${string}`;
+  escrow:    `0x${string}`;
+  deployBlock: bigint;
+}> = {
+  // X Layer Mainnet (chain 196)
+  196: {
+    insurance:   "0x8D10C2c6C92b613C1938fe532f0e391044e76188" as `0x${string}`,
+    reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
+    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on X Layer
+    escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
+    deployBlock: 1_000_000n,
+  },
+  // BOT Chain Mainnet (chain 677)
+  677: {
+    insurance:   "0x8D10C2c6C92b613C1938fe532f0e391044e76188" as `0x${string}`,
+    reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
+    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain Mainnet
+    escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
+    deployBlock: 44_268_060n,
+  },
+};
+
+/** Returns addresses for the given chainId, falling back to BOT Chain Mainnet. */
+export function getContracts(chainId?: number) {
+  return CONTRACT_ADDRESSES[(chainId as SupportedChainId) ?? 677] ?? CONTRACT_ADDRESSES[677];
+}
+
+// ─── Legacy single-chain exports (BOT Chain Mainnet defaults) ─────────────────────────
+export const ZEUS_INSURANCE_ADDRESS = CONTRACT_ADDRESSES[677].insurance;
+export const ZEUS_RESERVE_ADDRESS   = CONTRACT_ADDRESSES[677].reserve;
+export const USDC_ADDRESS           = CONTRACT_ADDRESSES[677].token; // kept for compat
+export const INSURANCE_DEPLOY_BLOCK = CONTRACT_ADDRESSES[677].deployBlock;
+
+// ─── ZeusInsuranceV2 ABI ─────────────────────────────────────────────────────
+export const ZEUS_INSURANCE_ABI = [
+  {
+    inputs: [{ internalType: "address", name: "_usdc", type: "address" }, { internalType: "address", name: "_reserve", type: "address" }],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  { inputs: [{ internalType: "address", name: "owner", type: "address" }], name: "OwnableInvalidOwner", type: "error" },
+  { inputs: [{ internalType: "address", name: "account", type: "address" }], name: "OwnableUnauthorizedAccount", type: "error" },
+  { inputs: [], name: "ReentrancyGuardReentrantCall", type: "error" },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "claimId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "claimant", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "ClaimApproved",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "previousOwner", type: "address" },
+      { indexed: true, internalType: "address", name: "newOwner", type: "address" },
+    ],
+    name: "OwnershipTransferred",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "policyId", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "PayoutExecuted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "policyId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "buyer", type: "address" },
+      { indexed: true, internalType: "address", name: "seller", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "premium", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "retryDeadline", type: "uint256" },
+    ],
+    name: "PolicyCreated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [{ indexed: true, internalType: "uint256", name: "policyId", type: "uint256" }],
+    name: "PolicyExpired",
+    type: "event",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "seller", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+      { internalType: "uint256", name: "timeoutSeconds", type: "uint256" },
+      { internalType: "uint256", name: "maxRetries", type: "uint256" },
+    ],
+    name: "buyInsurance",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
+    name: "claimPayout",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "claimId", type: "uint256" },
+      { internalType: "address", name: "claimant", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "isClaimApproved",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "claimId", type: "uint256" }],
+    name: "markClaimFulfilled",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "nextPolicyId",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "owner",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    name: "policies",
+    outputs: [
+      { internalType: "address", name: "buyer", type: "address" },
+      { internalType: "address", name: "seller", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+      { internalType: "uint256", name: "premium", type: "uint256" },
+      { internalType: "uint256", name: "retryDeadline", type: "uint256" },
+      { internalType: "uint256", name: "maxRetries", type: "uint256" },
+      { internalType: "bool", name: "isActive", type: "bool" },
+      { internalType: "bool", name: "isPaidOut", type: "bool" },
+      { internalType: "bool", name: "isExpired", type: "bool" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
+    name: "getPolicy",
+    outputs: [
+      {
+        components: [
+          { internalType: "address", name: "buyer", type: "address" },
+          { internalType: "address", name: "seller", type: "address" },
+          { internalType: "uint256", name: "amount", type: "uint256" },
+          { internalType: "uint256", name: "premium", type: "uint256" },
+          { internalType: "uint256", name: "retryDeadline", type: "uint256" },
+          { internalType: "uint256", name: "maxRetries", type: "uint256" },
+          { internalType: "bool", name: "isActive", type: "bool" },
+          { internalType: "bool", name: "isPaidOut", type: "bool" },
+          { internalType: "bool", name: "isExpired", type: "bool" },
+        ],
+        internalType: "struct ZeusInsuranceV2.Policy",
+        name: "",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "reserve",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "_reserve", type: "address" }],
+    name: "setReserve",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "usdc",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+// ─── ZeusReserveV2 ABI ───────────────────────────────────────────────────────
+export const ZEUS_RESERVE_ABI = [
+  {
+    inputs: [{ internalType: "address", name: "_usdc", type: "address" }, { internalType: "address", name: "initialOwner", type: "address" }],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  { inputs: [{ internalType: "uint256", name: "claimId", type: "uint256" }], name: "ClaimAlreadyFulfilled", type: "error" },
+  { inputs: [{ internalType: "uint256", name: "claimId", type: "uint256" }], name: "ClaimNotApproved", type: "error" },
+  { inputs: [{ internalType: "uint256", name: "attempted", type: "uint256" }, { internalType: "uint256", name: "remaining", type: "uint256" }], name: "DailyPayoutLimitExceeded", type: "error" },
+  { inputs: [{ internalType: "uint256", name: "available", type: "uint256" }, { internalType: "uint256", name: "required", type: "uint256" }], name: "InsufficientReserve", type: "error" },
+  { inputs: [{ internalType: "address", name: "addr", type: "address" }], name: "NotAContract", type: "error" },
+  { inputs: [{ internalType: "address", name: "caller", type: "address" }], name: "NotInsuranceContract", type: "error" },
+  { inputs: [], name: "ReserveBelowThreshold", type: "error" },
+  { inputs: [], name: "TransferFailed", type: "error" },
+  { inputs: [], name: "ZeroAddress", type: "error" },
+  { inputs: [], name: "ZeroAmount", type: "error" },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "uint256", name: "claimId", type: "uint256" },
+      { indexed: true, internalType: "address", name: "claimant", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "ClaimPaid",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "oldContract", type: "address" },
+      { indexed: true, internalType: "address", name: "newContract", type: "address" },
+    ],
+    name: "InsuranceContractUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "oldValue", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "newValue", type: "uint256" },
+    ],
+    name: "MaxDailyPayoutUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "oldValue", type: "uint256" },
+      { indexed: false, internalType: "uint256", name: "newValue", type: "uint256" },
+    ],
+    name: "MinReserveThresholdUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "from", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "ReserveDeposited",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "to", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "ReserveWithdrawn",
+    type: "event",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "amount", type: "uint256" }],
+    name: "deposit",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "dailyPayouts",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    name: "fulfilledClaims",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getReserveBalance",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "isAdequatelyFunded",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "insuranceContract",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "maxDailyPayout",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "minReserveThreshold",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "owner",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "remainingDailyPayout",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "_contract", type: "address" }],
+    name: "setInsuranceContract",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "usdc",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "amount", type: "uint256" }],
+    name: "withdraw",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+// ─── ERC-20 minimal ABI ───────────────────────────────────────────────────────
+export const ERC20_ABI = [
+  {
+    inputs: [{ internalType: "address", name: "spender", type: "address" }, { internalType: "uint256", name: "amount", type: "uint256" }],
+    name: "approve",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "owner", type: "address" }, { internalType: "address", name: "spender", type: "address" }],
+    name: "allowance",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "account", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "decimals",
+    outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** USDT uses 6 decimals on both X Layer and BOT Chain */
+export const TOKEN_DECIMALS = 6;
+/** @deprecated use TOKEN_DECIMALS */
+export const USDC_DECIMALS = TOKEN_DECIMALS;
+
+/** Format a raw token amount (6 decimals) to a human-readable string. */
+export function formatUsdc(raw: bigint | undefined, decimals = 2): string {
+  if (raw === undefined) return "–";
+  const divisor = 10n ** BigInt(TOKEN_DECIMALS);
+  const whole = raw / divisor;
+  const frac = raw % divisor;
+  const fracStr = frac.toString().padStart(TOKEN_DECIMALS, "0").slice(0, decimals);
+  return `${whole.toLocaleString()}.${fracStr}`;
+}
+/** Alias */
+export const formatToken = formatUsdc;
+
+/** Parse a human-readable token string (e.g. "100.50") to a bigint (6 decimals). */
+export function parseUsdc(value: string): bigint {
+  const [whole = "0", frac = ""] = value.split(".");
+  const fracPadded = frac.padEnd(TOKEN_DECIMALS, "0").slice(0, TOKEN_DECIMALS);
+  return BigInt(whole) * 10n ** BigInt(TOKEN_DECIMALS) + BigInt(fracPadded || "0");
+}
+/** Alias */
+export const parseToken = parseUsdc;
+
+/** Standard policy premium: base 7% + 2% per extra retry */
+export function computePremium(amount: bigint, retries: number): bigint {
+  const bps = BigInt(700 + (retries - 1) * 200);
+  return (amount * bps) / 10_000n;
+}
+
+// ─── Slashing protection premium ──────────────────────────────────────────────
+
+export type ValidatorRisk = "active" | "new" | "slashed";
 
 /**
- * @title ZeusInsuranceV2
- * @notice Decentralized insurance for AI agents and validators.
+ * Returns the premium rate in basis points for slashing protection.
+ * BOT Chain (677): base 15%, +3% for new validators, +5% for previously slashed.
+ * X Layer (196):   base 12%, +3% for new validators, +5% for previously slashed.
  */
-contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausable {
-    using ECDSA for bytes32;
-
-    // ── Custom Errors ──────────────────────────────────────────────────────────
-
-    error InvalidUSDTAddress();
-    error InvalidReserveAddress();
-    error ZeroAddress();
-    error InvalidSeller();
-    error InvalidValidator();
-    error InvalidAmount();
-    error InvalidTimeout();
-    error InvalidRetries();
-    error PremiumTransferFailed();
-    error NotWatcher();
-    error PolicyDoesNotExist();
-    error PolicyNotActive();
-    error NotASlashingPolicy();
-    error OnlyBuyerCanClaim();
-    error TimeoutNotReached();
-    error OnlyReserveCanCall();
-    error AlreadyWatcher();
-    error RequestAlreadyResolved();
-    error TimestampOutOfWindow();
-    error InvalidWatcherSignature();
-    error WatcherAlreadyVoted();
-    error InvalidRequestId();
-    error PolicyIdMismatch();
-    error VoteAlreadyResolved();
-    error NativePaymentNotAccepted();
-    error NotOwner();
-
-    // ── Enums ─────────────────────────────────────────────────────────────────
-
-    enum PolicyStatus { Active, Claimed, Rejected, Expired }
-    enum CoverageType { Standard, SlashingProtection }
-
-    // ── Structs ───────────────────────────────────────────────────────────────
-
-    struct Policy {
-        address buyer;
-        address seller;
-        uint256 amount;
-        uint256 premium;
-        uint256 retryDeadline;
-        uint256 maxRetries;
-        PolicyStatus status;
-        CoverageType coverageType;
-    }
-
-    struct Observation {
-        bytes32 requestId;
-        uint256 timestamp;
-        uint8   status;
-        bytes32 metadataHash;
-        uint256 nonce;
-        bytes   signature;
-    }
-
-    struct VoteTally {
-        uint256 policyId;
-        uint8[] statuses;
-        bool    resolved;
-    }
-
-    // ── State ─────────────────────────────────────────────────────────────────
-
-    IERC20       public usdt;
-    ZeusReserveV2 public reserve;
-
-    mapping(uint256 => Policy)    public policies;
-    uint256                       public nextPolicyId;
-
-    address[]                     public watcherList;
-    mapping(address => bool)      public isWatcher;
-
-    mapping(bytes32 => VoteTally)             public  pendingVotes;
-    mapping(bytes32 => mapping(address => bool)) public hasVoted;
-    mapping(bytes32 => bool)                  public  usedRequestIds;
-    mapping(uint256 => bytes32)               public  policyToRequestId;
-
-    // ── Events ────────────────────────────────────────────────────────────────
-
-    event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline, CoverageType coverageType);
-    event PayoutExecuted(uint256 indexed policyId, uint256 amount);
-    event PolicyExpired(uint256 indexed policyId);
-    event WatcherAdded(address indexed watcher);
-    event WatcherRemoved(address indexed watcher);
-    event SlashingReported(uint256 indexed policyId, address indexed validator, bytes32 indexed evidenceHash);
-    event ObservationSubmitted(bytes32 indexed requestId, address indexed watcher, uint8 status);
-    event VoteResolved(bytes32 indexed requestId, uint8 decision, uint256 indexed policyId);
-    event ClaimRejected(uint256 indexed policyId);
-
-    // ── Constructor ───────────────────────────────────────────────────────────
-
-    constructor(address _usdt, address _reserve) Ownable(msg.sender) {
-        if (_usdt == address(0)) revert InvalidUSDTAddress();
-        if (_reserve == address(0)) revert InvalidReserveAddress();
-        usdt    = IERC20(_usdt);
-        reserve = ZeusReserveV2(_reserve);
-    }
-
-    // ── Internal Buy Logic ────────────────────────────────────────────────────
-
-    function _buyInternal(
-        address buyer,
-        address seller,
-        uint256 amount,
-        uint256 timeoutSeconds,
-        uint256 maxRetries,
-        uint256 premium,
-        CoverageType coverageType
-    ) internal returns (uint256 policyId) {
-        if (seller == address(0)) revert InvalidSeller();
-        if (amount == 0) revert InvalidAmount();
-        if (maxRetries == 0 || maxRetries > 10) revert InvalidRetries();
-        if (timeoutSeconds == 0) revert InvalidTimeout();
-        if (msg.value > 0) revert NativePaymentNotAccepted();
-
-        if (!usdt.transferFrom(buyer, address(reserve), premium)) revert PremiumTransferFailed();
-
-        uint256 retryDeadline = block.timestamp + timeoutSeconds * maxRetries;
-
-        policyId = nextPolicyId;
-        policies[policyId] = Policy({
-            buyer:         buyer,
-            seller:        seller,
-            amount:        amount,
-            premium:       premium,
-            retryDeadline: retryDeadline,
-            maxRetries:    maxRetries,
-            status:        PolicyStatus.Active,
-            coverageType:  coverageType
-        });
-
-        emit PolicyCreated(policyId, buyer, seller, amount, premium, retryDeadline, coverageType);
-        nextPolicyId++;
-    }
-
-    // ── Policy Management ─────────────────────────────────────────────────────
-
-    function buyPolicy(
-        address seller,
-        uint256 amount,
-        uint256 timeoutSeconds,
-        uint256 maxRetries,
-        uint256 premium
-    ) external nonReentrant whenNotPaused returns (uint256) {
-        return _buyInternal(msg.sender, seller, amount, timeoutSeconds, maxRetries, premium, CoverageType.Standard);
-    }
-
-    function buyAllInclusivePolicy(
-        address seller,
-        uint256 amount,
-        uint256 timeoutSeconds,
-        uint256 maxRetries,
-        uint256 premium
-    ) external nonReentrant whenNotPaused returns (uint256) {
-        return _buyInternal(msg.sender, seller, amount, timeoutSeconds, maxRetries, premium, CoverageType.Standard);
-    }
-
-    function buySlashingProtection(
-        address validator,
-        uint256 amount,
-        uint256 timeoutSeconds,
-        uint256 premium
-    ) external nonReentrant whenNotPaused returns (uint256) {
-        return _buyInternal(msg.sender, validator, amount, timeoutSeconds, 1, premium, CoverageType.SlashingProtection);
-    }
-
-    // ── Claims ─────────────────────────────────────────────────────────────────
-
-    function claimPayout(uint256 policyId) external nonReentrant whenNotPaused {
-        Policy storage p = policies[policyId];
-        if (p.buyer == address(0)) revert PolicyDoesNotExist();
-        if (p.buyer != msg.sender) revert OnlyBuyerCanClaim();
-        if (p.status != PolicyStatus.Active) revert PolicyNotActive();
-        if (block.timestamp < p.retryDeadline) revert TimeoutNotReached();
-
-        p.status = PolicyStatus.Claimed;
-        reserve.payClaim(policyId, p.buyer, p.amount);
-        emit PayoutExecuted(policyId, p.amount);
-    }
-
-    // ── Slashing ───────────────────────────────────────────────────────────────
-
-    function reportSlashing(
-        uint256 policyId,
-        bytes32 evidenceHash
-    ) external nonReentrant whenNotPaused {
-        if (!isWatcher[msg.sender]) revert NotWatcher();
-
-        Policy storage p = policies[policyId];
-        if (p.buyer == address(0)) revert PolicyDoesNotExist();
-        if (p.status != PolicyStatus.Active) revert PolicyNotActive();
-        if (p.coverageType != CoverageType.SlashingProtection) revert NotASlashingPolicy();
-
-        address validator = p.seller;
-        address buyer = p.buyer;
-        uint256 amount = p.amount;
-
-        p.status = PolicyStatus.Claimed;
-        emit SlashingReported(policyId, validator, evidenceHash);
-
-        reserve.payClaim(policyId, buyer, amount);
-        emit PayoutExecuted(policyId, amount);
-    }
-
-    // ── IInsuranceContract ────────────────────────────────────────────────────
-
-    function isClaimApproved(
-        uint256 claimId,
-        address claimant,
-        uint256 amount
-    ) external view override returns (bool) {
-        Policy storage p = policies[claimId];
-        return p.status == PolicyStatus.Claimed
-            && p.buyer  == claimant
-            && p.amount == amount;
-    }
-
-    function markClaimFulfilled(uint256 claimId) external override {
-        if (msg.sender != address(reserve)) revert OnlyReserveCanCall();
-        Policy storage p = policies[claimId];
-        emit ClaimApproved(claimId, p.buyer, p.amount);
-    }
-
-    // ── Watcher Management ────────────────────────────────────────────────────
-
-    function addWatcher(address watcher) external onlyOwner {
-        if (watcher == address(0)) revert ZeroAddress();
-        if (isWatcher[watcher]) revert AlreadyWatcher();
-        isWatcher[watcher] = true;
-        watcherList.push(watcher);
-        emit WatcherAdded(watcher);
-    }
-
-    function removeWatcher(address watcher) external onlyOwner {
-        if (!isWatcher[watcher]) revert NotWatcher();
-        isWatcher[watcher] = false;
-        emit WatcherRemoved(watcher);
-    }
-
-    function getWatchers() external view returns (address[] memory) {
-        return watcherList;
-    }
-
-    // ── Oracle Observations ──────────────────────────────────────────────────
-
-    function submitObservation(uint256 policyId, Observation calldata obs) external whenNotPaused {
-        if (usedRequestIds[obs.requestId]) revert RequestAlreadyResolved();
-        if (block.timestamp < obs.timestamp - 120 || block.timestamp > obs.timestamp + 120) revert TimestampOutOfWindow();
-
-        address signer = _verifyObservation(obs);
-        if (!isWatcher[signer]) revert InvalidWatcherSignature();
-        if (hasVoted[obs.requestId][signer]) revert WatcherAlreadyVoted();
-
-        Policy storage policy = policies[policyId];
-        if (policy.buyer == address(0)) revert PolicyDoesNotExist();
-        if (policy.status != PolicyStatus.Active) revert PolicyNotActive();
-
-        bytes32 expectedId = keccak256(abi.encodePacked(policy.buyer, policy.seller, obs.timestamp));
-        if (obs.requestId != expectedId) revert InvalidRequestId();
-
-        VoteTally storage vote = pendingVotes[obs.requestId];
-        if (vote.policyId == 0) {
-            vote.policyId = policyId;
-            policyToRequestId[policyId] = obs.requestId;
-        } else {
-            if (vote.policyId != policyId) revert PolicyIdMismatch();
-        }
-
-        hasVoted[obs.requestId][signer] = true;
-        vote.statuses.push(obs.status);
-        emit ObservationSubmitted(obs.requestId, signer, obs.status);
-
-        if (vote.statuses.length >= 3) {
-            _resolveVote(obs.requestId);
-        }
-    }
-
-    // ── Views ─────────────────────────────────────────────────────────────────
-
-    function getPolicy(uint256 policyId) external view returns (Policy memory) {
-        return policies[policyId];
-    }
-
-    function getCoverageType(uint256 policyId) external view returns (CoverageType) {
-        return policies[policyId].coverageType;
-    }
-
-    function canClaim(uint256 policyId) external view returns (bool) {
-        Policy storage p = policies[policyId];
-        if (p.buyer == address(0)) return false;
-        if (p.status != PolicyStatus.Active) return false;
-        if (block.timestamp < p.retryDeadline) return false;
-        if (usdt.balanceOf(address(reserve)) < p.amount) return false;
-        return true;
-    }
-
-    // ── Owner Configuration ───────────────────────────────────────────────────
-
-    function setReserve(address _reserve) external onlyOwner {
-        if (_reserve == address(0)) revert InvalidReserveAddress();
-        reserve = ZeusReserveV2(_reserve);
-    }
-
-    function setUsdt(address _usdt) external onlyOwner {
-        if (_usdt == address(0)) revert InvalidUSDTAddress();
-        usdt = IERC20(_usdt);
-    }
-
-    function pause() external onlyOwner {
-        _pause();
-    }
-
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-
-    // ── Internal Helpers ──────────────────────────────────────────────────────
-
-    function _verifyObservation(Observation calldata obs) internal pure returns (address) {
-        bytes32 msgHash = keccak256(abi.encodePacked(
-            obs.requestId,
-            obs.timestamp,
-            obs.status,
-            obs.metadataHash,
-            obs.nonce
-        ));
-        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(msgHash);
-        return ECDSA.recover(ethHash, obs.signature);
-    }
-
-    function _resolveVote(bytes32 requestId) internal {
-        VoteTally storage vote = pendingVotes[requestId];
-        if (vote.resolved) revert VoteAlreadyResolved();
-
-        usedRequestIds[requestId] = true;
-        vote.resolved = true;
-
-        uint256 timeoutCount = 0;
-        for (uint256 i = 0; i < vote.statuses.length; i++) {
-            if (vote.statuses[i] == 1) timeoutCount++;
-        }
-
-        if (timeoutCount >= 2) {
-            emit VoteResolved(requestId, 1, vote.policyId);
-            _triggerOraclePayout(vote.policyId);
-        } else {
-            emit VoteResolved(requestId, 0, vote.policyId);
-            _rejectClaim(vote.policyId);
-        }
-    }
-
-    function _triggerOraclePayout(uint256 policyId) internal {
-        Policy storage p = policies[policyId];
-        if (p.status != PolicyStatus.Active) revert PolicyNotActive();
-        p.status = PolicyStatus.Claimed;
-        reserve.payClaim(policyId, p.buyer, p.amount);
-        emit PayoutExecuted(policyId, p.amount);
-    }
-
-    function _rejectClaim(uint256 policyId) internal {
-        Policy storage p = policies[policyId];
-        if (p.status != PolicyStatus.Active) revert PolicyNotActive();
-        p.status = PolicyStatus.Rejected;
-        emit ClaimRejected(policyId);
-    }
+export function computeSlashingPremiumBps(chainId: number, risk: ValidatorRisk): number {
+  const base = chainId === 677 ? 1500 : 1200;
+  if (risk === "slashed") return base + 500;
+  if (risk === "new")     return base + 300;
+  return base;
+}
+
+export function computeSlashingPremium(amount: bigint, chainId: number, risk: ValidatorRisk): bigint {
+  const bps = BigInt(computeSlashingPremiumBps(chainId, risk));
+  return (amount * bps) / 10_000n;
+}
+
+/** Returns the payment token symbol for a given chainId. */
+export function getTokenSymbol(chainId: number): string {
+  if (chainId === 677) return "USDT"; // BOT Chain
+  if (chainId === 196) return "USDC"; // X Layer
+  return "USDC";                       // default
 }
