@@ -12,7 +12,7 @@
 services:
 
   # ── 1. Frontend — Static Site ────────────────────────────────────────────
-  - type: static
+  - type: web
     name: Zeus-Insurance-BOT
     region: oregon
     buildCommand: >
