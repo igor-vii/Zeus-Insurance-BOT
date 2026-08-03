@@ -43,14 +43,28 @@ function walletClientToSigner(
     name: chain?.name ?? String(chainId),
   });
 
+  const mobile = isMobile();
+
   // On mobile wallets (MetaMask Mobile, Trust Wallet, etc.) the viem
   // WalletClient transport can hang when ethers calls eth_chainId through it.
-  // window.ethereum is the injected in-app browser provider and works reliably.
-  // On desktop we keep using walletClient directly (avoids duplicate providers).
-  const eip1193: Eip1193Provider =
-    isMobile() && typeof window !== "undefined" && window.ethereum
-      ? (window.ethereum as unknown as Eip1193Provider)
-      : (walletClient as unknown as Eip1193Provider);
+  // Use window.ethereum directly — ethers v6 BrowserProvider(window.ethereum)
+  // is the exact equivalent of ethers v5 ethers.providers.Web3Provider(window.ethereum).
+  // On desktop we keep walletClient from wagmi (avoids duplicate provider layers).
+  let eip1193: Eip1193Provider;
+  if (mobile && typeof window !== "undefined" && window.ethereum) {
+    console.log("[sdk] mobile path — using window.ethereum directly", {
+      userAgent: navigator.userAgent,
+      chainId,
+    });
+    eip1193 = window.ethereum as unknown as Eip1193Provider;
+  } else {
+    console.log("[sdk] desktop path — using wagmi walletClient", {
+      mobile,
+      hasWindowEthereum: typeof window !== "undefined" && !!window.ethereum,
+      chainId,
+    });
+    eip1193 = walletClient as unknown as Eip1193Provider;
+  }
 
   // staticNetwork: <Network> tells ethers to skip the eth_chainId RPC call
   // entirely and return this network object from memory. Without this option,
