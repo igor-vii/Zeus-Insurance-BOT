@@ -11,10 +11,14 @@ function isMobile(): boolean {
   return /Mobi|Android|iPhone/i.test(navigator.userAgent);
 }
 
-/** Maps wagmi chainId to Zeus SDK network name */
+/**
+ * Maps wagmi chainId to Zeus SDK network name.
+ *   677 → "bot-chain-mainnet"  (BOT Chain / Botanix)
+ *   196 → "x-layer"            (X Layer / OKX L2)
+ */
 function chainIdToNetwork(chainId: number): string {
   switch (chainId) {
-    case 677: return "bot-chain-mainnet";
+    case 677: return "bot-chain-mainnet"; // ✅ BOT Chain mainnet
     case 196:  return "x-layer";
     default:   return "bot-chain-mainnet";
   }
@@ -133,46 +137,68 @@ export function useZeusSDK() {
             effectiveChainId,
           );
           console.log("[sdk] mobile — signer built, calling sdk.connect() (5 s timeout)");
-          await withTimeout(sdk.connect(network, signer), 5000, "sdk.connect via window.ethereum");
-          console.log("[sdk] mobile — connected via window.ethereum ✅");
-          return; // success
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.warn("[sdk] mobile — window.ethereum path failed, falling back to wagmi walletClient:", msg);
-          // fall through to wagmi fallback below
+          try {
+            await withTimeout(sdk.connect(network, signer), 5000, "sdk.connect via window.ethereum");
+            console.log("[sdk] mobile — connected via window.ethereum ✅");
+            return; // success — do not fall through
+          } catch (connectErr) {
+            // sdk.connect() itself threw or timed out → log and fall through to wagmi
+            const msg = connectErr instanceof Error ? connectErr.message : String(connectErr);
+            console.warn("[sdk] mobile — sdk.connect() via window.ethereum failed:", msg);
+            // error state will be set by wagmi path or the outer catch
+          }
+        } catch (signerErr) {
+          const msg = signerErr instanceof Error ? signerErr.message : String(signerErr);
+          console.warn("[sdk] mobile — buildSigner(window.ethereum) failed:", msg);
         }
+        console.log("[sdk] mobile — falling back to wagmi walletClient");
       } else {
-        console.log("[sdk] desktop — using wagmi walletClient directly", {
-          mobile,
-          hasWindowEth,
-        });
+        console.log("[sdk] desktop — using wagmi walletClient directly", { mobile, hasWindowEth });
       }
 
       // ── Desktop or mobile fallback: use wagmi walletClient ─────────────────
       console.log("[sdk] attempting wagmi walletClient path");
-      const signer = buildSigner(
-        walletClient as unknown as Eip1193Provider,
-        address!,
-        walletClient!,
-        effectiveChainId,
-      );
+      let signer: JsonRpcSigner;
+      try {
+        signer = buildSigner(
+          walletClient as unknown as Eip1193Provider,
+          address!,
+          walletClient!,
+          effectiveChainId,
+        );
+      } catch (signerErr) {
+        const msg = signerErr instanceof Error ? signerErr.message : "Failed to build wagmi signer";
+        console.error("[sdk] buildSigner(walletClient) failed:", msg);
+        // Re-throw so the outer .catch() picks it up and stores it in sdkError
+        throw new Error(msg);
+      }
+
       console.log("[sdk] wagmi signer built, calling sdk.connect()");
-      await sdk.connect(network, signer);
-      console.log("[sdk] connected via wagmi walletClient ✅");
+      try {
+        await sdk.connect(network, signer);
+        console.log("[sdk] connected via wagmi walletClient ✅");
+      } catch (connectErr) {
+        const msg = connectErr instanceof Error ? connectErr.message.split("\n")[0] : "sdk.connect() failed";
+        console.error("[sdk] sdk.connect() via wagmi walletClient failed:", msg);
+        // Re-throw so the outer .catch() picks it up and stores it in sdkError
+        throw new Error(msg);
+      }
     }
 
     connectWithFallback()
       .then(() => {
         if (!cancelled) {
           setIsReady(true);
+          // Clear any previous error on successful connect
           setSdkError(null);
         }
       })
       .catch((err: unknown) => {
-        console.error("[sdk] connection failed ❌", err);
+        // All paths failed — store human-readable message in sdkError for UI display
+        console.error("[sdk] all connection paths failed ❌", err);
         if (!cancelled) {
           const msg = err instanceof Error ? err.message.split("\n")[0] : "SDK connection failed";
-          setSdkError(msg);
+          setSdkError(msg);   // returned from the hook; components render this as an error banner
           setIsReady(false);
         }
       });
