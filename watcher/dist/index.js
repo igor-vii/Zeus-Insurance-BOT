@@ -22,18 +22,26 @@
  *   3 = LATE      — past retryDeadline but endpoint unreachable for different reason
  */
 import { ethers } from "ethers";
+import fs from "fs";
 // ── Config ──────────────────────────────────────────────────────────────────
-const WATCHER_PRIVATE_KEY = process.env["WATCHER_PRIVATE_KEY"];
+// Read private key from secret file; fall back to env var for local dev.
+const WATCHER_PRIVATE_KEY = (() => {
+    const secretPath = "/etc/secrets/watcher-key";
+    if (fs.existsSync(secretPath)) {
+        return fs.readFileSync(secretPath, "utf8").trim();
+    }
+    const fromEnv = process.env["WATCHER_PRIVATE_KEY"];
+    if (fromEnv)
+        return fromEnv;
+    console.error("[watcher] ❌  Private key not found: /etc/secrets/watcher-key and WATCHER_PRIVATE_KEY not set. Exiting.");
+    process.exit(1);
+})();
 const API_SERVER_URL = (process.env["API_SERVER_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
 const RPC_URL = process.env["BOT_CHAIN_MAINNET_RPC_URL"] ?? "https://rpc.botchain.ai";
 const INSURANCE_ADDRESS = process.env["INSURANCE_ADDRESS"] ?? process.env["ZEUS_INSURANCE_ADDRESS"] ?? "";
 const POLL_INTERVAL_MS = Number(process.env["POLL_INTERVAL_MS"] ?? "15000");
 const MAX_POLICY_SCAN = Number(process.env["MAX_POLICY_SCAN"] ?? "200");
 const IDX = process.env["WATCHER_INDEX"] ?? "0";
-if (!WATCHER_PRIVATE_KEY) {
-    console.error("[watcher] ❌  WATCHER_PRIVATE_KEY not set. Exiting.");
-    process.exit(1);
-}
 if (!INSURANCE_ADDRESS) {
     console.error("[watcher] ❌  INSURANCE_ADDRESS / ZEUS_INSURANCE_ADDRESS not set. Exiting.");
     process.exit(1);

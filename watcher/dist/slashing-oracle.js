@@ -21,17 +21,25 @@
  */
 import { ethers } from "ethers";
 import { keccak256, toUtf8Bytes } from "ethers";
+import fs from "fs";
 // ── Config ───────────────────────────────────────────────────────────────────
-const WATCHER_PRIVATE_KEY = process.env["WATCHER_PRIVATE_KEY"];
+// Read private key from secret file; fall back to env var for local dev.
+const WATCHER_PRIVATE_KEY = (() => {
+    const secretPath = "/etc/secrets/watcher-key";
+    if (fs.existsSync(secretPath)) {
+        return fs.readFileSync(secretPath, "utf8").trim();
+    }
+    const fromEnv = process.env["WATCHER_PRIVATE_KEY"];
+    if (fromEnv)
+        return fromEnv;
+    console.error("[slashing-oracle] ❌  Private key not found: /etc/secrets/watcher-key and WATCHER_PRIVATE_KEY not set. Exiting.");
+    process.exit(1);
+})();
 const API_SERVER_URL = (process.env["API_SERVER_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
 const RPC_URL = process.env["BOT_CHAIN_MAINNET_RPC_URL"] ?? "https://rpc.botchain.ai";
 const INSURANCE_ADDRESS = process.env["INSURANCE_ADDRESS"] ?? process.env["ZEUS_INSURANCE_ADDRESS"] ?? "";
 const BOTCHAIN_SCAN_URL = (process.env["BOTCHAIN_SCAN_URL"] ?? "https://scan.botchain.ai").replace(/\/$/, "");
 const POLL_INTERVAL_MS = Number(process.env["POLL_INTERVAL_MS"] ?? "30000");
-if (!WATCHER_PRIVATE_KEY) {
-    console.error("[slashing-oracle] ❌  WATCHER_PRIVATE_KEY not set. Exiting.");
-    process.exit(1);
-}
 if (!INSURANCE_ADDRESS) {
     console.error("[slashing-oracle] ❌  INSURANCE_ADDRESS / ZEUS_INSURANCE_ADDRESS not set. Exiting.");
     process.exit(1);
