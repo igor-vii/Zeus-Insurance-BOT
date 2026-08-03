@@ -21,62 +21,50 @@ function chainIdToNetwork(chainId: number): string {
 }
 
 /**
- * Bridges wagmi WalletClient → ethers v6 JsonRpcSigner without triggering
- * any RPC calls (eth_chainId, eth_requestAccounts, etc.).
- *
- * Key fix: pass `staticNetwork` option so ethers v6 BrowserProvider returns
- * the network immediately from memory instead of calling eth_chainId on the
- * walletClient transport — which would go through viem → HTTP RPC and hang
- * or fail on MetaMask Mobile.
+ * Races `promise` against a timeout. Rejects with a TimeoutError if `ms`
+ * elapses first so the caller can catch and fall back.
  */
-function walletClientToSigner(
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`[sdk] timeout after ${ms}ms: ${label}`)),
+      ms,
+    );
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
+/**
+ * Builds a JsonRpcSigner from an EIP-1193 provider.
+ * Uses staticNetwork so ethers v6 never issues an eth_chainId RPC call,
+ * which would hang on some mobile wallet transports.
+ */
+function buildSigner(
+  eip1193: Eip1193Provider,
+  address: string,
   walletClient: WalletClient,
   chainId: number,
 ): JsonRpcSigner {
-  const { account, chain } = walletClient;
-  if (!account) throw new Error("Wallet account not available");
-
-  // Build an ethers Network object for the static network.
-  // Using Network.from() ensures the correct type for staticNetwork option.
   const staticNetwork = Network.from({
     chainId: BigInt(chainId),
-    name: chain?.name ?? String(chainId),
+    name: walletClient.chain?.name ?? String(chainId),
   });
-
-  const mobile = isMobile();
-
-  // On mobile wallets (MetaMask Mobile, Trust Wallet, etc.) the viem
-  // WalletClient transport can hang when ethers calls eth_chainId through it.
-  // Use window.ethereum directly — ethers v6 BrowserProvider(window.ethereum)
-  // is the exact equivalent of ethers v5 ethers.providers.Web3Provider(window.ethereum).
-  // On desktop we keep walletClient from wagmi (avoids duplicate provider layers).
-  let eip1193: Eip1193Provider;
-  if (mobile && typeof window !== "undefined" && window.ethereum) {
-    console.log("[sdk] mobile path — using window.ethereum directly", {
-      userAgent: navigator.userAgent,
-      chainId,
-    });
-    eip1193 = window.ethereum as unknown as Eip1193Provider;
-  } else {
-    console.log("[sdk] desktop path — using wagmi walletClient", {
-      mobile,
-      hasWindowEthereum: typeof window !== "undefined" && !!window.ethereum,
-      chainId,
-    });
-    eip1193 = walletClient as unknown as Eip1193Provider;
-  }
-
-  // staticNetwork: <Network> tells ethers to skip the eth_chainId RPC call
-  // entirely and return this network object from memory. Without this option,
-  // ethers calls eth_chainId even when `network` is passed as the 2nd arg.
   const provider = new BrowserProvider(eip1193, staticNetwork, { staticNetwork });
-
-  return new JsonRpcSigner(provider, account.address);
+  return new JsonRpcSigner(provider, address);
 }
 
 /**
  * Provides a connected ZeusSDK instance backed by the active wagmi wallet.
  * Re-connects whenever the wallet or chain changes.
+ *
+ * Mobile strategy:
+ *   1. Try window.ethereum directly (avoids viem transport hanging).
+ *   2. If that times out (5 s) or fails → fall back to wagmi walletClient.
+ *
+ * Desktop: always uses wagmi walletClient.
  *
  * Returns:
  *  - sdk       — the ZeusSDK instance (stable ref)
@@ -100,16 +88,28 @@ export function useZeusSDK() {
       return;
     }
 
-    // Prefer the chain ID from the walletClient (the actual connected chain)
-    // over the wagmi hook value, which may lag slightly on chain switch.
     const effectiveChainId = walletClient.chain?.id ?? chainId;
+    const address = walletClient.account?.address;
+
+    console.log("[sdk] useEffect triggered", {
+      address,
+      effectiveChainId,
+      mobile: isMobile(),
+      hasWindowEthereum: typeof window !== "undefined" && !!window.ethereum,
+    });
+
+    if (!address) {
+      setSdkError("Wallet account not available");
+      setIsReady(false);
+      return;
+    }
 
     if (!SUPPORTED_CHAIN_IDS.has(effectiveChainId)) {
       sdk.disconnect();
       setIsReady(false);
       setSdkError(
         `Unsupported network (chain ID ${effectiveChainId}). ` +
-        `Please switch your wallet to BOT Chain (677) or X Layer (196).`
+        `Please switch your wallet to BOT Chain (677) or X Layer (196).`,
       );
       return;
     }
@@ -118,21 +118,50 @@ export function useZeusSDK() {
     setSdkError(null);
 
     const network = chainIdToNetwork(effectiveChainId);
+    const mobile  = isMobile();
+    const hasWindowEth = typeof window !== "undefined" && !!window.ethereum;
 
-    let signer: JsonRpcSigner;
-    try {
-      signer = walletClientToSigner(walletClient, effectiveChainId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to create signer";
-      console.error("[sdk] Signer creation error:", err);
-      if (!cancelled) {
-        setSdkError(msg);
-        setIsReady(false);
+    async function connectWithFallback() {
+      // ── Mobile: try window.ethereum first, fallback to wagmi ──────────────
+      if (mobile && hasWindowEth) {
+        console.log("[sdk] mobile — attempting window.ethereum path");
+        try {
+          const signer = buildSigner(
+            window.ethereum as unknown as Eip1193Provider,
+            address!,
+            walletClient!,
+            effectiveChainId,
+          );
+          console.log("[sdk] mobile — signer built, calling sdk.connect() (5 s timeout)");
+          await withTimeout(sdk.connect(network, signer), 5000, "sdk.connect via window.ethereum");
+          console.log("[sdk] mobile — connected via window.ethereum ✅");
+          return; // success
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn("[sdk] mobile — window.ethereum path failed, falling back to wagmi walletClient:", msg);
+          // fall through to wagmi fallback below
+        }
+      } else {
+        console.log("[sdk] desktop — using wagmi walletClient directly", {
+          mobile,
+          hasWindowEth,
+        });
       }
-      return;
+
+      // ── Desktop or mobile fallback: use wagmi walletClient ─────────────────
+      console.log("[sdk] attempting wagmi walletClient path");
+      const signer = buildSigner(
+        walletClient as unknown as Eip1193Provider,
+        address!,
+        walletClient!,
+        effectiveChainId,
+      );
+      console.log("[sdk] wagmi signer built, calling sdk.connect()");
+      await sdk.connect(network, signer);
+      console.log("[sdk] connected via wagmi walletClient ✅");
     }
 
-    sdk.connect(network, signer)
+    connectWithFallback()
       .then(() => {
         if (!cancelled) {
           setIsReady(true);
@@ -140,7 +169,7 @@ export function useZeusSDK() {
         }
       })
       .catch((err: unknown) => {
-        console.error("[sdk] Connection error:", err);
+        console.error("[sdk] connection failed ❌", err);
         if (!cancelled) {
           const msg = err instanceof Error ? err.message.split("\n")[0] : "SDK connection failed";
           setSdkError(msg);
