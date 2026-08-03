@@ -25,7 +25,7 @@ json
     },
     {
       "name": "agentWallet",
-      "endpoint": "eip155:8453:0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640"
+      "endpoint": "eip155:8453:0xc9b597d102f5575ba0acdf3ad222bc2dda1969ef"
     }
   ],
   "registrations": [
@@ -81,5 +81,5 @@ npx hardhat run scripts/register-erc8004.ts --network base-mainnet
 bash
 cast call 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 \
   "getAgent(address)" \
-  0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640 \
+  0xc9b597d102f5575ba0acdf3ad222bc2dda1969ef \
   --rpc-url https://mainnet.base.org

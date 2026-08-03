@@ -13,7 +13,7 @@ description: ZeusEscrowBOT addresses, token addresses, and getLogs pagination co
 - Contract: `0x8D10C2c6C92b613C1938fe532f0e391044e76188` (v2 — correct USDC)
 - Old address `0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c` was deployed with testnet USDC by mistake — do not use
 - Token (native USDC): `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- Treasury (fee recipient): `0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640`
+- Treasury (fee recipient): `0xc9b597d102f5575ba0acdf3ad222bc2dda1969ef`
 - Verified: https://basescan.org/address/0x8D10C2c6C92b613C1938fe532f0e391044e76188#code
 - Protocol fee: 0.7% (70 bps) + $0.02 fixed per agreement
 - Server wallet USDC approved: MaxUint256 (tx 0x03b2fc…)

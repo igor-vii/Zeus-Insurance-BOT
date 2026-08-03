@@ -19,7 +19,7 @@ description: ZeusInsuranceV2 (oracle watcher) — current deployed addresses, ve
 - `ZEUS_INSURANCE_ADDRESS=0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4`
 - `ZEUS_INSURANCE_NETWORK=base-sepolia`
 - `BASE_SEPOLIA_RPC_URL=https://sepolia.base.org`
-- `PRIVATE_KEY` — Replit Secret (deployer: 0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640)
+- `PRIVATE_KEY` — Replit Secret (deployer: 0xc9b597d102f5575ba0acdf3ad222bc2dda1969ef)
 
 ## Policy struct change
 V2 replaced boolean fields `isActive/isPaidOut/isExpired` with `status: uint8` enum:

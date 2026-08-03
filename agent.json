@@ -22,7 +22,7 @@
     },
     {
       "name": "agentWallet",
-      "endpoint": "eip155:8453:0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640"
+      "endpoint": "eip155:8453:0xc9b597d102f5575ba0acdf3ad222bc2dda1969ef"
     },
     {
       "name": "mcp",
@@ -31,7 +31,7 @@
     },
     {
       "name": "agentWallet-bot",
-      "endpoint": "eip155:677:0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640"
+      "endpoint": "eip155:677:0xc9b597d102f5575ba0acdf3ad222bc2dda1969ef"
     }
   ],
   "registrations": [
@@ -99,7 +99,7 @@
         "explorer": "https://scan.botchain.ai",
         "rpc": "https://rpc.botchain.ai",
         "deployedAt": "2026-07-24",
-        "deployer": "0xaF8c45345e79dA97Dd41db5FE04d13ad4BEB1640",
+        "deployer": "0xc9b597d102f5575ba0acdf3ad222bc2dda1969ef",
         "verified": true
       },
       "bot-chain-testnet": {
