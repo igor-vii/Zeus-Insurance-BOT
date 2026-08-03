@@ -112,18 +112,42 @@ pnpm deploy:bot-chain-mainnet
 ---
 ## 🔒 Secutity (Audit and Testing)
 
-Tool	Status	Result
-Slither	✅ Passed	No critical vulnerabilities found
-ContractScan	⏳ Planned	—
+Tool    |  Status  | Result
+________ __________  _________________________________
+Slither |	✅Passed | No critical vulnerabilities found
 
 Slither Results
 High: 0 (all are false positives in OpenZeppelin)
-
 Medium: 0 (all are false positives in OpenZeppelin)
-
 Low: Stylistic comments (no security impact)
-
 Informational: Gas optimizations (can be improved)
+
+### Remix & Solhint Analysis
+
+| Tool | Result | Status |
+|------|--------|--------|
+| **Remix** | ✅ 7 warnings (all stylistic/gas-related) | ✅ No critical vulnerabilities |
+| **Solhint** | ✅ 9 warnings (imports, visibility, `require`) | ✅ No critical vulnerabilities |
+
+### Key Findings (fixed or non-critical)
+
+| Finding | Severity | Resolution |
+|---------|----------|------------|
+| **Global imports** | Low | Fixed with named imports |
+| **Explicit function visibility** | Low | Added `public` / `external` |
+| **`require` → Custom Errors** | Medium | Replaced with `revert` + custom errors |
+| **Inline Assembly (OZ)** | Informational | Used in OpenZeppelin libraries — not critical |
+| **`block.timestamp`** | Informational | Used for timeouts — acceptable |
+| **Gas costs "infinite"** | False positive | Remix false positive |
+| **Loops over dynamic arrays** | Low | Limited to 10 watchers |
+
+### Conclusion
+
+All findings are **non-critical** and **do not affect security**.
+
+### Вывод
+
+Все замечания **не критичны** и **не влияют на безопасность**.
 
 ## 🧪 Test Results
 
