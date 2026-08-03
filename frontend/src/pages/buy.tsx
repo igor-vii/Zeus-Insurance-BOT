@@ -40,7 +40,7 @@ export default function BuyInsurance() {
   const chainId = useChainId();
   const { toast } = useToast();
   const { isApiMode } = useApiMode();
-  const { sdk, isReady: isSdkReady } = useZeusSDK();
+  const { sdk, isReady: isSdkReady, sdkError } = useZeusSDK();
 
   const [premiumBps, setPremiumBps] = useState(700n);
   const [premiumAmount, setPremiumAmount] = useState(0n);
@@ -166,6 +166,14 @@ export default function BuyInsurance() {
           <AlertDescription className="text-sm font-mono mt-1">
             Connect your wallet to purchase an insurance policy.
           </AlertDescription>
+        </Alert>
+      )}
+
+      {!isApiMode && isConnected && sdkError && (
+        <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
+          <AlertTriangle className="w-4 h-4" />
+          <AlertTitle className="font-mono uppercase text-xs tracking-wider">Wallet Not Ready</AlertTitle>
+          <AlertDescription className="text-sm font-mono mt-1">{sdkError}</AlertDescription>
         </Alert>
       )}
 

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useWalletClient, useChainId } from "wagmi";
 import type { WalletClient } from "viem";
-import { BrowserProvider, JsonRpcSigner, type Eip1193Provider } from "ethers";
+import { BrowserProvider, JsonRpcSigner, Network, type Eip1193Provider } from "ethers";
 import { ZeusSDK } from "@zeus/sdk";
+
+const SUPPORTED_CHAIN_IDS = new Set([677, 196]);
 
 /** Maps wagmi chainId to Zeus SDK network name */
 function chainIdToNetwork(chainId: number): string {
@@ -15,12 +17,12 @@ function chainIdToNetwork(chainId: number): string {
 
 /**
  * Bridges wagmi WalletClient → ethers v6 JsonRpcSigner without triggering
- * eth_requestAccounts or eth_chainId.
+ * any RPC calls (eth_chainId, eth_requestAccounts, etc.).
  *
- * On MetaMask Mobile the injected provider serialises `eth_requestAccounts`
- * calls and may reject a second one that comes from ethers' getSigner().
- * Passing chain info explicitly and constructing JsonRpcSigner directly
- * avoids both extra RPC round-trips and resolves mobile compatibility.
+ * Key fix: pass `staticNetwork` option so ethers v6 BrowserProvider returns
+ * the network immediately from memory instead of calling eth_chainId on the
+ * walletClient transport — which would go through viem → HTTP RPC and hang
+ * or fail on MetaMask Mobile.
  */
 function walletClientToSigner(
   walletClient: WalletClient,
@@ -28,27 +30,45 @@ function walletClientToSigner(
 ): JsonRpcSigner {
   const { account, chain } = walletClient;
   if (!account) throw new Error("Wallet account not available");
-  const network = {
-    chainId,
+
+  // Build an ethers Network object for the static network.
+  // Using Network.from() ensures the correct type for staticNetwork option.
+  const staticNetwork = Network.from({
+    chainId: BigInt(chainId),
     name: chain?.name ?? String(chainId),
-  };
-  // Pass walletClient itself (not walletClient.transport) as the EIP-1193 provider.
-  // wagmi's HTTP transport is for read-only RPC; walletClient.request correctly
-  // routes writes (eth_sendTransaction, eth_sign, etc.) through the connected
-  // wallet (MetaMask), while reads still go through the configured RPC.
-  const provider = new BrowserProvider(walletClient as unknown as Eip1193Provider, network);
+  });
+
+  // Pass walletClient itself (not walletClient.transport) as the EIP-1193
+  // provider — viem's WalletClient.request correctly routes writes through
+  // the connected wallet (MetaMask) and reads through the HTTP transport.
+  //
+  // staticNetwork: <Network> tells ethers to skip the eth_chainId RPC call
+  // entirely and return this network object from memory. Without this option,
+  // ethers calls eth_chainId even when `network` is passed as the 2nd arg.
+  const provider = new BrowserProvider(
+    walletClient as unknown as Eip1193Provider,
+    staticNetwork,
+    { staticNetwork },
+  );
+
   return new JsonRpcSigner(provider, account.address);
 }
 
 /**
  * Provides a connected ZeusSDK instance backed by the active wagmi wallet.
  * Re-connects whenever the wallet or chain changes.
+ *
+ * Returns:
+ *  - sdk       — the ZeusSDK instance (stable ref)
+ *  - isReady   — true once sdk.connect() has resolved successfully
+ *  - sdkError  — human-readable error string if connect failed, else null
  */
 export function useZeusSDK() {
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
   const sdkRef = useRef<ZeusSDK>(new ZeusSDK());
   const [isReady, setIsReady] = useState(false);
+  const [sdkError, setSdkError] = useState<string | null>(null);
 
   useEffect(() => {
     const sdk = sdkRef.current;
@@ -56,23 +76,60 @@ export function useZeusSDK() {
     if (!walletClient) {
       sdk.disconnect();
       setIsReady(false);
+      setSdkError(null);
+      return;
+    }
+
+    // Prefer the chain ID from the walletClient (the actual connected chain)
+    // over the wagmi hook value, which may lag slightly on chain switch.
+    const effectiveChainId = walletClient.chain?.id ?? chainId;
+
+    if (!SUPPORTED_CHAIN_IDS.has(effectiveChainId)) {
+      sdk.disconnect();
+      setIsReady(false);
+      setSdkError(
+        `Unsupported network (chain ID ${effectiveChainId}). ` +
+        `Please switch your wallet to BOT Chain (677) or X Layer (196).`
+      );
       return;
     }
 
     let cancelled = false;
-    const network = chainIdToNetwork(chainId);
+    setSdkError(null);
 
-    const signer = walletClientToSigner(walletClient, chainId);
+    const network = chainIdToNetwork(effectiveChainId);
+
+    let signer: JsonRpcSigner;
+    try {
+      signer = walletClientToSigner(walletClient, effectiveChainId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to create signer";
+      console.error("[sdk] Signer creation error:", err);
+      if (!cancelled) {
+        setSdkError(msg);
+        setIsReady(false);
+      }
+      return;
+    }
 
     sdk.connect(network, signer)
-      .then(() => { if (!cancelled) setIsReady(true); })
-      .catch((err) => {
-        console.error("SDK connection error:", err);
-        if (!cancelled) setIsReady(false);
+      .then(() => {
+        if (!cancelled) {
+          setIsReady(true);
+          setSdkError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("[sdk] Connection error:", err);
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message.split("\n")[0] : "SDK connection failed";
+          setSdkError(msg);
+          setIsReady(false);
+        }
       });
 
     return () => { cancelled = true; };
   }, [walletClient, chainId]);
 
-  return { sdk: sdkRef.current, isReady };
+  return { sdk: sdkRef.current, isReady, sdkError };
 }

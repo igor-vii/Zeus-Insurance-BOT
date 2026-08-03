@@ -78,7 +78,7 @@ export default function Policies() {
   const publicClient = usePublicClient();
   const { toast } = useToast();
   const { isApiMode } = useApiMode();
-  const { sdk, isReady: isSdkReady } = useZeusSDK();
+  const { sdk, isReady: isSdkReady, sdkError } = useZeusSDK();
 
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -303,6 +303,14 @@ export default function Policies() {
       transition={{ duration: 0.5 }}
       className="max-w-6xl mx-auto space-y-6"
     >
+      {!isApiMode && sdkError && (
+        <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
+          <AlertTriangle className="w-4 h-4" />
+          <AlertTitle className="font-mono uppercase text-xs tracking-wider">Wallet Not Ready</AlertTitle>
+          <AlertDescription className="text-sm font-mono mt-1">{sdkError}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <Shield className="w-8 h-8 text-primary" />
