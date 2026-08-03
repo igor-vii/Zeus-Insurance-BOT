@@ -43,20 +43,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 /**
  * Builds a JsonRpcSigner from an EIP-1193 provider.
- * Uses staticNetwork so ethers v6 never issues an eth_chainId RPC call,
- * which would hang on some mobile wallet transports.
+ *
+ * Second arg to BrowserProvider is the raw chain ID number (677 for BOT
+ * mainnet, 196 for X Layer) — ethers v6 accepts Networkish (number | string |
+ * Network) so we skip building a Network object for that arg.
+ *
+ * The third-arg `staticNetwork` option still requires a Network instance;
+ * Network.from(chainId) builds it cheaply from the number so ethers never
+ * issues an eth_chainId RPC call (which hangs on some mobile wallet transports).
  */
 function buildSigner(
   eip1193: Eip1193Provider,
   address: string,
-  walletClient: WalletClient,
-  chainId: number,
+  chainId: number, // plain number: 677 = BOT mainnet, 196 = X Layer
 ): JsonRpcSigner {
-  const staticNetwork = Network.from({
-    chainId: BigInt(chainId),
-    name: walletClient.chain?.name ?? String(chainId),
-  });
-  const provider = new BrowserProvider(eip1193, staticNetwork, { staticNetwork });
+  const staticNetwork = Network.from(chainId); // Network object required for the option
+  const provider = new BrowserProvider(eip1193, chainId, { staticNetwork });
   return new JsonRpcSigner(provider, address);
 }
 
@@ -133,7 +135,6 @@ export function useZeusSDK() {
           const signer = buildSigner(
             window.ethereum as unknown as Eip1193Provider,
             address!,
-            walletClient!,
             effectiveChainId,
           );
           console.log("[sdk] mobile — signer built, calling sdk.connect() (5 s timeout)");
@@ -163,7 +164,6 @@ export function useZeusSDK() {
         signer = buildSigner(
           walletClient as unknown as Eip1193Provider,
           address!,
-          walletClient!,
           effectiveChainId,
         );
       } catch (signerErr) {
