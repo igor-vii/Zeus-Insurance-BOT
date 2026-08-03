@@ -6,6 +6,11 @@ import { ZeusSDK } from "@zeus/sdk";
 
 const SUPPORTED_CHAIN_IDS = new Set([677, 196]);
 
+/** Returns true when running inside a mobile browser / in-app wallet browser. */
+function isMobile(): boolean {
+  return /Mobi|Android|iPhone/i.test(navigator.userAgent);
+}
+
 /** Maps wagmi chainId to Zeus SDK network name */
 function chainIdToNetwork(chainId: number): string {
   switch (chainId) {
@@ -38,18 +43,19 @@ function walletClientToSigner(
     name: chain?.name ?? String(chainId),
   });
 
-  // Pass walletClient itself (not walletClient.transport) as the EIP-1193
-  // provider — viem's WalletClient.request correctly routes writes through
-  // the connected wallet (MetaMask) and reads through the HTTP transport.
-  //
+  // On mobile wallets (MetaMask Mobile, Trust Wallet, etc.) the viem
+  // WalletClient transport can hang when ethers calls eth_chainId through it.
+  // window.ethereum is the injected in-app browser provider and works reliably.
+  // On desktop we keep using walletClient directly (avoids duplicate providers).
+  const eip1193: Eip1193Provider =
+    isMobile() && typeof window !== "undefined" && window.ethereum
+      ? (window.ethereum as unknown as Eip1193Provider)
+      : (walletClient as unknown as Eip1193Provider);
+
   // staticNetwork: <Network> tells ethers to skip the eth_chainId RPC call
   // entirely and return this network object from memory. Without this option,
   // ethers calls eth_chainId even when `network` is passed as the 2nd arg.
-  const provider = new BrowserProvider(
-    walletClient as unknown as Eip1193Provider,
-    staticNetwork,
-    { staticNetwork },
-  );
+  const provider = new BrowserProvider(eip1193, staticNetwork, { staticNetwork });
 
   return new JsonRpcSigner(provider, account.address);
 }
