@@ -288,6 +288,10 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
         return watcherList;
     }
 
+    function renounceOwnership() public override onlyOwner {
+        revert("Cannot renounce ownership");
+    }
+
     // ── Oracle observations ───────────────────────────────────────────────────
 
     function submitObservation(uint256 policyId, Observation calldata obs) external {
