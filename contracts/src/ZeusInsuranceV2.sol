@@ -270,6 +270,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable {
     // ── Watcher management ────────────────────────────────────────────────────
 
     function addWatcher(address watcher) external onlyOwner {
+        require(watcherList.length < 10, "Max watchers reached");
         if (watcher == address(0)) revert ZeroAddress();
         if (isWatcher[watcher]) revert AlreadyWatcher();
         
