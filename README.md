@@ -110,8 +110,22 @@ pnpm deploy:bot-chain-mainnet
 | `WATCHER_PRIVATE_KEY` | Registered watcher key (oracle + slashing) |
 
 ---
+## 🔒 Secutity (Audit and Testing)
 
-## 🧪 Тестирование (Test Results)
+Tool	Status	Result
+Slither	✅ Passed	No critical vulnerabilities found
+ContractScan	⏳ Planned	—
+
+Slither Results
+High: 0 (all are false positives in OpenZeppelin)
+
+Medium: 0 (all are false positives in OpenZeppelin)
+
+Low: Stylistic comments (no security impact)
+
+Informational: Gas optimizations (can be improved)
+
+## 🧪 Test Results
 
 **108 tests — all passing** (`cd contracts && pnpm test`, run 2026-07-24)
 
