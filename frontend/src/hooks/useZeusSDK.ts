@@ -137,7 +137,8 @@ export function useZeusSDK() {
             address!,
             effectiveChainId,
           );
-          console.log("[sdk] mobile — signer built, calling sdk.connect() (5 s timeout)");
+          console.log("[sdk] signer address:", signer.address);
+          console.log("[sdk] connecting to network:", network, "signer:", signer.address);
           try {
             await withTimeout(sdk.connect(network, signer), 5000, "sdk.connect via window.ethereum");
             console.log("[sdk] mobile — connected via window.ethereum ✅");
@@ -173,7 +174,8 @@ export function useZeusSDK() {
         throw new Error(msg);
       }
 
-      console.log("[sdk] wagmi signer built, calling sdk.connect()");
+      console.log("[sdk] signer address:", signer.address);
+      console.log("[sdk] connecting to network:", network, "signer:", signer.address);
       try {
         await sdk.connect(network, signer);
         console.log("[sdk] connected via wagmi walletClient ✅");
