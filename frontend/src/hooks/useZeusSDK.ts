@@ -57,8 +57,8 @@ function buildSigner(
   address: string,
   chainId: number, // plain number: 677 = BOT mainnet, 196 = X Layer
 ): JsonRpcSigner {
-  const staticNetwork = Network.from(chainId); // Network object required for the option
-  const provider = new BrowserProvider(eip1193, chainId, { staticNetwork });
+  const staticNetwork = Network.from(chainId);
+  const provider = new BrowserProvider(eip1193, staticNetwork, { staticNetwork });
   return new JsonRpcSigner(provider, address);
 }
 
