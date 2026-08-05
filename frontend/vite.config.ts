@@ -4,13 +4,9 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
-// Определяем, запущена ли сборка в продакшн-среде (Netlify)
 const isProd = process.env.NODE_ENV === 'production' || process.env.NETLIFY === 'true';
-
-// BASE_PATH: для продакшена всегда '/', для разработки — из env или '/'
 const basePath = isProd ? '/' : (process.env.BASE_PATH || '/');
 
-// PORT: нужен только для разработки
 let port = 5173;
 if (!isProd) {
   const rawPort = process.env.PORT;
@@ -26,8 +22,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== 'production' &&
-    process.env.REPL_ID !== undefined
+    ...(process.env.NODE_ENV !== 'production' && process.env.REPL_ID !== undefined
       ? [
           await import('@replit/vite-plugin-cartographer').then((m) =>
             m.cartographer({
@@ -43,12 +38,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
-      '@assets': path.resolve(
-        import.meta.dirname,
-        '..',
-        '..',
-        'attached_assets',
-      ),
+      '@assets': path.resolve(import.meta.dirname, '..', '..', 'attached_assets'),
     },
     dedupe: ['react', 'react-dom'],
   },
@@ -67,7 +57,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.API_URL || 'http://localhost:3001', // 🔧 ИСПРАВЛЕНО
         changeOrigin: true,
       },
     },
