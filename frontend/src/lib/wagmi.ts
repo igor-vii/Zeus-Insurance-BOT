@@ -1,5 +1,5 @@
 import { createConfig, http } from "wagmi";
-import { defineChain } from "viem";
+import { defineChain, fallback } from "viem"; // ← ДОБАВЛЕН fallback
 import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
 
 // ─── Supported chains ─────────────────────────────────────────────────────────
@@ -35,10 +35,6 @@ export type SupportedChainId = (typeof SUPPORTED_CHAINS)[number]["id"];
 
 // ─── Connectors ───────────────────────────────────────────────────────────────
 
-/**
- * WalletConnect v2 requires a projectId from https://cloud.walletconnect.com
- * Set VITE_WALLETCONNECT_PROJECT_ID in your .env to enable it.
- */
 const wcProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | undefined;
 
 const connectors = [
@@ -63,7 +59,13 @@ export const wagmiConfig = createConfig({
   chains: [xLayerMainnet, botChainMainnet],
   connectors,
   transports: {
-    [xLayerMainnet.id]:    http("https://rpc.xlayer.tech"),
-    [botChainMainnet.id]:  http("https://rpc.botchain.ai"),
+    // 🔧 ДОБАВЛЕН fallback для надёжности
+    [xLayerMainnet.id]: fallback([
+      http("https://rpc.xlayer.tech"),
+      http("https://xlayerrpc.okx.com"),
+    ]),
+    [botChainMainnet.id]: fallback([
+      http("https://rpc.botchain.ai"),
+    ]),
   },
 });
