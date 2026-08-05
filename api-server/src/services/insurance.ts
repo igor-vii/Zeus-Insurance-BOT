@@ -121,3 +121,12 @@ export function prepareBuyCalldata(params: {
     data,
   };
 }
+
+export function prepareClaimCalldata(policyId: string): { to: string; data: string } {
+  const data = encodeFunctionData({
+    abi: ZEUS_INSURANCE_ABI,
+    functionName: "claimPayout",
+    args: [BigInt(policyId)],
+  });
+  return { to: getInsuranceAddress(ZEUS_NETWORK as any), data };
+}
