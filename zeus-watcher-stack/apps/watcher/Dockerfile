@@ -1,20 +1,33 @@
+# Build context: zeus-watcher-stack/ (monorepo root)
 FROM node:20-alpine AS builder
 WORKDIR /app
-RUN npm install -g pnpm
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json ./apps/api/
-COPY packages/shared ./packages/shared
-COPY prisma ./prisma
-RUN pnpm install
-COPY . .
-RUN pnpm db:generate
-RUN pnpm --filter @zeus/api build
 
+RUN npm install -g pnpm
+
+# Copy workspace manifests for layer caching
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/watcher/package.json ./apps/watcher/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN pnpm install --frozen-lockfile
+
+# Copy source
+COPY packages/shared ./packages/shared
+COPY apps/watcher ./apps/watcher
+
+# Build shared first, then watcher
+RUN pnpm --filter @zeus/shared build
+RUN pnpm --filter @zeus/watcher build
+
+# ── Production image ─────────────────────────────────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
-RUN npm install -g pnpm
-COPY --from=builder /app/apps/api/dist ./dist
+
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/api/package.json ./
-EXPOSE 3000
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder /app/apps/watcher/dist ./apps/watcher/dist
+COPY --from=builder /app/apps/watcher/package.json ./apps/watcher/package.json
+
+WORKDIR /app/apps/watcher
 CMD ["node", "dist/index.js"]
