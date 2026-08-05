@@ -9,7 +9,8 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/watcher/package.json ./apps/watcher/
 COPY packages/shared/package.json ./packages/shared/
 
-RUN pnpm install --frozen-lockfile
+# 🔧 ИСПРАВЛЕНО: добавлен --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source
 COPY packages/shared ./packages/shared
