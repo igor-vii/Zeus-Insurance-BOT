@@ -28,6 +28,8 @@ import { motion } from "framer-motion";
 
 const isEthAddress = (val: string): boolean => isAddress(val);
 
+const SUPPORTED_CHAIN_IDS = [677, 196];
+
 const formSchema = z.object({
   sellerAddress: z.string().refine(isEthAddress, { message: "Invalid Ethereum address" }),
   amount: z.coerce.number().min(0.001, "Amount must be at least 0.001 USDT"),
@@ -55,16 +57,14 @@ export default function BuyInsurance() {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { sellerAddress: "", amount: 10, timeoutSeconds: 86400, retries: 1 },
+    defaultValues: { sellerAddress: "", amount: 0.001, timeoutSeconds: 86400, retries: 1 },
   });
 
   const watchAmount = form.watch("amount");
   const watchRetries = form.watch("retries");
 
-  // Network label
   const networkLabel = chainId === 677 ? "BOT Chain mainnet" : chainId === 196 ? "X Layer mainnet" : "Unknown";
 
-  // Premium preview — computed locally (same formula as contract)
   useEffect(() => {
     if (watchAmount > 0 && watchRetries > 0) {
       try {
@@ -96,6 +96,17 @@ export default function BuyInsurance() {
       toast({ variant: "destructive", title: "Wallet not connected", description: "Please connect your wallet first." });
       return;
     }
+
+    // ─── ПРОВЕРКА СЕТИ ──────────────────────────────────────────────────────
+    if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
+      toast({
+        variant: "destructive",
+        title: "Wrong Network",
+        description: `Current network: ${chainId}. Please switch to BOT Chain (677) or X Layer (196).`,
+      });
+      return;
+    }
+
     setApiError(null);
 
     if (isApiMode) {
@@ -105,6 +116,7 @@ export default function BuyInsurance() {
           amount: amountBigInt.toString(),
           timeoutSeconds: values.timeoutSeconds,
           maxRetries: values.retries,
+          premium: premiumAmount.toString(), // ← ДОБАВЛЕНО
         });
         const hash = await sendTransactionAsync({ to: result.to, data: result.data });
         setApiBuyHash(hash);
@@ -129,6 +141,7 @@ export default function BuyInsurance() {
           amountBigInt,
           values.timeoutSeconds,
           values.retries,
+          premiumAmount, // ← ДОБАВЛЕНО (5-й аргумент)
         );
         toast({ title: "Policy Created!", description: `Policy #${policyId} is now active.` });
         form.reset({ ...form.getValues(), sellerAddress: "" });
