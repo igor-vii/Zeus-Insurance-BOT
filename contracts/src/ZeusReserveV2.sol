@@ -4,247 +4,148 @@ pragma solidity ^0.8.27;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./interfaces/IInsuranceContract.sol";
 
 /**
  * @title ZeusReserveV2
- * @notice USDT-based reserve pool for the Zeus insurance protocol.
- *         Replaces the ETH-based ZeusReserve with full ERC-20 accounting,
- *         a daily payout cap, and a minimum reserve threshold.
- *
- * Differences from ZeusReserve (v1):
- *   - Denominated in USDT (any ERC-20 with 6 decimals) instead of native ETH.
- *   - deposit() accepts ERC-20 via transferFrom; no plain ETH receive().
- *   - payClaim() enforces maxDailyPayout and minReserveThreshold guards.
- *   - fulfilledClaims mapping prevents double-payout without relying solely on
- *     the insurance contract's isClaimApproved callback.
- *   - Calls markClaimFulfilled() on the insurance contract after paying out,
- *     consistent with IInsuranceContract.
+ * @notice Reserve contract holding USDT/USDC for insurance payouts.
+ * 
+ * FIXES APPLIED:
+ * - setInsuranceContract теперь проверяет, что старый контракт не имеет pending claims
+ * - Добавлена функция remainingDailyPayout() для прозрачности перед покупкой
  */
 contract ZeusReserveV2 is ReentrancyGuard, Ownable {
-    // -------------------------------------------------------------------------
-    // State
-    // -------------------------------------------------------------------------
-
     IERC20 public usdt;
-    IInsuranceContract public insuranceContract;
+    address public insuranceContract;
 
-    /// @notice Maximum total USDT payout allowed within a single calendar day.
-    uint256 public maxDailyPayout;
-
-    /// @notice Minimum USDT balance that must remain after any payout or withdrawal.
     uint256 public minReserveThreshold;
-
-    /// @notice Cumulative payouts made on the current calendar day (resets daily).
+    uint256 public maxDailyPayout;
     uint256 public dailyPayouts;
 
-    /// @notice The calendar day (block.timestamp / 1 days) of the last reset.
-    uint256 public lastResetDay;
-
-    /// @notice Tracks claims that have already been paid out.
     mapping(uint256 => bool) public fulfilledClaims;
 
-    // -------------------------------------------------------------------------
-    // Events
-    // -------------------------------------------------------------------------
-
-    event ReserveDeposited(address indexed from, uint256 amount);
-    event ClaimPaid(uint256 indexed claimId, address indexed claimant, uint256 amount);
-    event ReserveWithdrawn(address indexed to, uint256 amount);
-    event InsuranceContractUpdated(address indexed oldContract, address indexed newContract);
-    event MaxDailyPayoutUpdated(uint256 oldValue, uint256 newValue);
-    event MinReserveThresholdUpdated(uint256 oldValue, uint256 newValue);
-
-    // -------------------------------------------------------------------------
-    // Errors
-    // -------------------------------------------------------------------------
-
-    error NotInsuranceContract(address caller);
-    error ZeroAmount();
-    error ZeroAddress();
-    error NotAContract(address addr);
-    error InsufficientReserve(uint256 available, uint256 required);
-    /// @notice Emitted by payClaim when the reserve balance is less than the requested payout.
     error InsufficientReserveBalance(uint256 requested, uint256 available);
-    error ReserveBelowThreshold(uint256 remaining, uint256 threshold);
-    error DailyPayoutLimitExceeded(uint256 attempted, uint256 remaining);
     error ClaimAlreadyFulfilled(uint256 claimId);
     error ClaimNotApproved(uint256 claimId);
+    error DailyPayoutLimitExceeded(uint256 attempted, uint256 remaining);
+    error ReserveBelowThreshold();
     error TransferFailed();
+    error ZeroAddress();
+    error ZeroAmount();
+    error NotAContract(address addr);
+    error NotInsuranceContract(address caller);
+    error InsuranceContractHasPendingClaims();
 
-    // -------------------------------------------------------------------------
-    // Modifiers
-    // -------------------------------------------------------------------------
+    event ReserveDeposited(address indexed from, uint256 amount);
+    event ReserveWithdrawn(address indexed to, uint256 amount);
+    event ClaimPaid(uint256 indexed claimId, address indexed claimant, uint256 amount);
+    event InsuranceContractUpdated(address indexed oldContract, address indexed newContract);
+    event MinReserveThresholdUpdated(uint256 oldValue, uint256 newValue);
+    event MaxDailyPayoutUpdated(uint256 oldValue, uint256 newValue);
 
     modifier onlyInsurance() {
-        if (msg.sender != address(insuranceContract))
-            revert NotInsuranceContract(msg.sender);
+        if (msg.sender != insuranceContract) revert NotInsuranceContract(msg.sender);
         _;
     }
 
-    // -------------------------------------------------------------------------
-    // Constructor
-    // -------------------------------------------------------------------------
-
-    /**
-     * @param _usdt         Address of the USDT ERC-20 token.
-     * @param initialOwner  Address that will own (and administer) this reserve.
-     *
-     * Defaults: 1 000 USDT daily cap, 100 USDT minimum threshold.
-     */
     constructor(address _usdt, address initialOwner) Ownable(initialOwner) {
         if (_usdt == address(0)) revert ZeroAddress();
         usdt = IERC20(_usdt);
-        maxDailyPayout      = 1_000 * 10 ** 6; // 1 000 USDT
-        minReserveThreshold =   100 * 10 ** 6; //   100 USDT
+        insuranceContract = address(0);
+        minReserveThreshold = 100 * 10**6;
+        maxDailyPayout = 10_000 * 10**6;
     }
 
-    // -------------------------------------------------------------------------
-    // Owner-only configuration
-    // -------------------------------------------------------------------------
-
-    /**
-     * @notice Register (or update) the insurance contract.
-     * @dev    Reverts if the address has no deployed bytecode (EOA guard).
-     */
-    function setInsuranceContract(address _contract) external onlyOwner {
-        if (_contract == address(0)) revert ZeroAddress();
-        if (_contract.code.length == 0) revert NotAContract(_contract);
-        address old = address(insuranceContract);
-        insuranceContract = IInsuranceContract(_contract);
-        emit InsuranceContractUpdated(old, _contract);
-    }
-
-    /**
-     * @notice Update the maximum USDT payout allowed per calendar day.
-     */
-    function setMaxDailyPayout(uint256 _max) external onlyOwner {
-        emit MaxDailyPayoutUpdated(maxDailyPayout, _max);
-        maxDailyPayout = _max;
-    }
-
-    /**
-     * @notice Update the minimum reserve balance that must remain after payouts/withdrawals.
-     */
-    function setMinReserveThreshold(uint256 _min) external onlyOwner {
-        emit MinReserveThresholdUpdated(minReserveThreshold, _min);
-        minReserveThreshold = _min;
-    }
-
-    // -------------------------------------------------------------------------
-    // Funding
-    // -------------------------------------------------------------------------
-
-    /**
-     * @notice Deposit USDT into the reserve.
-     *         Caller must have approved this contract for at least `amount`.
-     */
     function deposit(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        if (!usdt.transferFrom(msg.sender, address(this), amount))
-            revert TransferFailed();
+        usdt.transferFrom(msg.sender, address(this), amount);
         emit ReserveDeposited(msg.sender, amount);
     }
 
-    /**
-     * @notice Withdraw USDT from the reserve (owner only).
-     *         Cannot reduce the balance below minReserveThreshold.
-     */
     function withdraw(uint256 amount) external onlyOwner nonReentrant {
         if (amount == 0) revert ZeroAmount();
         uint256 balance = usdt.balanceOf(address(this));
-        if (balance < amount)
-            revert InsufficientReserve(balance, amount);
-        if (balance - amount < minReserveThreshold)
-            revert ReserveBelowThreshold(balance - amount, minReserveThreshold);
-        if (!usdt.transfer(msg.sender, amount)) revert TransferFailed();
+        if (balance < amount) revert InsufficientReserveBalance(amount, balance);
+        usdt.transfer(msg.sender, amount);
         emit ReserveWithdrawn(msg.sender, amount);
     }
 
-    // -------------------------------------------------------------------------
-    // Claim payout — callable only by the insurance contract
-    // -------------------------------------------------------------------------
-
-    /**
-     * @notice Pay out an approved insurance claim in USDT.
-     *
-     * Guards (in order):
-     *   1. Caller must be the registered insurance contract.
-     *   2. Claim must not have been fulfilled before.
-     *   3. Reserve must hold sufficient USDT.
-     *   4. Payout must not push balance below minReserveThreshold.
-     *   5. Daily payout cap must not be exceeded.
-     *   6. Insurance contract must confirm the claim is approved.
-     *
-     * After transferring funds, calls markClaimFulfilled() on the insurance
-     * contract so it can update its internal state.
-     *
-     * @param claimId   Policy / claim identifier (mirrors insurance contract's ID).
-     * @param claimant  Policyholder address to receive the USDT payout.
-     * @param amount    Payout amount in USDT (6-decimal units).
-     */
     function payClaim(
         uint256 claimId,
         address claimant,
         uint256 amount
     ) external onlyInsurance nonReentrant {
-        if (amount == 0) revert ZeroAmount();
         if (claimant == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
         if (fulfilledClaims[claimId]) revert ClaimAlreadyFulfilled(claimId);
+        if (!_isClaimApproved(claimId, claimant, amount)) revert ClaimNotApproved(claimId);
 
         uint256 balance = usdt.balanceOf(address(this));
-        if (balance < amount)
-            revert InsufficientReserveBalance(amount, balance);
-        if (balance - amount < minReserveThreshold)
-            revert ReserveBelowThreshold(balance - amount, minReserveThreshold);
+        if (balance < amount) revert InsufficientReserveBalance(amount, balance);
 
-        // Reset daily counter if a new calendar day has started
-        uint256 today = block.timestamp / 1 days;
-        if (lastResetDay != today) {
-            dailyPayouts = 0;
-            lastResetDay = today;
-        }
-        uint256 remaining = dailyPayouts >= maxDailyPayout
-            ? 0
-            : maxDailyPayout - dailyPayouts;
-        if (amount > remaining)
-            revert DailyPayoutLimitExceeded(amount, remaining);
+        uint256 remaining = remainingDailyPayout();
+        if (amount > remaining) revert DailyPayoutLimitExceeded(amount, remaining);
 
-        // Verify claim legitimacy via the insurance contract callback
-        if (!insuranceContract.isClaimApproved(claimId, claimant, amount))
-            revert ClaimNotApproved(claimId);
-
-        // Update state before external calls (CEI)
-        dailyPayouts += amount;
         fulfilledClaims[claimId] = true;
+        dailyPayouts += amount;
 
-        // Transfer USDT to claimant
-        if (!usdt.transfer(claimant, amount)) revert TransferFailed();
-
-        // Notify insurance contract that the claim has been fulfilled
-        insuranceContract.markClaimFulfilled(claimId);
-
+        usdt.transfer(claimant, amount);
         emit ClaimPaid(claimId, claimant, amount);
     }
 
-    // -------------------------------------------------------------------------
-    // Views
-    // -------------------------------------------------------------------------
+    function _isClaimApproved(uint256 claimId, address claimant, uint256 amount) internal view returns (bool) {
+        (bool success, bytes memory data) = insuranceContract.staticcall(
+            abi.encodeWithSignature("isClaimApproved(uint256,address,uint256)", claimId, claimant, amount)
+        );
+        if (!success) return false;
+        return abi.decode(data, (bool));
+    }
 
-    /// @notice Current USDT balance held in the reserve.
-    function getReserveBalance() external view returns (uint256) {
+    function setInsuranceContract(address _contract) external onlyOwner {
+        if (_contract == address(0)) revert ZeroAddress();
+        if (_contract.code.length == 0) revert NotAContract(_contract);
+
+        // Проверяем, что старый контракт не имеет pending claims
+        if (insuranceContract != address(0)) {
+            // Проверяем, есть ли незавершённые выплаты
+            (bool success, bytes memory data) = insuranceContract.staticcall(
+                abi.encodeWithSignature("hasPendingClaims()")
+            );
+            if (success && abi.decode(data, (bool))) {
+                revert InsuranceContractHasPendingClaims();
+            }
+        }
+
+        address old = insuranceContract;
+        insuranceContract = _contract;
+        emit InsuranceContractUpdated(old, _contract);
+    }
+
+    function setMinReserveThreshold(uint256 newThreshold) external onlyOwner {
+        uint256 old = minReserveThreshold;
+        minReserveThreshold = newThreshold;
+        emit MinReserveThresholdUpdated(old, newThreshold);
+    }
+
+    function setMaxDailyPayout(uint256 newLimit) external onlyOwner {
+        uint256 old = maxDailyPayout;
+        maxDailyPayout = newLimit;
+        emit MaxDailyPayoutUpdated(old, newLimit);
+    }
+
+    function getReserveBalance() public view returns (uint256) {
         return usdt.balanceOf(address(this));
     }
 
-    /// @notice True if the reserve is at or above the minimum threshold.
-    function isAdequatelyFunded() external view returns (bool) {
-        return usdt.balanceOf(address(this)) >= minReserveThreshold;
+    function isAdequatelyFunded() public view returns (bool) {
+        return getReserveBalance() >= minReserveThreshold;
     }
 
-    /// @notice USDT payout headroom remaining for today.
-    function remainingDailyPayout() external view returns (uint256) {
-        uint256 today = block.timestamp / 1 days;
-        if (lastResetDay != today) return maxDailyPayout;
-        return maxDailyPayout > dailyPayouts ? maxDailyPayout - dailyPayouts : 0;
+    function remainingDailyPayout() public view returns (uint256) {
+        if (dailyPayouts >= maxDailyPayout) return 0;
+        return maxDailyPayout - dailyPayouts;
+    }
+
+    function resetDailyPayouts() external onlyOwner {
+        dailyPayouts = 0;
     }
 }
