@@ -1,4 +1,4 @@
-    // SPDX-License-Identifier: MIT
+  // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -14,11 +14,14 @@ import "./interfaces/IInsuranceContract.sol";
  * @title ZeusInsuranceV2
  * @notice Decentralized insurance for AI agents and validators.
  * 
- * FIXES APPLIED:
+ * FIXES APPLIED (v2.1):
  * 1. requestId теперь включает policyId — устранена коллизия
  * 2. Подпись включает policyId — невозможен replay между полисами
  * 3. reportSlashing требует кворум (2+ голоса)
  * 4. policyCoverageMask удалён (мёртвый код)
+ * 5. Добавлена hasPendingClaims() для Reserve
+ * 6. Валидация premium (0 < premium <= amount)
+ * 7. Валидация evidenceHash (не может быть 0)
  */
 contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausable {
     using ECDSA for bytes32;
@@ -52,6 +55,8 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     error NativePaymentNotAccepted();
     error SlashingQuorumNotReached();
     error AlreadyVotedSlashing();
+    error InvalidPremium();
+    error InvalidEvidenceHash();
 
     // ── Enums ─────────────────────────────────────────────────────────────────
 
@@ -151,6 +156,9 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (timeoutSeconds == 0) revert InvalidTimeout();
         if (msg.value > 0) revert NativePaymentNotAccepted();
 
+        // ✅ FIX 6: валидация premium
+        if (premium == 0 || premium > amount) revert InvalidPremium();
+
         if (!usdt.transferFrom(buyer, address(reserve), premium)) revert PremiumTransferFailed();
 
         uint256 retryDeadline = block.timestamp + timeoutSeconds * maxRetries;
@@ -228,12 +236,13 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (slashingResolved[policyId]) revert VoteAlreadyResolved();
         if (slashingVotes[policyId][msg.sender]) revert AlreadyVotedSlashing();
 
-        // ─── Голосование ──────────────────────────────────────────────────────
+        // ✅ FIX 7: валидация evidenceHash
+        if (evidenceHash == 0) revert InvalidEvidenceHash();
+
         slashingVotes[policyId][msg.sender] = true;
         slashingVoteCount[policyId]++;
         emit SlashingVoteCast(policyId, msg.sender);
 
-        // ─── Проверка кворума ──────────────────────────────────────────────
         if (slashingVoteCount[policyId] >= SLASHING_QUORUM) {
             slashingResolved[policyId] = true;
             
@@ -267,6 +276,19 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (msg.sender != address(reserve)) revert OnlyReserveCanCall();
         Policy storage p = policies[claimId];
         emit ClaimApproved(claimId, p.buyer, p.amount);
+    }
+
+    // ── ✅ FIX 5: hasPendingClaims() для Reserve ─────────────────────────────
+
+    function hasPendingClaims() external view returns (bool) {
+        // Проверяем, есть ли активные полисы, которые ещё не истекли и не выплачены
+        for (uint256 i = 0; i < nextPolicyId; i++) {
+            Policy storage p = policies[i];
+            if (p.status == PolicyStatus.Active) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── Watcher Management ────────────────────────────────────────────────────
@@ -303,7 +325,6 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (policy.buyer == address(0)) revert PolicyDoesNotExist();
         if (policy.status != PolicyStatus.Active) revert PolicyNotActive();
 
-        // ✅ FIX 1: requestId включает policyId
         bytes32 expectedId = keccak256(abi.encodePacked(policy.buyer, policy.seller, policyId, obs.timestamp));
         if (obs.requestId != expectedId) revert InvalidRequestId();
 
@@ -374,11 +395,10 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
 
     // ── Internal Helpers ──────────────────────────────────────────────────────
 
-    // ✅ FIX 2: подпись включает policyId
     function _verifyObservation(uint256 policyId, Observation calldata obs) internal pure returns (address) {
         bytes32 msgHash = keccak256(abi.encodePacked(
             obs.requestId,
-            policyId,                       // ← ДОБАВЛЕНО
+            policyId,
             obs.timestamp,
             obs.status,
             obs.metadataHash,
