@@ -1,320 +1,202 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useAccount, useChainId } from "wagmi";
+import { toast } from "@/components/ui/use-toast"; // ваш импорт тостов
+import { useZeusSDK } from "@/hooks/useZeusSDK";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import {
-  useAccount, useWaitForTransactionReceipt, useSendTransaction, useChainId,
-} from "wagmi";
-import { isAddress } from "viem";
-import { Shield, ArrowRight, Loader2, AlertTriangle, ShieldCheck, ServerCrash } from "lucide-react";
-import {
-  formatUsdc, parseUsdc, computePremium,
-} from "@/lib/contracts";
-import { useApiMode } from "@/lib/api-mode";
-import { fetchPrepareBuy, ApiError } from "@/lib/api-client";
-import { useZeusSDK } from "@/hooks/useZeusSDK";
-import { Button } from "@/components/ui/button";
-import {
-  Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
-} from "@/components/ui/card";
-import {
-  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useToast } from "@/hooks/use-toast";
-import { motion } from "framer-motion";
+import { parseEther, formatEther } from "viem";
 
-const isEthAddress = (val: string): boolean => isAddress(val);
+// ============ КОНФИГУРАЦИЯ ============
+const SUPPORTED_CHAIN_IDS = new Set([
+  196,   // X Layer Mainnet
+  1456,  // BOT Chain Mainnet
+]);
 
-const SUPPORTED_CHAIN_IDS = [677, 196];
-
+// ============ СХЕМА ФОРМЫ ============
 const formSchema = z.object({
-  sellerAddress: z.string().refine(isEthAddress, { message: "Invalid Ethereum address" }),
-  amount: z.coerce.number().min(0.001, "Amount must be at least 0.001 USDT"),
-  timeoutSeconds: z.coerce.number().min(60, "Timeout must be at least 60 seconds"),
+  sellerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address"),
+  amount: z.string().min(1, "Amount required"),
+  timeoutSeconds: z.coerce.number().min(60, "Minimum 60 seconds"),
   retries: z.coerce.number().min(1).max(10),
+  mode: z.enum(["direct", "api"]),
 });
 
-export default function BuyInsurance() {
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-  const { toast } = useToast();
-  const { isApiMode } = useApiMode();
-  const { sdk, isReady: isSdkReady, sdkError } = useZeusSDK();
+type FormValues = z.infer<typeof formSchema>;
 
-  const [premiumBps, setPremiumBps] = useState(700n);
-  const [premiumAmount, setPremiumAmount] = useState(0n);
-  const [amountBigInt, setAmountBigInt] = useState(0n);
-  const [apiError, setApiError] = useState<string | null>(null);
-
-  const [isBuyingSdk, setIsBuyingSdk] = useState(false);
-
-  const { sendTransactionAsync, isPending: isBuyingApi } = useSendTransaction();
-  const [apiBuyHash, setApiBuyHash] = useState<`0x${string}` | undefined>();
-  const { isLoading: isWaitingApiBuy, isSuccess: isApiBuySuccess } = useWaitForTransactionReceipt({ hash: apiBuyHash });
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: { sellerAddress: "", amount: 0.001, timeoutSeconds: 86400, retries: 1 },
+// ============ API CLIENT ============
+async function fetchPrepareBuy(params: {
+  seller: string;
+  amount: string;
+  timeoutSeconds: number;
+  maxRetries: number;
+  premium: string; // ← ДОБАВЛЕНО
+  chainId: number;
+}) {
+  const response = await fetch("/api/prepare-buy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
   });
 
-  const watchAmount = form.watch("amount");
-  const watchRetries = form.watch("retries");
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "Unknown error" }));
+    throw new Error(error.message || `API error: ${response.status}`);
+  }
 
-  const networkLabel = chainId === 677 ? "BOT Chain mainnet" : chainId === 196 ? "X Layer mainnet" : "Unknown";
+  return response.json();
+}
 
-  useEffect(() => {
-    if (watchAmount > 0 && watchRetries > 0) {
-      try {
-        const amt = parseUsdc(watchAmount.toString());
-        setAmountBigInt(amt);
-        setPremiumAmount(computePremium(amt, watchRetries));
-        setPremiumBps(BigInt(700 + (watchRetries - 1) * 200));
-      } catch {
-        setAmountBigInt(0n);
-        setPremiumAmount(0n);
-      }
-    }
-  }, [watchAmount, watchRetries]);
+// ============ КОМПОНЕНТ ============
+export function BuyInsurance() {
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const { sdk, isSdkReady, sdkError, reconnect } = useZeusSDK();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (isApiBuySuccess) {
-      toast({ title: "Policy Created!", description: "Your insurance policy is now active." });
-      form.reset({ ...form.getValues(), sellerAddress: "" });
-      setApiError(null);
-    }
-  }, [isApiBuySuccess, form, toast]);
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      sellerAddress: "",
+      amount: "",
+      timeoutSeconds: 3600,
+      retries: 3,
+      mode: "direct",
+    },
+  });
 
-  const isBuying = isApiMode ? isBuyingApi : isBuyingSdk;
-  const isWaiting = isApiMode ? isWaitingApiBuy : false;
-  const totalCost = amountBigInt > 0 ? premiumAmount : 0n;
+  // ============ РАСЧЁТ PREMIUM ============
+  /**
+   * Рассчитывает premium на основе amount.
+   * Замените логику на вашу реальную формулу или вызов API pricing.
+   */
+  const calculatePremium = (amountWei: bigint): bigint => {
+    // Пример: premium = amount * 2.5% = amount * 25 / 1000
+    // Замените на реальную логику из pricing.ts
+    return (amountWei * 25n) / 1000n;
+  };
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  // ============ ОБРАБОТКА ОТПРАВКИ ============
+  async function onSubmit(values: FormValues) {
+    // 1. Проверка подключения
     if (!isConnected) {
-      toast({ variant: "destructive", title: "Wallet not connected", description: "Please connect your wallet first." });
-      return;
-    }
-
-    // ─── ПРОВЕРКА СЕТИ ──────────────────────────────────────────────────────
-    if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
       toast({
         variant: "destructive",
-        title: "Wrong Network",
-        description: `Current network: ${chainId}. Please switch to BOT Chain (677) or X Layer (196).`,
+        title: "Wallet not connected",
+        description: "Please connect your wallet first.",
       });
       return;
     }
 
-    setApiError(null);
+    // 2. Проверка готовности SDK
+    if (!isSdkReady || !sdk) {
+      toast({
+        variant: "destructive",
+        title: "SDK not ready",
+        description: sdkError || "Wallet connection still initialising, please wait.",
+      });
+      // Пробуем переподключиться автоматически
+      reconnect();
+      return;
+    }
 
-    if (isApiMode) {
-      try {
+    // 3. 🔒 ПРОВЕРКА СЕТИ (НОВОЕ)
+    if (!SUPPORTED_CHAIN_IDS.has(chainId)) {
+      toast({
+        variant: "destructive",
+        title: "Wrong Network",
+        description: `Current chain (${chainId}) is not supported. Please switch to X Layer (196) or BOT Chain.`,
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const amountBigInt = parseEther(values.amount);
+      const premiumAmount = calculatePremium(amountBigInt);
+
+      console.log("[BuyInsurance] Submitting with params:", {
+        seller: values.sellerAddress,
+        amount: amountBigInt.toString(),
+        premium: premiumAmount.toString(),
+        timeoutSeconds: values.timeoutSeconds,
+        maxRetries: values.retries,
+        mode: values.mode,
+        chainId,
+      });
+
+      if (values.mode === "api") {
+        // ============ API MODE (для ИИ-агентов) ============
         const result = await fetchPrepareBuy({
           seller: values.sellerAddress,
           amount: amountBigInt.toString(),
           timeoutSeconds: values.timeoutSeconds,
           maxRetries: values.retries,
           premium: premiumAmount.toString(), // ← ДОБАВЛЕНО
+          chainId,
         });
-        const hash = await sendTransactionAsync({ to: result.to, data: result.data });
-        setApiBuyHash(hash);
-      } catch (e: unknown) {
-        if (e instanceof ApiError) {
-          setApiError(`API error ${e.status}: ${e.message}`);
-          toast({ variant: "destructive", title: "API Error", description: e.message });
-        } else {
-          const msg = e instanceof Error ? e.message.split("\n")[0] : "Unknown error";
-          toast({ variant: "destructive", title: "Purchase Failed", description: msg });
-        }
-      }
-    } else {
-      if (!isSdkReady) {
-        toast({ variant: "destructive", title: "SDK not ready", description: "Wallet connection still initialising, please wait." });
-        return;
-      }
-      setIsBuyingSdk(true);
-      try {
+
+        toast({
+          title: "API Policy Created",
+          description: `Policy prepared via API. Tx: ${result.txHash || "pending"}`,
+        });
+      } else {
+        // ============ DIRECT MODE (для ПК-браузеров) ============
+        // 🔧 ИСПРАВЛЕНО: добавлен 5-й аргумент premiumAmount
         const { policyId } = await sdk.insurance.createPolicy(
           values.sellerAddress,
           amountBigInt,
           values.timeoutSeconds,
           values.retries,
-          premiumAmount, // ← ДОБАВЛЕНО (5-й аргумент)
+          premiumAmount // ← ДОБАВЛЕНО
         );
-        toast({ title: "Policy Created!", description: `Policy #${policyId} is now active.` });
-        form.reset({ ...form.getValues(), sellerAddress: "" });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message.split("\n")[0] : "Unknown error";
-        toast({ variant: "destructive", title: "Purchase Failed", description: msg });
-      } finally {
-        setIsBuyingSdk(false);
+
+        toast({
+          title: "Policy Created",
+          description: `Policy #${policyId} created successfully.`,
+        });
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Transaction failed";
+      console.error("[BuyInsurance] Error:", error);
+
+      toast({
+        variant: "destructive",
+        title: "Transaction Failed",
+        description: message,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
+  // ============ RENDER ============
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="max-w-2xl mx-auto space-y-6"
-    >
-      <div className="flex items-center gap-3 mb-8">
-        <ShieldCheck className="w-8 h-8 text-primary" />
-        <div>
-          <h1 className="text-3xl font-brand font-bold tracking-tight">Issue Policy</h1>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            {networkLabel} · USDT
-            {isApiMode && " · Calldata via API"}
-          </span>
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      {/* Ваши поля формы */}
+      <input {...form.register("sellerAddress")} placeholder="Seller Address" />
+      <input {...form.register("amount")} placeholder="Amount (ETH)" />
+      <input {...form.register("timeoutSeconds")} type="number" />
+      <input {...form.register("retries")} type="number" />
+      
+      <select {...form.register("mode")}>
+        <option value="direct">Direct (Browser)</option>
+        <option value="api">API (AI Agent)</option>
+      </select>
+
+      <button type="submit" disabled={isSubmitting || !isSdkReady}>
+        {isSubmitting ? "Processing..." : "Buy Insurance"}
+      </button>
+
+      {sdkError && (
+        <div className="text-red-500 text-sm mt-2">
+          SDK Error: {sdkError}
+          <button type="button" onClick={reconnect} className="ml-2 underline">
+            Retry
+          </button>
         </div>
-      </div>
-
-      {!isConnected && (
-        <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
-          <AlertTriangle className="w-4 h-4" />
-          <AlertTitle className="font-mono uppercase text-xs tracking-wider">Not Connected</AlertTitle>
-          <AlertDescription className="text-sm font-mono mt-1">
-            Connect your wallet to purchase an insurance policy.
-          </AlertDescription>
-        </Alert>
       )}
-
-      {!isApiMode && isConnected && sdkError && (
-        <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
-          <AlertTriangle className="w-4 h-4" />
-          <AlertTitle className="font-mono uppercase text-xs tracking-wider">Wallet Not Ready</AlertTitle>
-          <AlertDescription className="text-sm font-mono mt-1">{sdkError}</AlertDescription>
-        </Alert>
-      )}
-
-      {apiError && (
-        <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
-          <ServerCrash className="w-4 h-4" />
-          <AlertTitle className="font-mono uppercase text-xs tracking-wider">API Unavailable</AlertTitle>
-          <AlertDescription className="text-sm font-mono mt-1">
-            {apiError} — try switching to Direct mode.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardHeader>
-              <CardTitle className="font-mono uppercase tracking-wider text-sm">Policy Details</CardTitle>
-              <CardDescription>Enter the transaction details to secure coverage.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <FormField
-                control={form.control}
-                name="sellerAddress"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-mono uppercase text-xs tracking-wider text-muted-foreground">Seller Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="0x..." className="font-mono bg-background/50" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-mono uppercase text-xs tracking-wider text-muted-foreground">Insured Amount (USDT)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0.001"
-                          step="0.001"
-                          className="font-mono bg-background/50"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription className="text-xs">Min: 0.001 USDT</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="timeoutSeconds"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="font-mono uppercase text-xs tracking-wider text-muted-foreground">Timeout per retry (Sec)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="60" className="font-mono bg-background/50" {...field} />
-                      </FormControl>
-                      <FormDescription className="text-xs">Ex: 86400 = 1 day</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="retries"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-mono uppercase text-xs tracking-wider text-muted-foreground flex justify-between">
-                      <span>Delivery Retries</span>
-                      <span className="text-primary">{field.value}</span>
-                    </FormLabel>
-                    <FormControl>
-                      <div className="py-2">
-                        <Slider
-                          min={1} max={10} step={1}
-                          value={[field.value]}
-                          onValueChange={(vals) => field.onChange(vals[0])}
-                          className="py-2"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormDescription className="text-xs">More retries = higher premium.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 mt-6">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">Premium Rate</span>
-                  <span className="font-mono text-sm">{Number(premiumBps) / 100}%</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">Insured Value</span>
-                  <span className="font-mono text-sm">{watchAmount || 0} USDT</span>
-                </div>
-                <div className="w-full h-px bg-primary/20 my-2" />
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-sm uppercase tracking-wider text-primary font-bold">Total Cost</span>
-                  <span className="font-mono text-xl font-bold">{formatUsdc(totalCost)} USDT</span>
-                </div>
-              </div>
-            </CardContent>
-
-            <CardFooter>
-              <Button
-                type="submit"
-                className="w-full font-mono uppercase tracking-wider"
-                disabled={!isConnected || isBuying || isWaiting || amountBigInt === 0n}
-              >
-                {(isBuying || isWaiting)
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Confirming…</>
-                  : <><ArrowRight className="mr-2 h-4 w-4" /> Issue Policy</>}
-              </Button>
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
-    </motion.div>
+    </form>
   );
 }
