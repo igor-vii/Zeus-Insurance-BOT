@@ -1,4 +1,4 @@
-  // SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -14,14 +14,19 @@ import "./interfaces/IInsuranceContract.sol";
  * @title ZeusInsuranceV2
  * @notice Decentralized insurance for AI agents and validators.
  * 
- * FIXES APPLIED (v2.1):
+ * @dev Version 2.4 — FINAL
+ * 
+ * CRITICAL FIXES APPLIED:
  * 1. requestId теперь включает policyId — устранена коллизия
  * 2. Подпись включает policyId — невозможен replay между полисами
- * 3. reportSlashing требует кворум (2+ голоса)
+ * 3. reportSlashing требует кворум (2+ голоса) с on-chain голосованием
  * 4. policyCoverageMask удалён (мёртвый код)
- * 5. Добавлена hasPendingClaims() для Reserve
+ * 5. hasPendingClaims() — O(1) через activePolicyCount
  * 6. Валидация premium (0 < premium <= amount)
  * 7. Валидация evidenceHash (не может быть 0)
+ * 8. Защита renounceOwnership — недоступна
+ * 9. Все evidenceHash сохраняются для полного аудита
+ * 10. СТАВКИ УБРАНЫ ИЗ КОНТРАКТА — premium передаётся из API (гибкая ставка)
  */
 contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausable {
     using ECDSA for bytes32;
@@ -57,6 +62,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     error AlreadyVotedSlashing();
     error InvalidPremium();
     error InvalidEvidenceHash();
+    error CannotRenounceOwnership();
 
     // ── Enums ─────────────────────────────────────────────────────────────────
 
@@ -98,17 +104,17 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
 
     mapping(uint256 => Policy)    public policies;
     uint256                       public nextPolicyId;
+    uint256                       public activePolicyCount; // O(1) для hasPendingClaims
 
     address[]                     public watcherList;
     mapping(address => bool)      public isWatcher;
-
-    uint256 public constant SLASHING_PREMIUM_BPS = 500;
 
     // ── Slashing кворум ─────────────────────────────────────────────────────
 
     mapping(uint256 => mapping(address => bool)) public slashingVotes;
     mapping(uint256 => uint256) public slashingVoteCount;
     mapping(uint256 => bool) public slashingResolved;
+    mapping(uint256 => bytes32[]) public slashingEvidenceHashes; // все evidenceHash для аудита
     uint256 public constant SLASHING_QUORUM = 2;
 
     mapping(bytes32 => VoteTally)             public  pendingVotes;
@@ -139,7 +145,13 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         reserve = ZeusReserveV2(_reserve);
     }
 
-    // ── Internal Buy Logic ────────────────────────────────────────────────────
+    // ─── Защита renounceOwnership ─────────────────────────────────────────────
+
+    function renounceOwnership() public override onlyOwner {
+        revert CannotRenounceOwnership();
+    }
+
+    // ─── Internal Buy Logic ───────────────────────────────────────────────────
 
     function _buyInternal(
         address buyer,
@@ -155,8 +167,6 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (maxRetries == 0 || maxRetries > 10) revert InvalidRetries();
         if (timeoutSeconds == 0) revert InvalidTimeout();
         if (msg.value > 0) revert NativePaymentNotAccepted();
-
-        // ✅ FIX 6: валидация premium
         if (premium == 0 || premium > amount) revert InvalidPremium();
 
         if (!usdt.transferFrom(buyer, address(reserve), premium)) revert PremiumTransferFailed();
@@ -175,11 +185,12 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
             coverageType:  coverageType
         });
 
+        activePolicyCount++;
         emit PolicyCreated(policyId, buyer, seller, amount, premium, retryDeadline, coverageType);
         nextPolicyId++;
     }
 
-    // ── Policy Management ─────────────────────────────────────────────────────
+    // ─── Policy Management ────────────────────────────────────────────────────
 
     function buyPolicy(
         address seller,
@@ -205,12 +216,20 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         address validator,
         uint256 amount,
         uint256 timeoutSeconds,
-        uint256 premium
+        uint256 premium  // ← ПРЕМИЯ ПРИХОДИТ ИЗ API (гибкая ставка)
     ) external nonReentrant whenNotPaused returns (uint256) {
-        return _buyInternal(msg.sender, validator, amount, timeoutSeconds, 1, premium, CoverageType.SlashingProtection);
+        return _buyInternal(
+            msg.sender,
+            validator,
+            amount,
+            timeoutSeconds,
+            1,
+            premium,
+            CoverageType.SlashingProtection
+        );
     }
 
-    // ── Claims ─────────────────────────────────────────────────────────────────
+    // ─── Claims ────────────────────────────────────────────────────────────────
 
     function claimPayout(uint256 policyId) external nonReentrant whenNotPaused {
         Policy storage p = policies[policyId];
@@ -220,11 +239,12 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (block.timestamp < p.retryDeadline) revert TimeoutNotReached();
 
         p.status = PolicyStatus.Claimed;
+        activePolicyCount--;
         reserve.payClaim(policyId, p.buyer, p.amount);
         emit PayoutExecuted(policyId, p.amount);
     }
 
-    // ── Slashing с кворумом ──────────────────────────────────────────────────
+    // ─── Slashing с кворумом ─────────────────────────────────────────────────
 
     function reportSlashing(uint256 policyId, bytes32 evidenceHash) external nonReentrant whenNotPaused {
         if (!isWatcher[msg.sender]) revert NotWatcher();
@@ -235,9 +255,9 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (p.coverageType != CoverageType.SlashingProtection) revert NotASlashingPolicy();
         if (slashingResolved[policyId]) revert VoteAlreadyResolved();
         if (slashingVotes[policyId][msg.sender]) revert AlreadyVotedSlashing();
-
-        // ✅ FIX 7: валидация evidenceHash
         if (evidenceHash == 0) revert InvalidEvidenceHash();
+
+        slashingEvidenceHashes[policyId].push(evidenceHash);
 
         slashingVotes[policyId][msg.sender] = true;
         slashingVoteCount[policyId]++;
@@ -251,6 +271,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
             uint256 amount = p.amount;
 
             p.status = PolicyStatus.Claimed;
+            activePolicyCount--;
             emit SlashingReported(policyId, validator, evidenceHash);
             emit SlashingResolved(policyId, true);
 
@@ -259,7 +280,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         }
     }
 
-    // ── IInsuranceContract ────────────────────────────────────────────────────
+    // ─── IInsuranceContract ──────────────────────────────────────────────────
 
     function isClaimApproved(
         uint256 claimId,
@@ -278,20 +299,13 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         emit ClaimApproved(claimId, p.buyer, p.amount);
     }
 
-    // ── ✅ FIX 5: hasPendingClaims() для Reserve ─────────────────────────────
+    // ─── O(1) hasPendingClaims() ─────────────────────────────────────────────
 
     function hasPendingClaims() external view returns (bool) {
-        // Проверяем, есть ли активные полисы, которые ещё не истекли и не выплачены
-        for (uint256 i = 0; i < nextPolicyId; i++) {
-            Policy storage p = policies[i];
-            if (p.status == PolicyStatus.Active) {
-                return true;
-            }
-        }
-        return false;
+        return activePolicyCount > 0;
     }
 
-    // ── Watcher Management ────────────────────────────────────────────────────
+    // ─── Watcher Management ──────────────────────────────────────────────────
 
     function addWatcher(address watcher) external onlyOwner {
         if (watcher == address(0)) revert ZeroAddress();
@@ -311,7 +325,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         return watcherList;
     }
 
-    // ── Oracle Observations ──────────────────────────────────────────────────
+    // ─── Oracle Observations ──────────────────────────────────────────────────
 
     function submitObservation(uint256 policyId, Observation calldata obs) external whenNotPaused {
         if (usedRequestIds[obs.requestId]) revert RequestAlreadyResolved();
@@ -345,7 +359,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         }
     }
 
-    // ── Views ─────────────────────────────────────────────────────────────────
+    // ─── Views ─────────────────────────────────────────────────────────────────
 
     function getPolicy(uint256 policyId) external view returns (Policy memory) {
         return policies[policyId];
@@ -353,6 +367,10 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
 
     function getCoverageType(uint256 policyId) external view returns (CoverageType) {
         return policies[policyId].coverageType;
+    }
+
+    function getSlashingEvidenceHashes(uint256 policyId) external view returns (bytes32[] memory) {
+        return slashingEvidenceHashes[policyId];
     }
 
     function canClaim(uint256 policyId) external view returns (bool) {
@@ -373,7 +391,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         return true;
     }
 
-    // ── Owner Configuration ───────────────────────────────────────────────────
+    // ─── Owner Configuration ──────────────────────────────────────────────────
 
     function setReserve(address _reserve) external onlyOwner {
         if (_reserve == address(0)) revert InvalidReserveAddress();
@@ -393,7 +411,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         _unpause();
     }
 
-    // ── Internal Helpers ──────────────────────────────────────────────────────
+    // ─── Internal Helpers ─────────────────────────────────────────────────────
 
     function _verifyObservation(uint256 policyId, Observation calldata obs) internal pure returns (address) {
         bytes32 msgHash = keccak256(abi.encodePacked(
@@ -433,6 +451,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         Policy storage p = policies[policyId];
         if (p.status != PolicyStatus.Active) revert PolicyNotActive();
         p.status = PolicyStatus.Claimed;
+        activePolicyCount--;
         reserve.payClaim(policyId, p.buyer, p.amount);
         emit PayoutExecuted(policyId, p.amount);
     }
@@ -441,6 +460,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         Policy storage p = policies[policyId];
         if (p.status != PolicyStatus.Active) revert PolicyNotActive();
         p.status = PolicyStatus.Rejected;
+        activePolicyCount--;
         emit ClaimRejected(policyId);
     }
 }
