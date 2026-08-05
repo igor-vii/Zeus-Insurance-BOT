@@ -48,11 +48,9 @@ function apiPolicyToNormalized(p: ApiPolicy): NormalizedPolicy {
   };
 }
 
-/** Decode a friendly error message from SDK or API errors. */
 function decodeClaimError(err: unknown): string {
   if (!(err instanceof Error)) return String(err);
   const msg = err.message;
-  // Match known contract revert strings embedded in the SDK error message
   const friendly: Record<string, string> = {
     "Only buyer can claim": "Only the policy buyer can claim this.",
     "Policy not active": "Policy is not active.",
@@ -89,7 +87,6 @@ export default function Policies() {
     return () => clearInterval(timer);
   }, []);
 
-  // ─── Direct mode: event log scan ──────────────────────────────────────────
   const [policyIds, setPolicyIds] = useState<bigint[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [syncedBlock, setSyncedBlock] = useState<bigint | null>(null);
@@ -105,9 +102,12 @@ export default function Policies() {
       const CHUNK = 2000n;
       const latestBlock = await publicClient.getBlockNumber();
       const totalBlocks = latestBlock - INSURANCE_DEPLOY_BLOCK + 1n;
+      
+      // 🔧 ИСПРАВЛЕНО: добавлен coverageType
       const event = parseAbiItem(
-        "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline)",
+        "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint8 coverageType)",
       );
+      
       const allLogs: Awaited<ReturnType<typeof publicClient.getLogs>> = [];
       let cursor = INSURANCE_DEPLOY_BLOCK;
 
@@ -154,7 +154,6 @@ export default function Policies() {
     fetchLogs();
   }, [fetchLogs, directRefetchKey]);
 
-  // ─── Direct mode: batch read policies via SDK ──────────────────────────────
   const {
     data: directPoliciesData,
     isLoading: isLoadingPolicies,
@@ -165,7 +164,6 @@ export default function Policies() {
     enabled: !isApiMode && policyIds.length > 0 && isSdkReady,
   });
 
-  // ─── API mode: single fetch ────────────────────────────────────────────────
   const {
     data: apiPoliciesData,
     isLoading: isLoadingApi,
@@ -178,7 +176,6 @@ export default function Policies() {
     retry: 1,
   });
 
-  // ─── API mode claim — sendTransaction ─────────────────────────────────────
   const { sendTransactionAsync, isPending: isClaimingApi } = useSendTransaction();
   const [apiClaimHash, setApiClaimHash] = useState<`0x${string}` | undefined>();
   const { isLoading: isWaitingApiClaim, isSuccess: isApiClaimSuccess } =
@@ -215,7 +212,6 @@ export default function Policies() {
         toast({ variant: "destructive", title: "Claim Failed", description: msg });
       }
     } else {
-      // Direct mode — SDK handles the full claim tx and awaits receipt
       const policyId = idBigInt !== undefined ? Number(idBigInt) : Number(idStr);
       if (!isSdkReady) {
         const msg = "SDK not ready — please wait for wallet connection to initialise.";
@@ -252,7 +248,6 @@ export default function Policies() {
     return <Badge variant="outline">Unknown</Badge>;
   }
 
-  // Build normalized policy list
   const normalizedPolicies: NormalizedPolicy[] = isApiMode
     ? (apiPoliciesData?.policies ?? []).map(apiPolicyToNormalized)
     : (directPoliciesData ?? []).map((p, idx) => ({
