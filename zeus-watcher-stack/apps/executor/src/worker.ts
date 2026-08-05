@@ -1,40 +1,90 @@
 import { Job } from 'bullmq';
 import { ethers } from 'ethers';
-import { NETWORKS } from '../../watcher/src/config';
+import { NETWORKS } from '../../watcher/src/config.js';
+import {
+  getProvider,
+  getInsuranceContract,
+  type ObservationTuple,
+} from './blockchain.js';
 
-const ABI = [
-  'function submitObservation(uint256 policyId, (bytes32 requestId, uint256 timestamp, uint8 status, bytes32 metadataHash, uint256 nonce, bytes signature) obs) external',
-  'function reportSlashing(uint256 policyId, bytes32 evidenceHash) external',
-];
+// ─── Env guard ───────────────────────────────────────────────────────────────
+
+const RELAYER_KEY = process.env.RELAYER_KEY;
+if (!RELAYER_KEY) {
+  throw new Error('RELAYER_KEY environment variable is required');
+}
+
+// ─── Worker ──────────────────────────────────────────────────────────────────
 
 export async function relayWorker(job: Job) {
   const { name, data } = job;
 
+  // ── 1. relay-observation ─────────────────────────────────────────────────
   if (name === 'relay-observation') {
     const cfg = Object.values(NETWORKS).find(n => n.chainId === data.chainId);
-    if (!cfg) throw new Error('Unknown chain');
+    if (!cfg) throw new Error(`Unknown chain: ${data.chainId}`);
 
-    const provider = new ethers.JsonRpcProvider(cfg.rpcs[0]);
-    // Relayer wallet — funded account, НЕ watcher (msg.sender не проверяется)
-    const wallet = new ethers.Wallet(process.env.RELAYER_KEY!, provider);
-    const contract = new ethers.Contract(cfg.insurance, ABI, wallet);
+    const provider = getProvider(cfg.rpcs);
+    const contract = getInsuranceContract(cfg.insurance, provider);
+    const wallet = new ethers.Wallet(RELAYER_KEY, provider);
+    const writeContract = contract.connect(wallet);
 
-    const tx = await contract.submitObservation(data.policyId, {
+    // Проверяем, что полис всё ещё активен (дешёвая read-only проверка)
+    const policy = await contract.policies(data.policyId);
+    if (Number(policy.status) !== 0) { // 0 = Active
+      throw new Error(`Policy ${data.policyId} not active (status=${policy.status})`);
+    }
+
+    const observation: ObservationTuple = {
       requestId: data.requestId,
-      timestamp: data.timestamp,
+      timestamp: BigInt(data.timestamp),
       status: data.status,
       metadataHash: data.metadataHash,
-      nonce: data.nonce,
+      nonce: BigInt(data.nonce),
       signature: data.signature,
-    });
+    };
 
+    const tx = await writeContract.submitObservation(data.policyId, observation);
     const receipt = await tx.wait();
-    return { txHash: tx.hash, status: receipt?.status };
+
+    return {
+      txHash: tx.hash,
+      status: receipt?.status,
+      blockNumber: receipt?.blockNumber,
+    };
   }
 
+  // ── 2. relay-slashing ────────────────────────────────────────────────────
   if (name === 'relay-slashing') {
-    // Slashing требует isWatcher[msg.sender] — значит релеер должен быть watcher'ом
-    // Или мы используем отдельный watcher-key для executor
-    // Это отдельная тема — требует доработки контракта или доверенного relayer
+    const cfg = Object.values(NETWORKS).find(n => n.chainId === data.chainId);
+    if (!cfg) throw new Error(`Unknown chain: ${data.chainId}`);
+
+    const provider = getProvider(cfg.rpcs);
+    const contract = getInsuranceContract(cfg.insurance, provider);
+    const wallet = new ethers.Wallet(RELAYER_KEY, provider);
+    const writeContract = contract.connect(wallet);
+
+    // Проверяем, что slashing ещё возможен
+    const canSlash = await contract.canSlash(data.policyId);
+    if (!canSlash) {
+      throw new Error(`Policy ${data.policyId} cannot be slashed`);
+    }
+
+    // ВАЖНО: reportSlashing требует isWatcher[msg.sender].
+    // Если relayer НЕ зарегистрирован как watcher — tx revert.
+    // Решения:
+    //   A) Зарегистрировать relayer-адрес как watcher в контракте
+    //   B) Использовать watcher-key для подписи + relayer для газа (meta-tx)
+    //   C) Отправлять slashing с того же ключа, что и observation (если он watcher)
+    const tx = await writeContract.reportSlashing(data.policyId, data.evidenceHash);
+    const receipt = await tx.wait();
+
+    return {
+      txHash: tx.hash,
+      status: receipt?.status,
+      blockNumber: receipt?.blockNumber,
+    };
   }
+
+  throw new Error(`Unknown job name: ${name}`);
 }
