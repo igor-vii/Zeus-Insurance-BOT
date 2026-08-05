@@ -1,161 +1,91 @@
-// ─── Deployed addresses (Base Sepolia testnet) ───────────────────────────────
-export const ZEUS_INSURANCE_ADDRESS =
-  "0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4" as const;
+import { encodeFunctionData, parseAbi } from "viem";
 
-export const ZEUS_RESERVE_ADDRESS =
-  "0xF5010Afe1856be1F447f962Dfa8AA30c2Ed19a47" as const;
+// ─── Network config ──────────────────────────────────────────────────────────
+export const SUPPORTED_NETWORKS = {
+  "base-sepolia": { chainId: 84532, rpc: process.env["BASE_SEPOLIA_RPC_URL"] ?? "https://sepolia.base.org" },
+  "x-layer":      { chainId: 196,   rpc: process.env["XLAYER_MAINNET_RPC_URL"] ?? "https://rpc.xlayer.tech" },
+  "bot-chain":    { chainId: 677,   rpc: process.env["BOT_CHAIN_RPC_URL"] ?? "https://rpc.botchain.ai" },
+} as const;
 
-// ─── ZeusInsuranceV2 ABI (subset used by server) ─────────────────────────────
-export const ZEUS_INSURANCE_ABI = [
-  // ── Functions ────────────────────────────────────────────────────────────────
-  {
-    inputs: [
-      { internalType: "address", name: "seller", type: "address" },
-      { internalType: "uint256", name: "amount", type: "uint256" },
-      { internalType: "uint256", name: "timeoutSeconds", type: "uint256" },
-      { internalType: "uint256", name: "maxRetries", type: "uint256" },
-    ],
-    name: "buyInsurance",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
-    name: "claimPayout",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
-    name: "getPolicy",
-    outputs: [
-      {
-        components: [
-          { internalType: "address", name: "buyer",         type: "address" },
-          { internalType: "address", name: "seller",        type: "address" },
-          { internalType: "uint256", name: "amount",        type: "uint256" },
-          { internalType: "uint256", name: "premium",       type: "uint256" },
-          { internalType: "uint256", name: "retryDeadline", type: "uint256" },
-          { internalType: "uint256", name: "maxRetries",    type: "uint256" },
-          { internalType: "uint8",   name: "status",        type: "uint8"   },
-        ],
-        internalType: "struct ZeusInsuranceV2.Policy",
-        name: "",
-        type: "tuple",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  // ── SlashingProtection ────────────────────────────────────────────────────────
-  {
-    inputs: [
-      { internalType: "address", name: "validator",      type: "address" },
-      { internalType: "uint256", name: "amount",         type: "uint256" },
-      { internalType: "uint256", name: "timeoutSeconds", type: "uint256" },
-    ],
-    name: "buySlashingProtection",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      { internalType: "uint256", name: "policyId",     type: "uint256" },
-      { internalType: "bytes32", name: "evidenceHash", type: "bytes32" },
-    ],
-    name: "reportSlashing",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
-    name: "getCoverageType",
-    outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  // ── Events ────────────────────────────────────────────────────────────────────
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true,  internalType: "uint256", name: "policyId",      type: "uint256" },
-      { indexed: true,  internalType: "address", name: "buyer",         type: "address" },
-      { indexed: true,  internalType: "address", name: "seller",        type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount",        type: "uint256" },
-      { indexed: false, internalType: "uint256", name: "premium",       type: "uint256" },
-      { indexed: false, internalType: "uint256", name: "retryDeadline", type: "uint256" },
-    ],
-    name: "PolicyCreated",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true,  internalType: "uint256", name: "policyId",     type: "uint256" },
-      { indexed: true,  internalType: "address", name: "validator",    type: "address" },
-      { indexed: true,  internalType: "bytes32", name: "evidenceHash", type: "bytes32" },
-    ],
-    name: "SlashingReported",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true,  internalType: "uint256", name: "policyId", type: "uint256" },
-      { indexed: true,  internalType: "address", name: "buyer",    type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount",   type: "uint256" },
-    ],
-    name: "ClaimPaid",
-    type: "event",
-  },
-] as const;
+export type SupportedNetwork = keyof typeof SUPPORTED_NETWORKS;
 
-// ─── ZeusReserveV2 ABI (subset used by server) ───────────────────────────────
-export const ZEUS_RESERVE_ABI = [
-  {
-    inputs: [],
-    name: "getReserveBalance",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "minReserveThreshold",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "maxDailyPayout",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "remainingDailyPayout",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "isAdequatelyFunded",
-    outputs: [{ internalType: "bool", name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
+// ─── Address resolver ────────────────────────────────────────────────────────
+function getAddr(network: SupportedNetwork, type: "insurance" | "reserve"): `0x${string}` {
+  const suffix = network === "base-sepolia" ? "" : `_${network.toUpperCase().replace("-", "_")}`;
+  const key = type === "insurance" ? `ZEUS_INSURANCE_ADDRESS${suffix}` : `ZEUS_RESERVE_ADDRESS${suffix}`;
+  const val = process.env[key];
+  if (!val) throw new Error(`Missing env: ${key}`);
+  return val as `0x${string}`;
+}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-/** Premium = (7% + 2% × (retries−1)) of amount — mirrors frontend logic */
+export const getInsuranceAddress = (n: SupportedNetwork = "x-layer") => getAddr(n, "insurance");
+export const getReserveAddress   = (n: SupportedNetwork = "x-layer") => getAddr(n, "reserve");
+
+// ─── ZeusInsuranceV2 v2.4 ABI ────────────────────────────────────────────────
+export const ZEUS_INSURANCE_ABI = parseAbi([
+  // Write
+  "function buyPolicy(address seller, uint256 amount, uint256 timeoutSeconds, uint256 maxRetries, uint256 premium) returns (uint256)",
+  "function buySlashingProtection(address validator, uint256 amount, uint256 timeoutSeconds, uint256 premium) returns (uint256)",
+  "function claimPayout(uint256 policyId)",
+  "function submitObservation(uint256 policyId, (bytes32 requestId, uint256 timestamp, uint8 status, bytes32 metadataHash, uint256 nonce, bytes signature) observation)",
+  "function submitSlashingVote(uint256 policyId, bytes32 evidenceHash, uint256 timestamp, uint256 nonce, bytes signature)",
+  // View
+  "function policies(uint256) view returns (address buyer, address seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint256 maxRetries, uint8 status, uint8 coverageType)",
+  "function nextPolicyId() view returns (uint256)",
+  "function isWatcher(address) view returns (bool)",
+  "function canClaim(uint256) view returns (bool)",
+  "function canSlash(uint256) view returns (bool)",
+  "function hasPendingClaims() view returns (bool)",
+  "function getCoverageType(uint256) view returns (uint8)",
+  "function getWatchers() view returns (address[])",
+  // Events
+  "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint8 coverageType)",
+  "event PayoutExecuted(uint256 indexed policyId, uint256 amount)",
+  "event ClaimRejected(uint256 indexed policyId)",
+  "event PolicyExpired(uint256 indexed policyId)",
+  "event SlashingResolved(uint256 indexed policyId, bool approved)",
+  "event SlashingReported(uint256 indexed policyId, address indexed validator, bytes32 indexed evidenceHash)",
+  "event VoteResolved(bytes32 indexed requestId, uint8 decision, uint256 indexed policyId)",
+  "event ObservationSubmitted(bytes32 indexed requestId, address indexed watcher, uint8 status)",
+] as const);
+
+// ─── ZeusReserveV2 ABI ───────────────────────────────────────────────────────
+export const ZEUS_RESERVE_ABI = parseAbi([
+  "function payClaim(uint256 claimId, address claimant, uint256 amount)",
+  "function getReserveBalance() view returns (uint256)",
+  "function minReserveThreshold() view returns (uint256)",
+  "function maxDailyPayout() view returns (uint256)",
+  "function remainingDailyPayout() view returns (uint256)",
+  "function isAdequatelyFunded() view returns (bool)",
+  "function fulfilledClaims(uint256) view returns (bool)",
+  "function insuranceContract() view returns (address)",
+  "function hasPendingClaims() view returns (bool)",
+] as const);
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 export function computePremium(amount: bigint, retries: number): bigint {
   const bps = BigInt(700 + (retries - 1) * 200);
   return (amount * bps) / 10_000n;
+}
+
+export function encodeBuyPolicy(
+  seller: `0x${string}`,
+  amount: bigint,
+  timeoutSeconds: number,
+  maxRetries: number,
+  premium: bigint
+) {
+  return encodeFunctionData({
+    abi: ZEUS_INSURANCE_ABI,
+    functionName: "buyPolicy",
+    args: [seller, amount, BigInt(timeoutSeconds), BigInt(maxRetries), premium],
+  });
+}
+
+export function encodeClaimPayout(policyId: bigint) {
+  return encodeFunctionData({
+    abi: ZEUS_INSURANCE_ABI,
+    functionName: "claimPayout",
+    args: [policyId],
+  });
 }
