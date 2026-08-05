@@ -8,7 +8,7 @@ import { ZeusSDK } from "@zeus/sdk"; // замените на ваш реаль�
 const SDK_TIMEOUT_MS = 1000; // 1 сек вместо 5
 const SUPPORTED_CHAIN_IDS = new Set([
   196,   // X Layer Mainnet
-  1456,  // BOT Chain Mainnet (проверьте реальный ID)
+  677,  // BOT Chain Mainnet (проверьте реальный ID)
 ]);
 
 // ============ ТИПЫ ============
