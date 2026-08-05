@@ -31,6 +31,8 @@ export declare class ZeusSDK {
     readonly client: ZeusClient;
     readonly escrow: ZeusEscrow;
     readonly insurance: ZeusInsurance;
+    /** Set to false to silence SDK debug logs. */
+    debug: boolean;
     constructor();
     /** Connect to a supported network with an ethers v6 Signer. */
     connect(network: string, signer: Signer): Promise<void>;

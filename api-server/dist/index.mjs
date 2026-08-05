@@ -71650,12 +71650,20 @@ var init_client = __esm({
       _provider = null;
       _network = null;
       _address = null;
+      /** Set to false to silence ZeusClient debug logs. */
+      debug = true;
       /**
        * Connect to a network with a signer.
        * @param network  One of "mainnet" | "base-sepolia" | "sepolia" | "localhost"
        * @param signer   ethers v6 Signer (wallet, injected provider, etc.)
        */
       async connect(network, signer) {
+        if (this.debug) {
+          console.log("[sdk:client] connect called", {
+            network,
+            signerAddress: signer.address ?? "(resolving\u2026)"
+          });
+        }
         if (!(network in NETWORKS)) {
           throw new ZeusValidationError(`Unknown network "${network}". Supported networks: ${Object.keys(NETWORKS).join(", ")}`);
         }
@@ -72285,6 +72293,8 @@ var init_dist2 = __esm({
       client;
       escrow;
       insurance;
+      /** Set to false to silence SDK debug logs. */
+      debug = true;
       constructor() {
         this.client = new ZeusClient();
         this.escrow = new ZeusEscrow(this.client);
@@ -72292,6 +72302,12 @@ var init_dist2 = __esm({
       }
       /** Connect to a supported network with an ethers v6 Signer. */
       async connect(network, signer) {
+        if (this.debug) {
+          console.log("[sdk] connect called with", {
+            network,
+            signerAddress: signer.address ?? "(resolving\u2026)"
+          });
+        }
         await this.client.connect(network, signer);
       }
       isReady() {
@@ -100620,209 +100636,140 @@ init_zod();
 
 // src/services/insurance.ts
 init_lib2();
-init_dist2();
 
 // src/lib/contracts-server.ts
-var ZEUS_INSURANCE_ADDRESS = "0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4";
-var ZEUS_RESERVE_ADDRESS = "0xF5010Afe1856be1F447f962Dfa8AA30c2Ed19a47";
-var ZEUS_INSURANCE_ABI = [
-  // ── Functions ────────────────────────────────────────────────────────────────
-  {
-    inputs: [
-      { internalType: "address", name: "seller", type: "address" },
-      { internalType: "uint256", name: "amount", type: "uint256" },
-      { internalType: "uint256", name: "timeoutSeconds", type: "uint256" },
-      { internalType: "uint256", name: "maxRetries", type: "uint256" }
-    ],
-    name: "buyInsurance",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function"
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
-    name: "claimPayout",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function"
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
-    name: "getPolicy",
-    outputs: [
-      {
-        components: [
-          { internalType: "address", name: "buyer", type: "address" },
-          { internalType: "address", name: "seller", type: "address" },
-          { internalType: "uint256", name: "amount", type: "uint256" },
-          { internalType: "uint256", name: "premium", type: "uint256" },
-          { internalType: "uint256", name: "retryDeadline", type: "uint256" },
-          { internalType: "uint256", name: "maxRetries", type: "uint256" },
-          { internalType: "uint8", name: "status", type: "uint8" }
-        ],
-        internalType: "struct ZeusInsuranceV2.Policy",
-        name: "",
-        type: "tuple"
-      }
-    ],
-    stateMutability: "view",
-    type: "function"
-  },
-  // ── SlashingProtection ────────────────────────────────────────────────────────
-  {
-    inputs: [
-      { internalType: "address", name: "validator", type: "address" },
-      { internalType: "uint256", name: "amount", type: "uint256" },
-      { internalType: "uint256", name: "timeoutSeconds", type: "uint256" }
-    ],
-    name: "buySlashingProtection",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function"
-  },
-  {
-    inputs: [
-      { internalType: "uint256", name: "policyId", type: "uint256" },
-      { internalType: "bytes32", name: "evidenceHash", type: "bytes32" }
-    ],
-    name: "reportSlashing",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function"
-  },
-  {
-    inputs: [{ internalType: "uint256", name: "policyId", type: "uint256" }],
-    name: "getCoverageType",
-    outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  // ── Events ────────────────────────────────────────────────────────────────────
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "uint256", name: "policyId", type: "uint256" },
-      { indexed: true, internalType: "address", name: "buyer", type: "address" },
-      { indexed: true, internalType: "address", name: "seller", type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
-      { indexed: false, internalType: "uint256", name: "premium", type: "uint256" },
-      { indexed: false, internalType: "uint256", name: "retryDeadline", type: "uint256" }
-    ],
-    name: "PolicyCreated",
-    type: "event"
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "uint256", name: "policyId", type: "uint256" },
-      { indexed: true, internalType: "address", name: "validator", type: "address" },
-      { indexed: true, internalType: "bytes32", name: "evidenceHash", type: "bytes32" }
-    ],
-    name: "SlashingReported",
-    type: "event"
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "uint256", name: "policyId", type: "uint256" },
-      { indexed: true, internalType: "address", name: "buyer", type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" }
-    ],
-    name: "ClaimPaid",
-    type: "event"
-  }
-];
-var ZEUS_RESERVE_ABI = [
-  {
-    inputs: [],
-    name: "getReserveBalance",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [],
-    name: "minReserveThreshold",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [],
-    name: "maxDailyPayout",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [],
-    name: "remainingDailyPayout",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function"
-  },
-  {
-    inputs: [],
-    name: "isAdequatelyFunded",
-    outputs: [{ internalType: "bool", name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function"
-  }
-];
+var SUPPORTED_NETWORKS = {
+  "base-sepolia": { chainId: 84532, rpc: process.env["BASE_SEPOLIA_RPC_URL"] ?? "https://sepolia.base.org" },
+  "x-layer": { chainId: 196, rpc: process.env["XLAYER_MAINNET_RPC_URL"] ?? "https://rpc.xlayer.tech" },
+  "bot-chain": { chainId: 677, rpc: process.env["BOT_CHAIN_RPC_URL"] ?? "https://rpc.botchain.ai" }
+};
+function getAddr(network, type) {
+  const suffix = network === "base-sepolia" ? "" : `_${network.toUpperCase().replace("-", "_")}`;
+  const key = type === "insurance" ? `ZEUS_INSURANCE_ADDRESS${suffix}` : `ZEUS_RESERVE_ADDRESS${suffix}`;
+  const val = process.env[key];
+  if (!val) throw new Error(`Missing env: ${key}`);
+  return val;
+}
+var getInsuranceAddress = (n2 = "x-layer") => getAddr(n2, "insurance");
+var ZEUS_INSURANCE_ABI = parseAbi([
+  // Write
+  "function buyPolicy(address seller, uint256 amount, uint256 timeoutSeconds, uint256 maxRetries, uint256 premium) returns (uint256)",
+  "function buySlashingProtection(address validator, uint256 amount, uint256 timeoutSeconds, uint256 premium) returns (uint256)",
+  "function claimPayout(uint256 policyId)",
+  "function submitObservation(uint256 policyId, (bytes32 requestId, uint256 timestamp, uint8 status, bytes32 metadataHash, uint256 nonce, bytes signature) observation)",
+  "function submitSlashingVote(uint256 policyId, bytes32 evidenceHash, uint256 timestamp, uint256 nonce, bytes signature)",
+  // View
+  "function policies(uint256) view returns (address buyer, address seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint256 maxRetries, uint8 status, uint8 coverageType)",
+  "function nextPolicyId() view returns (uint256)",
+  "function isWatcher(address) view returns (bool)",
+  "function canClaim(uint256) view returns (bool)",
+  "function canSlash(uint256) view returns (bool)",
+  "function hasPendingClaims() view returns (bool)",
+  "function getCoverageType(uint256) view returns (uint8)",
+  "function getWatchers() view returns (address[])",
+  // Events
+  "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint8 coverageType)",
+  "event PayoutExecuted(uint256 indexed policyId, uint256 amount)",
+  "event ClaimRejected(uint256 indexed policyId)",
+  "event PolicyExpired(uint256 indexed policyId)",
+  "event SlashingResolved(uint256 indexed policyId, bool approved)",
+  "event SlashingReported(uint256 indexed policyId, address indexed validator, bytes32 indexed evidenceHash)",
+  "event VoteResolved(bytes32 indexed requestId, uint8 decision, uint256 indexed policyId)",
+  "event ObservationSubmitted(bytes32 indexed requestId, address indexed watcher, uint8 status)"
+]);
+var ZEUS_RESERVE_ABI = parseAbi([
+  "function payClaim(uint256 claimId, address claimant, uint256 amount)",
+  "function getReserveBalance() view returns (uint256)",
+  "function minReserveThreshold() view returns (uint256)",
+  "function maxDailyPayout() view returns (uint256)",
+  "function remainingDailyPayout() view returns (uint256)",
+  "function isAdequatelyFunded() view returns (bool)",
+  "function fulfilledClaims(uint256) view returns (bool)",
+  "function insuranceContract() view returns (address)",
+  "function hasPendingClaims() view returns (bool)"
+]);
+function computePremium(amount, retries) {
+  const bps = BigInt(700 + (retries - 1) * 200);
+  return amount * bps / 10000n;
+}
+var ZEUS_INSURANCE_ADDRESS = "0x8D10C2c6C92b613C1938fe532f0e391044e76188";
+var ZEUS_RESERVE_ADDRESS = "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c";
 
 // src/services/insurance.ts
 var SERVER_PRIVATE_KEY = process.env["SERVER_PRIVATE_KEY"];
-var ZEUS_NETWORK = process.env["ZEUS_INSURANCE_NETWORK"] ?? process.env["ZEUS_NETWORK"] ?? "base-sepolia";
+var ZEUS_NETWORK = process.env["ZEUS_INSURANCE_NETWORK"] ?? process.env["ZEUS_NETWORK"] ?? "x-layer";
 var RPC_URLS = {
   "base-mainnet": process.env["BASE_MAINNET_RPC_URL"] ?? "https://mainnet.base.org",
-  "base-sepolia": process.env["BASE_SEPOLIA_RPC_URL"] ?? "https://sepolia.base.org"
+  "base-sepolia": process.env["BASE_SEPOLIA_RPC_URL"] ?? "https://sepolia.base.org",
+  "x-layer": process.env["XLAYER_MAINNET_RPC_URL"] ?? "https://rpc.xlayer.tech",
+  "bot-chain": process.env["BOT_CHAIN_RPC_URL"] ?? "https://rpc.botchain.ai"
 };
 function isAutomaticModeAvailable() {
   return Boolean(SERVER_PRIVATE_KEY);
 }
+function getProvider2(network = ZEUS_NETWORK) {
+  const url = RPC_URLS[network];
+  if (!url) throw new Error(`No RPC for network: ${network}`);
+  return new ethers_exports.JsonRpcProvider(url);
+}
 async function createPolicyFromServer(params) {
-  if (!SERVER_PRIVATE_KEY) {
-    throw new Error("SERVER_PRIVATE_KEY is not configured \u2014 automatic mode unavailable");
-  }
-  const rpcUrl = RPC_URLS[ZEUS_NETWORK] ?? RPC_URLS["base-sepolia"];
-  const provider = new ethers_exports.JsonRpcProvider(rpcUrl);
+  if (!SERVER_PRIVATE_KEY) throw new Error("SERVER_PRIVATE_KEY not configured");
+  const network = params.network ?? ZEUS_NETWORK;
+  const provider = getProvider2(network);
   const signer = new ethers_exports.Wallet(SERVER_PRIVATE_KEY, provider);
-  const sdk = new ZeusSDK();
-  await sdk.connect(ZEUS_NETWORK, signer);
-  const result = await sdk.insurance.createPolicy(
+  const contract = new ethers_exports.Contract(getInsuranceAddress(network), ZEUS_INSURANCE_ABI, signer);
+  const premium = computePremium(params.amount, params.retries);
+  const tx = await contract.buyPolicy(
     params.seller,
     params.amount,
     params.timeout,
-    params.retries
+    params.retries,
+    premium
   );
-  return {
-    policyId: result.policyId,
-    txHash: result.tx.hash
-  };
+  const receipt = await tx.wait();
+  const iface = new ethers_exports.Interface(ZEUS_INSURANCE_ABI);
+  const log2 = receipt.logs.find((l2) => {
+    try {
+      return iface.parseLog({ topics: l2.topics, data: l2.data })?.name === "PolicyCreated";
+    } catch {
+      return false;
+    }
+  });
+  const policyId = log2 ? Number(log2.topics[1]) : 0;
+  return { policyId, txHash: tx.hash };
 }
 async function createSlashingProtectionFromServer(params) {
-  if (!SERVER_PRIVATE_KEY) {
-    throw new Error("SERVER_PRIVATE_KEY is not configured \u2014 automatic mode unavailable");
-  }
-  const rpcUrl = RPC_URLS[ZEUS_NETWORK] ?? RPC_URLS["base-sepolia"];
-  const provider = new ethers_exports.JsonRpcProvider(rpcUrl);
+  if (!SERVER_PRIVATE_KEY) throw new Error("SERVER_PRIVATE_KEY not configured");
+  const network = params.network ?? ZEUS_NETWORK;
+  const provider = getProvider2(network);
   const signer = new ethers_exports.Wallet(SERVER_PRIVATE_KEY, provider);
-  const sdk = new ZeusSDK();
-  await sdk.connect(ZEUS_NETWORK, signer);
-  const result = await sdk.insurance.createSlashingProtectionPolicy(
+  const contract = new ethers_exports.Contract(getInsuranceAddress(network), ZEUS_INSURANCE_ABI, signer);
+  const premium = params.amount * 500n / 10000n;
+  const tx = await contract.buySlashingProtection(
     params.validator,
     params.amount,
-    params.timeout
+    params.timeout,
+    premium
   );
-  return { policyId: result.policyId, txHash: result.tx.hash };
+  const receipt = await tx.wait();
+  const iface = new ethers_exports.Interface(ZEUS_INSURANCE_ABI);
+  const log2 = receipt.logs.find((l2) => {
+    try {
+      return iface.parseLog({ topics: l2.topics, data: l2.data })?.name === "PolicyCreated";
+    } catch {
+      return false;
+    }
+  });
+  const policyId = log2 ? Number(log2.topics[1]) : 0;
+  return { policyId, txHash: tx.hash };
 }
 function prepareClaimCalldata(policyId) {
   const data4 = encodeFunctionData({
     abi: ZEUS_INSURANCE_ABI,
     functionName: "claimPayout",
-    args: [policyId]
+    args: [BigInt(policyId)]
   });
-  return { to: ZEUS_INSURANCE_ADDRESS, data: data4 };
+  return { to: getInsuranceAddress(ZEUS_NETWORK), data: data4 };
 }
 
 // ../node_modules/.pnpm/drizzle-orm@0.45.2_@types+pg@8.20.0_pg@8.22.0/node_modules/drizzle-orm/node-postgres/driver.js

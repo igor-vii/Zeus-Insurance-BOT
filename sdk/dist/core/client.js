@@ -5,12 +5,20 @@ export class ZeusClient {
     _provider = null;
     _network = null;
     _address = null;
+    /** Set to false to silence ZeusClient debug logs. */
+    debug = true;
     /**
      * Connect to a network with a signer.
      * @param network  One of "mainnet" | "base-sepolia" | "sepolia" | "localhost"
      * @param signer   ethers v6 Signer (wallet, injected provider, etc.)
      */
     async connect(network, signer) {
+        if (this.debug) {
+            console.log("[sdk:client] connect called", {
+                network,
+                signerAddress: signer.address ?? "(resolving…)",
+            });
+        }
         if (!(network in NETWORKS)) {
             throw new ZeusValidationError(`Unknown network "${network}". Supported networks: ${Object.keys(NETWORKS).join(", ")}`);
         }

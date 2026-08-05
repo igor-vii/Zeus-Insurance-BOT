@@ -30,6 +30,8 @@ export class ZeusSDK {
     client;
     escrow;
     insurance;
+    /** Set to false to silence SDK debug logs. */
+    debug = true;
     constructor() {
         this.client = new ZeusClient();
         this.escrow = new ZeusEscrow(this.client);
@@ -37,6 +39,12 @@ export class ZeusSDK {
     }
     /** Connect to a supported network with an ethers v6 Signer. */
     async connect(network, signer) {
+        if (this.debug) {
+            console.log("[sdk] connect called with", {
+                network,
+                signerAddress: signer.address ?? "(resolving…)",
+            });
+        }
         await this.client.connect(network, signer);
     }
     isReady() {

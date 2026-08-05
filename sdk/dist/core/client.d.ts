@@ -5,6 +5,8 @@ export declare class ZeusClient {
     private _provider;
     private _network;
     private _address;
+    /** Set to false to silence ZeusClient debug logs. */
+    debug: boolean;
     /**
      * Connect to a network with a signer.
      * @param network  One of "mainnet" | "base-sepolia" | "sepolia" | "localhost"
