@@ -116,4 +116,8 @@ export function prepareBuyCalldata(params: {
       params.premium,
     ],
   });
-  return { to: getInsuranceAddress((params
+  return {
+    to: getInsuranceAddress((params.network ?? ZEUS_NETWORK) as any),
+    data,
+  };
+}
