@@ -17,5 +17,6 @@
   "dependencies": {
     "pdfkit": "^0.19.1"
   },
-  "description": "Zeus Insurance Protocol — BOT Chain (Botanix) deployment with USDT"
+  "description": "Zeus Insurance Protocol — BOT Chain (Botanix) deployment with USDT",
+  "packageManager": "pnpm@10.26.1"
 }
