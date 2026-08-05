@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Policy {
+  id            String   @id @default(cuid())
+  chainId       Int
+  policyId      String
+  contract      String
+  buyer         String
+  seller        String
+  amount        String
+  premium       String
+  retryDeadline BigInt
+  isActive      Boolean  @default(true)
+  isPaidOut     Boolean  @default(false)
+  isExpired     Boolean  @default(false)
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  votes  Vote[]
+  claims Claim[]
+
+  @@unique([chainId, policyId])
+  @@index([status, retryDeadline])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  policyId  String
+  watcher   String
+  vote      Boolean?
+  signature String
+  timestamp DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  policy Policy @relation(fields: [policyId], references: [id])
+
+  @@unique([policyId, watcher])
+}
+
+model Claim {
+  id        String   @id @default(cuid())
+  policyId  String
+  txHash    String?
+  gasUsed   String?
+  gasPrice  String?
+  status    String   @default("pending")
+  error     String?
+  createdAt DateTime @default(now())
+
+  policy Policy @relation(fields: [policyId], references: [id])
+}
