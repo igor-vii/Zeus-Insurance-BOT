@@ -1,54 +1,40 @@
 import { Job } from 'bullmq';
-import { prisma } from './db';
-import { getProvider, getContract } from './blockchain';
+import { ethers } from 'ethers';
 import { NETWORKS } from '../../watcher/src/config';
 
-export async function claimWorker(job: Job<{ chainId: number; policyId: string }>) {
-  const { chainId, policyId } = job.data;
-  const cfg = Object.values(NETWORKS).find(n => n.chainId === chainId);
-  if (!cfg) throw new Error('Unknown chain');
+const ABI = [
+  'function submitObservation(uint256 policyId, (bytes32 requestId, uint256 timestamp, uint8 status, bytes32 metadataHash, uint256 nonce, bytes signature) obs) external',
+  'function reportSlashing(uint256 policyId, bytes32 evidenceHash) external',
+];
 
-  const provider = getProvider(cfg.rpcs);
-  const contract = getContract(cfg.insurance, provider);
+export async function relayWorker(job: Job) {
+  const { name, data } = job;
 
-  // 1. Re-check on-chain
-  const policy = await contract.policies(policyId);
-  const [,, amount, premium, retryDeadline, , isActive, isPaidOut, isExpired] = policy;
+  if (name === 'relay-observation') {
+    const cfg = Object.values(NETWORKS).find(n => n.chainId === data.chainId);
+    if (!cfg) throw new Error('Unknown chain');
 
-  const now = Math.floor(Date.now() / 1000);
-  if (!isActive || isPaidOut || isExpired || Number(retryDeadline) > now) {
-    await prisma.policy.updateMany({
-      where: { id: `${chainId}:${policyId}` },
-      data: { status: 'failed' }
+    const provider = new ethers.JsonRpcProvider(cfg.rpcs[0]);
+    // Relayer wallet — funded account, НЕ watcher (msg.sender не проверяется)
+    const wallet = new ethers.Wallet(process.env.RELAYER_KEY!, provider);
+    const contract = new ethers.Contract(cfg.insurance, ABI, wallet);
+
+    const tx = await contract.submitObservation(data.policyId, {
+      requestId: data.requestId,
+      timestamp: data.timestamp,
+      status: data.status,
+      metadataHash: data.metadataHash,
+      nonce: data.nonce,
+      signature: data.signature,
     });
-    throw new Error('Policy state changed or deadline not reached');
+
+    const receipt = await tx.wait();
+    return { txHash: tx.hash, status: receipt?.status };
   }
 
-  // 2. Economic guard
-  const feeData = await provider.getFeeData();
-  const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
-  const estimatedGas = await contract.claimPayout.estimateGas(policyId).catch(() => 150_000n);
-  const gasCost = gasPrice * estimatedGas;
-  const minProfit = (gasCost * 15n) / 10n;
-
-  if (premium < minProfit) {
-    await job.moveToDelayed(Date.now() + 3_600_000);
-    return { status: 'delayed', reason: 'unprofitable', gasCost: gasCost.toString() };
+  if (name === 'relay-slashing') {
+    // Slashing требует isWatcher[msg.sender] — значит релеер должен быть watcher'ом
+    // Или мы используем отдельный watcher-key для executor
+    // Это отдельная тема — требует доработки контракта или доверенного relayer
   }
-
-  // 3. In production: use KMS or AWS signer here
-  // const wallet = new ethers.Wallet(process.env.EXECUTOR_KEY!, provider);
-  // const tx = await contract.connect(wallet).claimPayout(policyId, { ... });
-  
-  // Placeholder: log and mark as claimed (replace with real send)
-  console.log(`Would claim ${policyId} on chain ${chainId}`);
-  
-  await prisma.claim.create({
-    data: {
-      policyId: `${chainId}:${policyId}`,
-      status: 'pending',
-    }
-  });
-
-  return { status: 'pending', reason: 'Waiting for KMS integration' };
 }
