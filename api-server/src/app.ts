@@ -69,6 +69,12 @@ if (ZEUS_TREASURY) {
   logger.warn("ZEUS_TREASURY not set — x402 payment middleware disabled");
 }
 
+// Root-level health endpoint — no /api prefix so Railway's healthcheck and
+// load-balancers can reach it directly at GET /health or GET /healthz
+app.get(["/health", "/healthz"], (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 app.use("/api", router);
 
 // MCP server — AI agent interface at POST /mcp
