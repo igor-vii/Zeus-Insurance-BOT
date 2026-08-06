@@ -1,0 +1,11 @@
+[build]
+# Install all workspace packages from monorepo root so @workspace/* and @zeus/sdk resolve,
+# then run esbuild bundle for the api-server only.
+buildCommand = "pnpm install --no-frozen-lockfile && cd api-server && node ./build.mjs"
+
+[deploy]
+startCommand = "node --enable-source-maps api-server/dist/index.mjs"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 60
