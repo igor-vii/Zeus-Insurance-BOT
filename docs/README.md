@@ -71,8 +71,12 @@ curl -X POST https://zeus-insurance-bot-api-production.up.railway.app/api/prepar
     "premium": "25000",
     "chainId": 196
   }'
+{
+  "to": "0x7483bB3C605f3187808b028d9e086AbCa2a34676",
+  "data": "0x...",
+  "policyId": "42"
+}
 Send the returned data to to via your wallet or eth_sendRawTransaction.
-
 Deployment Status
 Component	Status	URL / Note
 Frontend	✅ Live	https://zeus-insurance-frontend.onrender.com
