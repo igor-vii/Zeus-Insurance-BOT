@@ -121449,6 +121449,9 @@ if (ZEUS_TREASURY) {
 } else {
   logger.warn("ZEUS_TREASURY not set \u2014 x402 payment middleware disabled");
 }
+app.get(["/health", "/healthz"], (_req, res) => {
+  res.json({ status: "ok" });
+});
 app.use("/api", routes_default);
 connectMCPServer(app);
 startBackgroundSync();
