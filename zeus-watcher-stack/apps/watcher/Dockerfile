@@ -29,6 +29,7 @@ COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=builder /app/apps/watcher/dist ./apps/watcher/dist
 COPY --from=builder /app/apps/watcher/package.json ./apps/watcher/package.json
+COPY --from=builder /app/apps/watcher/node_modules ./apps/watcher/node_modules
 
 WORKDIR /app/apps/watcher
 CMD ["node", "dist/index.js"]
