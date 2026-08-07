@@ -63,6 +63,8 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     error InvalidPremium();
     error InvalidEvidenceHash();
     error CannotRenounceOwnership();
+    error InvalidPaymentHash();
+    error DeliveryAlreadyConfirmed();
 
     // ── Enums ─────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         uint256 maxRetries;
         PolicyStatus status;
         CoverageType coverageType;
+        bytes32 paymentHash;
     }
 
     struct Observation {
@@ -135,6 +138,8 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     event ClaimRejected(uint256 indexed policyId);
     event SlashingVoteCast(uint256 indexed policyId, address indexed watcher);
     event SlashingResolved(uint256 indexed policyId, bool approved);
+    event DeliveryConfirmed(uint256 indexed policyId, address indexed buyer, bytes32 indexed paymentHash, uint256 timestamp);
+
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -462,5 +467,24 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         p.status = PolicyStatus.Rejected;
         activePolicyCount--;
         emit ClaimRejected(policyId);
+    }
+
+    // ─── Delivery Confirmation ──────────────────────────────────────────────
+
+    function confirmDelivery(uint256 policyId, bytes32 paymentHash) external nonReentrant whenNotPaused {
+        Policy storage p = policies[policyId];
+        
+        // Guards
+        if (p.buyer == address(0)) revert PolicyDoesNotExist();
+        if (p.buyer != msg.sender) revert OnlyBuyerCanClaim();
+        if (p.status != PolicyStatus.Active) revert PolicyNotActive();
+        if (paymentHash == bytes32(0)) revert InvalidPaymentHash();
+        if (p.paymentHash != bytes32(0)) revert DeliveryAlreadyConfirmed();
+        
+        p.paymentHash = paymentHash;
+        p.status = PolicyStatus.Claimed;
+        activePolicyCount--;
+        
+        emit DeliveryConfirmed(policyId, p.buyer, paymentHash, block.timestamp);
     }
 }
