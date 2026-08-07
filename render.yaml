@@ -20,7 +20,7 @@ services:
       pnpm install --no-frozen-lockfile --prefer-offline &&
       pnpm --filter @zeus/sdk build &&
       cd frontend && pnpm build
-    staticPublishPath: ./frontend/dist
+    staticPublishPath: frontend/dist
     # SPA routing — all paths fall back to index.html
     routes:
       - type: rewrite
