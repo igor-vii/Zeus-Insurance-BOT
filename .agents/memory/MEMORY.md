@@ -1,6 +1,0 @@
-- [Escrow deployment](escrow-deployment.md) — ZeusEscrowBOT on Sepolia + Mainnet; getLogs must stay ≤2000-block chunks clamped to head-1
-- [BaseScan verification](basescan-verification.md) — BaseScan V1 API dead; must use Etherscan V2 URL with an etherscan.io key (not basescan.org key)
-- [Insurance deployment](insurance-deployment.md) — ZeusInsuranceV2 v2 (oracle) at 0x58038Df01A824C94F3D2fEd6d4e1bEf2211Ad8F4, verified, reserve linked
-- [SDK ESM build](sdk-esm-build.md) — SDK must build as ESM (NodeNext) not CJS; Vite workspace packages bypass optimizeDeps and break on CJS named exports
-- [Frontend SDK integration](frontend-sdk-integration.md) — useZeusSDK hook bridges wagmi WalletClient → ethers BrowserProvider; buy/policies pages use SDK for insurance operations
-- [Automatic mode setup](automatic-mode-setup.md) — SERVER_PRIVATE_KEY enables auto mode; ZEUS_INSURANCE_NETWORK overrides ZEUS_NETWORK for insurance service; server wallet needs USDC approval on ZeusInsuranceV2 before first use

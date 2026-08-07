@@ -2,3 +2,9 @@ Zeus_Insurance_Pitch_Deck.pdf
 Zeus_Insurance_Pitch_Deck.pdf
 
 watcher/.env
+
+# Build artifacts
+**/dist/
+**/.tsbuildinfo
+**/node_modules/
+**/package-lock.json
