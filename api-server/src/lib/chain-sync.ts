@@ -15,7 +15,7 @@ const CHUNK_SIZE = 2000n;
  * requests — start here instead.
  * Verified via eth_getTransactionReceipt of creation tx 0x769f8682...
  */
-const DEPLOY_BLOCK = 43_540_426n;
+const DEPLOY_BLOCK = BigInt(process.env.DEPLOY_BLOCK || "0");
 
 const POLICY_CREATED_EVENT = parseAbiItem(
   "event PolicyCreated(uint256 indexed policyId, address indexed buyer, address indexed seller, uint256 amount, uint256 premium, uint256 retryDeadline)",
