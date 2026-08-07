@@ -27,7 +27,8 @@
     "viem": "^2.54.0",
     "x402": "^1.2.0",
     "x402-express": "^1.2.0",
-    "zod": "^3.25.61"
+    "zod": "^3.25.61",
+    "express-rate-limit": "^7.0.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
