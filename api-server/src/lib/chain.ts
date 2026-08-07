@@ -13,11 +13,11 @@ export const botChain: Chain = {
     symbol: "BOT",
   },
   rpcUrls: {
-    default: { http: ["https://mainnet.bottest.xyz"] },
-    public: { http: ["https://mainnet.bottest.xyz"] },
+    default: { http: ["https://rpc.botchain.ai"] },
+    public: { http: ["https://rpc.botchain.ai"] },
   },
   blockExplorers: {
-    default: { name: "BOTScan", url: "https://explorer.bottest.xyz" },
+    default: { name: "BOTScan", url: "https://scan.botchain.ai" },
   },
 };
 
@@ -34,8 +34,8 @@ export const xLayer: Chain = {
     symbol: "OKB",
   },
   rpcUrls: {
-    default: { http: ["https://xlayerrpc.okx.com"] },
-    public: { http: ["https://xlayerrpc.okx.com"] },
+    default: { http: ["https://rpc.xlayer.tech"] },
+    public: { http: ["https://rpc.xlayer.tech"] },
   },
   blockExplorers: {
     default: { name: "X Layer Explorer", url: "https://www.okx.com/web3/explorer/xlayer" },
