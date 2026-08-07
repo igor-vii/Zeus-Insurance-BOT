@@ -1,31 +1,48 @@
 import { Policy, WatcherVote, NetworkConfig } from '@zeus/shared';
 import { JsonRpcProvider } from 'ethers';
 
+/**
+ * txHashWatcher — проверяет наличие подтверждённой транзакции оплаты.
+ * Пока paymentHash не передаётся в policy (нет metadata), возвращает abstain.
+ * Когда paymentHash станет доступен через graph/cache — активируется логика проверки.
+ */
 export const txHashWatcher = {
   name: 'txhash',
   async check(policy: Policy, cfg: NetworkConfig): Promise<WatcherVote> {
     try {
-      const paymentHash = policy.metadata?.paymentHash;
-      if (!paymentHash) {
-        return { watcher: 'txhash', vote: 'abstain', reason: 'No paymentHash in metadata' };
+      // TODO: получить paymentHash из policy cache или subgraph
+      // Сейчас metadata отсутствует в типе Policy — абстрагируемся
+      const paymentHash = (policy as any).paymentHash as string | undefined;
+      
+      if (!paymentHash || !/^0x[a-fA-F0-9]{64}$/.test(paymentHash)) {
+        return { watcher: 'txhash', vote: 'abstain', reason: 'No paymentHash available' };
       }
 
       const provider = new JsonRpcProvider(cfg.rpcs[0]);
       const tx = await provider.getTransaction(paymentHash);
       if (!tx) {
-        return { watcher: 'txhash', vote: 'yes', reason: 'Transaction not found' };
+        return { watcher: 'txhash', vote: 'no', reason: 'Transaction not found' };
       }
 
       if (tx.to?.toLowerCase() !== cfg.insurance.toLowerCase()) {
-        return { watcher: 'txhash', vote: 'yes', reason: 'Transaction not to insurance contract' };
+        return { watcher: 'txhash', vote: 'no', reason: 'Transaction not to insurance contract' };
       }
 
       const receipt = await provider.getTransactionReceipt(paymentHash);
-      if (!receipt || receipt.confirmations < 1) {
-        return { watcher: 'txhash', vote: 'yes', reason: 'Transaction not confirmed' };
+      if (!receipt) {
+        return { watcher: 'txhash', vote: 'no', reason: 'Receipt not available' };
       }
 
-      return { watcher: 'txhash', vote: 'no', reason: 'Payment transaction confirmed' };
+      // ethers v6: confirmations — это bigint
+      const confirmations = typeof receipt.confirmations === 'bigint' 
+        ? Number(receipt.confirmations) 
+        : receipt.confirmations;
+      
+      if (confirmations < 1) {
+        return { watcher: 'txhash', vote: 'no', reason: 'Transaction not confirmed' };
+      }
+
+      return { watcher: 'txhash', vote: 'yes', reason: `Payment confirmed (${confirmations} blocks)` };
     } catch (err: any) {
       return { watcher: 'txhash', vote: 'abstain', reason: err.message };
     }
