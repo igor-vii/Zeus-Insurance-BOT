@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
@@ -30,6 +31,7 @@ import "./interfaces/IInsuranceContract.sol";
  */
 contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausable {
     using ECDSA for bytes32;
+    using SafeERC20 for IERC20;
 
     // ── Custom Errors ──────────────────────────────────────────────────────────
 
@@ -173,7 +175,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (msg.value > 0) revert NativePaymentNotAccepted();
         if (premium == 0 || premium > amount) revert InvalidPremium();
 
-        if (!usdt.transferFrom(buyer, address(reserve), premium)) revert PremiumTransferFailed();
+        usdt.safeTransferFrom(buyer, address(reserve), premium);
 
         uint256 retryDeadline = block.timestamp + timeoutSeconds * maxRetries;
 
@@ -208,13 +210,13 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     }
 
     function buyAllInclusivePolicy(
-        address seller,
-        uint256 amount,
-        uint256 timeoutSeconds,
-        uint256 maxRetries,
-        uint256 premium
-    ) external nonReentrant whenNotPaused returns (uint256) {
-        return _buyInternal(msg.sender, seller, amount, timeoutSeconds, maxRetries, premium, CoverageType.Standard);
+        address,
+        uint256,
+        uint256,
+        uint256,
+        uint256
+    ) external pure returns (uint256) {
+        revert("Function deprecated or not supported");
     }
 
     function buySlashingProtection(
