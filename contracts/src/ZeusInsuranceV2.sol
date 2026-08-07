@@ -108,6 +108,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     ZeusReserveV2 public reserve;
 
     mapping(uint256 => Policy)    public policies;
+    mapping(uint256 => string) public policyMetadata;
     uint256                       public nextPolicyId;
     uint256                       public activePolicyCount; // O(1) для hasPendingClaims
 
@@ -126,6 +127,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     mapping(bytes32 => mapping(address => bool)) public hasVoted;
     mapping(bytes32 => bool)                  public  usedRequestIds;
     mapping(uint256 => bytes32)               public  policyToRequestId;
+    mapping(uint256 => bool) public claimFulfilled;
 
     // ── Events ────────────────────────────────────────────────────────────────
 
@@ -303,6 +305,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     function markClaimFulfilled(uint256 claimId) external override {
         if (msg.sender != address(reserve)) revert OnlyReserveCanCall();
         Policy storage p = policies[claimId];
+        claimFulfilled[claimId] = true;
         emit ClaimApproved(claimId, p.buyer, p.amount);
     }
 
@@ -330,6 +333,14 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
 
     function getWatchers() external view returns (address[] memory) {
         return watcherList;
+    }
+
+    // ─── Policy Metadata ─────────────────────────────────────────────────────
+    function setPolicyMetadata(uint256 policyId, string memory metadata) external {
+        Policy storage p = policies[policyId];
+        if (p.buyer == address(0)) revert PolicyDoesNotExist();
+        if (p.buyer != msg.sender && msg.sender != owner()) revert OnlyBuyerCanClaim();
+        policyMetadata[policyId] = metadata;
     }
 
     // ─── Oracle Observations ──────────────────────────────────────────────────
