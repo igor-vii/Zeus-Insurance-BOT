@@ -5,9 +5,10 @@ import { logWatcher } from './watchers/logs';
 import { gasWatcher } from './watchers/gas';
 import { okxWatcher } from './watchers/okx';
 import { rpcWatcher } from './watchers/rpc';
+import { txHashWatcher } from './watchers/tx-hash';
 import { NETWORKS } from './config';
 
-const WATCHERS = [apiWatcher, logWatcher, gasWatcher, okxWatcher, rpcWatcher];
+const WATCHERS = [apiWatcher, logWatcher, gasWatcher, okxWatcher, rpcWatcher, txHashWatcher];
 
 export interface ObservationResult {
   policyId: string;
