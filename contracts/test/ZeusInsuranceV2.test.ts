@@ -30,6 +30,7 @@ async function currentTimestamp(): Promise<number> {
 async function signObservation(
   signer: HardhatEthersSigner,
   obs: {
+    policyId: bigint;
     requestId: string;
     timestamp: number;
     status: number;
@@ -39,8 +40,8 @@ async function signObservation(
 ): Promise<string> {
   const msgHash = keccak256(
     solidityPacked(
-      ["bytes32", "uint256", "uint8", "bytes32", "uint256"],
-      [obs.requestId, obs.timestamp, obs.status, obs.metadataHash, obs.nonce]
+      ["bytes32", "uint256", "uint256", "uint8", "bytes32", "uint256"],
+      [obs.requestId, obs.policyId, obs.timestamp, obs.status, obs.metadataHash, obs.nonce]
     )
   );
   // personal_sign = EIP-191 prefix + keccak
@@ -313,6 +314,7 @@ describe("ZeusInsuranceV2", function () {
       const { insurance, owner, w1, w2 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
       await insurance.connect(owner).addWatcher(w2.address);
+      await insurance.connect(owner).addWatcher(w2.address);
       const list = await insurance.getWatchers();
       expect(list).to.include(w1.address);
       expect(list).to.include(w2.address);
@@ -321,6 +323,7 @@ describe("ZeusInsuranceV2", function () {
     it("removeWatcher deregisters and emits WatcherRemoved", async function () {
       const { insurance, owner, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
+      await insurance.connect(owner).addWatcher(w2.address);
       await expect(insurance.connect(owner).removeWatcher(w1.address))
         .to.emit(insurance, "WatcherRemoved")
         .withArgs(w1.address);
@@ -337,6 +340,7 @@ describe("ZeusInsuranceV2", function () {
     it("reverts addWatcher for duplicate", async function () {
       const { insurance, owner, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
+      await insurance.connect(owner).addWatcher(w2.address);
       await expect(
         insurance.connect(owner).addWatcher(w1.address)
       ).to.be.revertedWithCustomError(insurance, "AlreadyWatcher");
@@ -367,6 +371,7 @@ describe("ZeusInsuranceV2", function () {
       // Register three watchers
       await insurance.connect(owner).addWatcher(w1.address);
       await insurance.connect(owner).addWatcher(w2.address);
+      await insurance.connect(owner).addWatcher(w2.address);
       await insurance.connect(owner).addWatcher(w3.address);
 
       // Create a policy
@@ -378,9 +383,10 @@ describe("ZeusInsuranceV2", function () {
       const requestId = buildRequestId(buyer.address, seller.address, policyId, ts);
       const metadataHash = keccak256(toUtf8Bytes("test-metadata"));
 
-      async function makeObs(watcher: HardhatEthersSigner, status: number, nonce: number) {
+      async function makeObs(watcher: HardhatEthersSigner, status: number, nonce: number, policyId: bigint) {
         const sig = await signObservation(watcher, {
           requestId,
+        policyId,
           timestamp: ts,
           status,
           metadataHash,
@@ -394,7 +400,7 @@ describe("ZeusInsuranceV2", function () {
 
     it("accepts a valid watcher observation and emits ObservationSubmitted", async function () {
       const { insurance, w1, policyId, makeObs } = await setup();
-      const obs = await makeObs(w1, 1, 0);
+      const obs = await makeObs(w1, 1, 0, policyId);
       await expect(insurance.submitObservation(policyId, obs))
         .to.emit(insurance, "ObservationSubmitted")
         .withArgs(obs.requestId, w1.address, 1);
@@ -405,9 +411,9 @@ describe("ZeusInsuranceV2", function () {
 
       const balanceBefore = await token.balanceOf(buyer.address);
 
-      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0)); // TIMEOUT
-      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1)); // TIMEOUT
-      const tx = insurance.submitObservation(policyId, await makeObs(w3, 0, 2)); // OK
+      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0, policyId)); // TIMEOUT
+      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1, policyId)); // TIMEOUT
+      const tx = insurance.submitObservation(policyId, await makeObs(w3, 0, 2, policyId)); // OK
 
       await expect(tx)
         .to.emit(insurance, "VoteResolved")
@@ -421,11 +427,11 @@ describe("ZeusInsuranceV2", function () {
     it("resolves to REJECTED when < 2 TIMEOUT votes", async function () {
       const { insurance, w1, w2, w3, policyId, requestId, makeObs } = await setup();
 
-      await insurance.submitObservation(policyId, await makeObs(w1, 0, 0)); // OK
-      await insurance.submitObservation(policyId, await makeObs(w2, 0, 1)); // OK
+      await insurance.submitObservation(policyId, await makeObs(w1, 0, 0, policyId)); // OK
+      await insurance.submitObservation(policyId, await makeObs(w2, 0, 1, policyId)); // OK
 
       await expect(
-        insurance.submitObservation(policyId, await makeObs(w3, 1, 2)) // TIMEOUT
+        insurance.submitObservation(policyId, await makeObs(w3, 1, 2, policyId)) // TIMEOUT
       )
         .to.emit(insurance, "VoteResolved")
         .withArgs(requestId, 0, policyId)
@@ -436,10 +442,10 @@ describe("ZeusInsuranceV2", function () {
     it("reverts if watcher votes twice on same requestId", async function () {
       const { insurance, w1, policyId, makeObs } = await setup();
 
-      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0));
+      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0, policyId));
 
       // same watcher, same requestId, different nonce — still the same requestId
-      const obs2 = await makeObs(w1, 1, 1);
+      const obs2 = await makeObs(w1, 1, 1, policyId);
       await expect(
         insurance.submitObservation(policyId, obs2)
       ).to.be.revertedWithCustomError(insurance, "WatcherAlreadyVoted");
@@ -480,9 +486,9 @@ describe("ZeusInsuranceV2", function () {
       const { insurance, w1, w2, w3, policyId, makeObs, requestId, ts, metadataHash } = await setup();
 
       // Resolve the vote
-      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0));
-      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1));
-      await insurance.submitObservation(policyId, await makeObs(w3, 1, 2));
+      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0, policyId));
+      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1, policyId));
+      await insurance.submitObservation(policyId, await makeObs(w3, 1, 2, policyId));
 
       // Now the requestId is consumed — any further submission with it reverts
       const { other } = await deploy(); // fresh signer to avoid "already voted"
@@ -583,6 +589,7 @@ describe("ZeusInsuranceV2", function () {
     it("watcher can reportSlashing and emits SlashingReported + PayoutExecuted", async function () {
       const { insurance, token, owner, buyer, seller, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
+      await insurance.connect(owner).addWatcher(w2.address);
 
       const policyId     = await buySlashing(insurance, buyer, seller);
       const balanceBefore = await token.balanceOf(buyer.address);
@@ -599,6 +606,7 @@ describe("ZeusInsuranceV2", function () {
     it("sets policy status to Claimed after report", async function () {
       const { insurance, owner, buyer, seller, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
+      await insurance.connect(owner).addWatcher(w2.address);
       const policyId = await buySlashing(insurance, buyer, seller);
       await insurance.connect(w1).reportSlashing(policyId, EVIDENCE);
       const p = await insurance.getPolicy(policyId);
@@ -616,6 +624,7 @@ describe("ZeusInsuranceV2", function () {
     it("reverts for a standard (non-slashing) policy", async function () {
       const { insurance, owner, buyer, seller, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
+      await insurance.connect(owner).addWatcher(w2.address);
       const policyId = await buyPolicy(insurance, buyer, seller, usdc(100), 3600, 1);
       await expect(
         insurance.connect(w1).reportSlashing(policyId, EVIDENCE)
@@ -625,6 +634,7 @@ describe("ZeusInsuranceV2", function () {
     it("reverts for a non-active policy (already claimed)", async function () {
       const { insurance, owner, buyer, seller, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
+      await insurance.connect(owner).addWatcher(w2.address);
       const policyId = await buySlashing(insurance, buyer, seller);
       await insurance.connect(w1).reportSlashing(policyId, EVIDENCE);
       await expect(
