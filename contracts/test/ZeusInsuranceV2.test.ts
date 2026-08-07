@@ -4,12 +4,8 @@ import { ZeusInsuranceV2, ZeusReserveV2, MockERC20 } from "../typechain-types";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { parseUnits, ZeroAddress, keccak256, solidityPacked, toUtf8Bytes, getBytes } from "ethers";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 const USDC_DECIMALS = 6;
 const usdc = (n: number | string) => parseUnits(String(n), USDC_DECIMALS);
-
-// ── Time helpers ──────────────────────────────────────────────────────────────
 
 async function advanceTime(seconds: number) {
   await ethers.provider.send("evm_increaseTime", [seconds]);
@@ -21,17 +17,11 @@ async function currentTimestamp(): Promise<number> {
   return block!.timestamp;
 }
 
-// ── Signature helper ──────────────────────────────────────────────────────────
-
-/**
- * Sign an observation the same way the Solidity contract verifies it.
- * keccak256(requestId, timestamp, status, metadataHash, nonce)  → EIP-191 personal_sign
- */
 async function signObservation(
   signer: HardhatEthersSigner,
   obs: {
-    policyId: bigint;
     requestId: string;
+    policyId: bigint;
     timestamp: number;
     status: number;
     metadataHash: string;
@@ -44,32 +34,23 @@ async function signObservation(
       [obs.requestId, obs.policyId, obs.timestamp, obs.status, obs.metadataHash, obs.nonce]
     )
   );
-  // personal_sign = EIP-191 prefix + keccak
   return signer.signMessage(getBytes(msgHash));
 }
 
-/**
- * Build a valid requestId: keccak256(buyer, seller, policyId, timestamp)
- */
 function buildRequestId(buyer: string, seller: string, policyId: number, timestamp: number): string {
   return keccak256(solidityPacked(["address", "address", "uint256", "uint256"], [buyer, seller, policyId, timestamp]));
 }
 
-// ── Fixture ───────────────────────────────────────────────────────────────────
-
 async function deploy() {
   const [owner, buyer, seller, w1, w2, w3, other] = await ethers.getSigners();
 
-  // MockERC20 as USDC (6 decimals)
   const ERC20 = await ethers.getContractFactory("MockERC20");
   const token: MockERC20 = await ERC20.deploy("Mock USDC", "USDC", USDC_DECIMALS);
   await token.waitForDeployment();
 
-  // Mint tokens to buyer and provide reserve funding
   await token.mint(buyer!.address, usdc(100_000));
   await token.mint(owner!.address, usdc(1_000_000));
 
-  // Deploy ZeusReserveV2
   const Reserve = await ethers.getContractFactory("ZeusReserveV2");
   const reserve: ZeusReserveV2 = await Reserve.deploy(
     await token.getAddress(),
@@ -77,11 +58,9 @@ async function deploy() {
   );
   await reserve.waitForDeployment();
 
-  // Raise daily payout cap so tests don't hit the default 10 000 USDC limit
   await reserve.setMaxDailyPayout(usdc(10_000_000));
   await reserve.setMinReserveThreshold(0n);
 
-  // Deploy ZeusInsuranceV2
   const Insurance = await ethers.getContractFactory("ZeusInsuranceV2");
   const insurance: ZeusInsuranceV2 = await Insurance.deploy(
     await token.getAddress(),
@@ -89,14 +68,11 @@ async function deploy() {
   );
   await insurance.waitForDeployment();
 
-  // Wire reserve → insurance
   await reserve.setInsuranceContract(await insurance.getAddress());
 
-  // Fund the reserve
   await token.connect(owner!).approve(await reserve.getAddress(), usdc(100_000));
   await reserve.connect(owner!).deposit(usdc(100_000));
 
-  // Approve premium for buyer
   await token.connect(buyer!).approve(await insurance.getAddress(), usdc(100_000));
 
   return {
@@ -113,8 +89,6 @@ async function deploy() {
   };
 }
 
-// ── Shared policy helper ──────────────────────────────────────────────────────
-
 async function buyPolicy(
   insurance: ZeusInsuranceV2,
   buyer: HardhatEthersSigner,
@@ -122,30 +96,26 @@ async function buyPolicy(
   amount = usdc(100),
   timeoutSeconds = 3600,
   maxRetries = 3,
-  premium = usdc(5) // Default 5 USDC premium
+  premium = usdc(5)
 ) {
   const tx = await insurance.connect(buyer).buyPolicy(
     seller.address, amount, timeoutSeconds, maxRetries, premium
   );
   const receipt = await tx.wait();
-  // Policy ID is nextPolicyId before increment; read from event
   const iface = insurance.interface;
   for (const log of receipt!.logs) {
     try {
       const parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
       if (parsed?.name === "PolicyCreated") {
-        return Number(parsed.args[0]); // policyId
+        return Number(parsed.args[0]);
       }
     } catch { /* skip */ }
   }
   throw new Error("PolicyCreated event not found");
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 describe("ZeusInsuranceV2", function () {
 
-  // ── Constructor ─────────────────────────────────────────────────────────────
   describe("constructor", function () {
     it("sets usdt and reserve addresses", async function () {
       const { insurance, token, reserve } = await deploy();
@@ -170,7 +140,6 @@ describe("ZeusInsuranceV2", function () {
     });
   });
 
-  // ── buyPolicy ──────────────────────────────────────────────────────────
   describe("buyPolicy", function () {
     it("creates a policy and emits PolicyCreated", async function () {
       const { insurance, buyer, seller } = await deploy();
@@ -213,7 +182,7 @@ describe("ZeusInsuranceV2", function () {
       expect(p.amount).to.equal(usdc(100));
       expect(p.premium).to.equal(usdc(5));
       expect(p.maxRetries).to.equal(3n);
-      expect(p.status).to.equal(0); // Active
+      expect(p.status).to.equal(0);
       expect(p.retryDeadline).to.be.gt(BigInt(ts));
     });
 
@@ -246,7 +215,6 @@ describe("ZeusInsuranceV2", function () {
     });
   });
 
-  // ── claimPayout (timeout-based) ───────────────────────────────────────────
   describe("claimPayout", function () {
     it("pays out after retryDeadline and emits PayoutExecuted", async function () {
       const { insurance, token, buyer, seller } = await deploy();
@@ -269,7 +237,7 @@ describe("ZeusInsuranceV2", function () {
       await advanceTime(61);
       await insurance.connect(buyer).claimPayout(policyId);
       const p = await insurance.getPolicy(policyId);
-      expect(p.status).to.equal(1); // Claimed
+      expect(p.status).to.equal(1);
     });
 
     it("reverts if not buyer", async function () {
@@ -300,7 +268,6 @@ describe("ZeusInsuranceV2", function () {
     });
   });
 
-  // ── Watcher management ────────────────────────────────────────────────────
   describe("watcher management", function () {
     it("addWatcher registers a watcher and emits WatcherAdded", async function () {
       const { insurance, owner, w1 } = await deploy();
@@ -314,7 +281,6 @@ describe("ZeusInsuranceV2", function () {
       const { insurance, owner, w1, w2 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
       await insurance.connect(owner).addWatcher(w2.address);
-      await insurance.connect(owner).addWatcher(w2.address);
       const list = await insurance.getWatchers();
       expect(list).to.include(w1.address);
       expect(list).to.include(w2.address);
@@ -323,7 +289,6 @@ describe("ZeusInsuranceV2", function () {
     it("removeWatcher deregisters and emits WatcherRemoved", async function () {
       const { insurance, owner, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
-      await insurance.connect(owner).addWatcher(w2.address);
       await expect(insurance.connect(owner).removeWatcher(w1.address))
         .to.emit(insurance, "WatcherRemoved")
         .withArgs(w1.address);
@@ -340,7 +305,6 @@ describe("ZeusInsuranceV2", function () {
     it("reverts addWatcher for duplicate", async function () {
       const { insurance, owner, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
-      await insurance.connect(owner).addWatcher(w2.address);
       await expect(
         insurance.connect(owner).addWatcher(w1.address)
       ).to.be.revertedWithCustomError(insurance, "AlreadyWatcher");
@@ -361,32 +325,26 @@ describe("ZeusInsuranceV2", function () {
     });
   });
 
-  // ── submitObservation ─────────────────────────────────────────────────────
   describe("submitObservation", function () {
 
     async function setup() {
       const ctx = await deploy();
       const { insurance, owner, buyer, seller, w1, w2, w3 } = ctx;
 
-      // Register three watchers
       await insurance.connect(owner).addWatcher(w1.address);
-      await insurance.connect(owner).addWatcher(w2.address);
       await insurance.connect(owner).addWatcher(w2.address);
       await insurance.connect(owner).addWatcher(w3.address);
 
-      // Create a policy
       const policyId = await buyPolicy(insurance, buyer, seller, usdc(100), 3600, 3);
-
-      // Build a shared timestamp that is "now" (within the ±120 s window)
       const ts = await currentTimestamp();
 
       const requestId = buildRequestId(buyer.address, seller.address, policyId, ts);
       const metadataHash = keccak256(toUtf8Bytes("test-metadata"));
 
-      async function makeObs(watcher: HardhatEthersSigner, status: number, nonce: number, policyId: bigint) {
+      async function makeObs(watcher: HardhatEthersSigner, status: number, nonce: number) {
         const sig = await signObservation(watcher, {
           requestId,
-        policyId,
+          policyId: BigInt(policyId),
           timestamp: ts,
           status,
           metadataHash,
@@ -400,7 +358,7 @@ describe("ZeusInsuranceV2", function () {
 
     it("accepts a valid watcher observation and emits ObservationSubmitted", async function () {
       const { insurance, w1, policyId, makeObs } = await setup();
-      const obs = await makeObs(w1, 1, 0, policyId);
+      const obs = await makeObs(w1, 1, 0);
       await expect(insurance.submitObservation(policyId, obs))
         .to.emit(insurance, "ObservationSubmitted")
         .withArgs(obs.requestId, w1.address, 1);
@@ -411,9 +369,9 @@ describe("ZeusInsuranceV2", function () {
 
       const balanceBefore = await token.balanceOf(buyer.address);
 
-      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0, policyId)); // TIMEOUT
-      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1, policyId)); // TIMEOUT
-      const tx = insurance.submitObservation(policyId, await makeObs(w3, 0, 2, policyId)); // OK
+      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0));
+      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1));
+      const tx = insurance.submitObservation(policyId, await makeObs(w3, 0, 2));
 
       await expect(tx)
         .to.emit(insurance, "VoteResolved")
@@ -427,11 +385,11 @@ describe("ZeusInsuranceV2", function () {
     it("resolves to REJECTED when < 2 TIMEOUT votes", async function () {
       const { insurance, w1, w2, w3, policyId, requestId, makeObs } = await setup();
 
-      await insurance.submitObservation(policyId, await makeObs(w1, 0, 0, policyId)); // OK
-      await insurance.submitObservation(policyId, await makeObs(w2, 0, 1, policyId)); // OK
+      await insurance.submitObservation(policyId, await makeObs(w1, 0, 0));
+      await insurance.submitObservation(policyId, await makeObs(w2, 0, 1));
 
       await expect(
-        insurance.submitObservation(policyId, await makeObs(w3, 1, 2, policyId)) // TIMEOUT
+        insurance.submitObservation(policyId, await makeObs(w3, 1, 2))
       )
         .to.emit(insurance, "VoteResolved")
         .withArgs(requestId, 0, policyId)
@@ -442,10 +400,9 @@ describe("ZeusInsuranceV2", function () {
     it("reverts if watcher votes twice on same requestId", async function () {
       const { insurance, w1, policyId, makeObs } = await setup();
 
-      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0, policyId));
+      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0));
 
-      // same watcher, same requestId, different nonce — still the same requestId
-      const obs2 = await makeObs(w1, 1, 1, policyId);
+      const obs2 = await makeObs(w1, 1, 1);
       await expect(
         insurance.submitObservation(policyId, obs2)
       ).to.be.revertedWithCustomError(insurance, "WatcherAlreadyVoted");
@@ -454,7 +411,7 @@ describe("ZeusInsuranceV2", function () {
     it("reverts for a signature from a non-watcher", async function () {
       const { insurance, other, policyId, buyer, seller, ts, metadataHash } = await setup();
       const requestId = buildRequestId(buyer.address, seller.address, policyId, ts);
-      const sig = await signObservation(other, { requestId, timestamp: ts, status: 1, metadataHash, nonce: 99 });
+      const sig = await signObservation(other, { requestId, policyId: BigInt(policyId), timestamp: ts, status: 1, metadataHash, nonce: 99 });
       await expect(
         insurance.submitObservation(policyId, { requestId, timestamp: ts, status: 1, metadataHash, nonce: 99, signature: sig })
       ).to.be.revertedWithCustomError(insurance, "InvalidWatcherSignature");
@@ -465,7 +422,7 @@ describe("ZeusInsuranceV2", function () {
 
       const staleTs = (await currentTimestamp()) - 200;
       const requestId = buildRequestId(buyer.address, seller.address, policyId, staleTs);
-      const sig = await signObservation(w1, { requestId, timestamp: staleTs, status: 1, metadataHash, nonce: 0 });
+      const sig = await signObservation(w1, { requestId, policyId: BigInt(policyId), timestamp: staleTs, status: 1, metadataHash, nonce: 0 });
 
       await expect(
         insurance.submitObservation(policyId, { requestId, timestamp: staleTs, status: 1, metadataHash, nonce: 0, signature: sig })
@@ -474,9 +431,8 @@ describe("ZeusInsuranceV2", function () {
 
     it("reverts if requestId doesn't match (buyer/seller/timestamp)", async function () {
       const { insurance, w1, policyId, ts, metadataHash, other } = await setup();
-      // Build requestId with a wrong seller address
       const wrongRequestId = buildRequestId(other.address, other.address, policyId, ts);
-      const sig = await signObservation(w1, { requestId: wrongRequestId, timestamp: ts, status: 1, metadataHash, nonce: 0 });
+      const sig = await signObservation(w1, { requestId: wrongRequestId, policyId: BigInt(policyId), timestamp: ts, status: 1, metadataHash, nonce: 0 });
       await expect(
         insurance.submitObservation(policyId, { requestId: wrongRequestId, timestamp: ts, status: 1, metadataHash, nonce: 0, signature: sig })
       ).to.be.revertedWithCustomError(insurance, "InvalidRequestId");
@@ -485,21 +441,18 @@ describe("ZeusInsuranceV2", function () {
     it("reverts after requestId is resolved (used)", async function () {
       const { insurance, w1, w2, w3, policyId, makeObs, requestId, ts, metadataHash } = await setup();
 
-      // Resolve the vote
-      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0, policyId));
-      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1, policyId));
-      await insurance.submitObservation(policyId, await makeObs(w3, 1, 2, policyId));
+      await insurance.submitObservation(policyId, await makeObs(w1, 1, 0));
+      await insurance.submitObservation(policyId, await makeObs(w2, 1, 1));
+      await insurance.submitObservation(policyId, await makeObs(w3, 1, 2));
 
-      // Now the requestId is consumed — any further submission with it reverts
-      const { other } = await deploy(); // fresh signer to avoid "already voted"
-      const sig = await signObservation(w1, { requestId, timestamp: ts, status: 1, metadataHash, nonce: 10 });
+      const { other } = await deploy();
+      const sig = await signObservation(w1, { requestId, policyId: BigInt(policyId), timestamp: ts, status: 1, metadataHash, nonce: 10 });
       await expect(
         insurance.submitObservation(policyId, { requestId, timestamp: ts, status: 1, metadataHash, nonce: 10, signature: sig })
       ).to.be.revertedWithCustomError(insurance, "RequestAlreadyResolved");
     });
   });
 
-  // ── buySlashingProtection ─────────────────────────────────────────────────
   describe("buySlashingProtection", function () {
     it("creates a SlashingProtection policy and emits PolicyCreated", async function () {
       const { insurance, buyer, seller } = await deploy();
@@ -515,13 +468,13 @@ describe("ZeusInsuranceV2", function () {
     it("sets coverageType to SlashingProtection (1)", async function () {
       const { insurance, buyer, seller } = await deploy();
       await insurance.connect(buyer).buySlashingProtection(seller.address, usdc(100), 3600, usdc(5));
-      expect(await insurance.getCoverageType(0n)).to.equal(1n); // SlashingProtection
+      expect(await insurance.getCoverageType(0n)).to.equal(1n);
     });
 
     it("standard buyPolicy has coverageType Standard (0)", async function () {
       const { insurance, buyer, seller } = await deploy();
       await insurance.connect(buyer).buyPolicy(seller.address, usdc(100), 3600, 1, usdc(5));
-      expect(await insurance.getCoverageType(0n)).to.equal(0n); // Standard
+      expect(await insurance.getCoverageType(0n)).to.equal(0n);
     });
 
     it("premium is transferred to reserve", async function () {
@@ -546,7 +499,7 @@ describe("ZeusInsuranceV2", function () {
       expect(p.seller).to.equal(seller.address);
       expect(p.amount).to.equal(usdc(100));
       expect(p.maxRetries).to.equal(1n);
-      expect(p.status).to.equal(0); // Active
+      expect(p.status).to.equal(0);
       expect(p.retryDeadline).to.be.gt(BigInt(ts));
     });
 
@@ -565,7 +518,6 @@ describe("ZeusInsuranceV2", function () {
     });
   });
 
-  // ── reportSlashing ────────────────────────────────────────────────────────
   describe("reportSlashing", function () {
     const EVIDENCE = "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
 
@@ -587,7 +539,7 @@ describe("ZeusInsuranceV2", function () {
     }
 
     it("watcher can reportSlashing and emits SlashingReported + PayoutExecuted", async function () {
-      const { insurance, token, owner, buyer, seller, w1 } = await deploy();
+      const { insurance, token, owner, buyer, seller, w1, w2 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
       await insurance.connect(owner).addWatcher(w2.address);
 
@@ -596,21 +548,24 @@ describe("ZeusInsuranceV2", function () {
 
       await expect(insurance.connect(w1).reportSlashing(policyId, EVIDENCE))
         .to.emit(insurance, "SlashingReported")
-        .withArgs(policyId, seller.address, EVIDENCE)
-        .and.to.emit(insurance, "PayoutExecuted")
+        .withArgs(policyId, seller.address, EVIDENCE);
+
+      await expect(insurance.connect(w2).reportSlashing(policyId, EVIDENCE))
+        .to.emit(insurance, "PayoutExecuted")
         .withArgs(policyId, usdc(100));
 
       expect(await token.balanceOf(buyer.address)).to.equal(balanceBefore + usdc(100));
     });
 
     it("sets policy status to Claimed after report", async function () {
-      const { insurance, owner, buyer, seller, w1 } = await deploy();
+      const { insurance, owner, buyer, seller, w1, w2 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
       await insurance.connect(owner).addWatcher(w2.address);
       const policyId = await buySlashing(insurance, buyer, seller);
       await insurance.connect(w1).reportSlashing(policyId, EVIDENCE);
+      await insurance.connect(w2).reportSlashing(policyId, EVIDENCE);
       const p = await insurance.getPolicy(policyId);
-      expect(p.status).to.equal(1); // Claimed
+      expect(p.status).to.equal(1);
     });
 
     it("reverts if caller is not a watcher", async function () {
@@ -624,7 +579,6 @@ describe("ZeusInsuranceV2", function () {
     it("reverts for a standard (non-slashing) policy", async function () {
       const { insurance, owner, buyer, seller, w1 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
-      await insurance.connect(owner).addWatcher(w2.address);
       const policyId = await buyPolicy(insurance, buyer, seller, usdc(100), 3600, 1);
       await expect(
         insurance.connect(w1).reportSlashing(policyId, EVIDENCE)
@@ -632,18 +586,18 @@ describe("ZeusInsuranceV2", function () {
     });
 
     it("reverts for a non-active policy (already claimed)", async function () {
-      const { insurance, owner, buyer, seller, w1 } = await deploy();
+      const { insurance, owner, buyer, seller, w1, w2 } = await deploy();
       await insurance.connect(owner).addWatcher(w1.address);
       await insurance.connect(owner).addWatcher(w2.address);
       const policyId = await buySlashing(insurance, buyer, seller);
       await insurance.connect(w1).reportSlashing(policyId, EVIDENCE);
+      await insurance.connect(w2).reportSlashing(policyId, EVIDENCE);
       await expect(
         insurance.connect(w1).reportSlashing(policyId, EVIDENCE)
       ).to.be.revertedWithCustomError(insurance, "PolicyNotActive");
     });
   });
 
-  // ── isClaimApproved / markClaimFulfilled ──────────────────────────────────
   describe("IInsuranceContract interface", function () {
     it("isClaimApproved returns false before claim", async function () {
       const { insurance, buyer, seller } = await deploy();
