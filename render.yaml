@@ -1,31 +1,20 @@
 ## Render Blueprint — Zeus Insurance BOT (Frontend ONLY)
-## Docs: https://render.com/docs/blueprint-spec
-##
-## Архитектура:
-##   - Frontend  → Render (Static Site)
-##   - API       → Railway
-##   - PostgreSQL → Railway
-##   - Watchers  → Railway
-##
-## Deploy steps:
-##   1. Push this file to GitHub
-##   2. Go to render.com → New → Blueprint → connect your repo
-##   3. Render creates ONLY the frontend static site
-##   4. After first deploy, fill VITE_API_BASE_URL with your Railway API URL
+## Render:  Frontend (Static Site)
+## Railway: API Server + PostgreSQL + Watcher Stack
 
 services:
-
-  # ── Frontend — Static Site ───────────────────────────────────────────────
   - type: static
     name: Zeus-Insurance-BOT
     region: oregon
+    # Всё выполняется из корня репозитория — без cd!
     buildCommand: >
       npm install -g pnpm@10.28.0 &&
-      pnpm install --no-frozen-lockfile --prefer-offline &&
+      pnpm install --no-frozen-lockfile --prefer-offline --filter @workspace/frontend... &&
       pnpm --filter @zeus/sdk build &&
-      cd frontend && pnpm build
+      pnpm --filter @workspace/frontend build
+    # Путь относительно корня репозитория
     staticPublishPath: frontend/dist
-    # SPA routing — all paths fall back to index.html
+    # SPA routing
     routes:
       - type: rewrite
         source: /*
@@ -38,9 +27,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # After first deploy copy the Railway API URL here and redeploy:
-      #   https://<your-api>.up.railway.app/api
       - key: VITE_API_BASE_URL
-        value: ""             # ← fill with https://<your-api>.up.railway.app/api
-      - key: VITE_WATCHER_API_URL
-        value: ""             # ← fill with https://<your-watcher>.up.railway.app (optional)
+        value: ""  # ← fill with https://<your-railway-api>.up.railway.app/api
