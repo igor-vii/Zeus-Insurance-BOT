@@ -55,12 +55,12 @@ export async function evaluateAndSign(
   let status: number;
   let reason: string;
 
-  if (no > 0) {
-    status = 0;
-    reason = `Vetoed: ${reasons.join('; ')}`;
-  } else if (yes >= 2) {
+  if (yes >= cfg.quorum) {
     status = 1;
     reason = `Payout: ${reasons.join('; ')}`;
+  } else if (no > 0) {
+    status = 0;
+    reason = `Rejected: ${reasons.join('; ')}`;
   } else {
     return { policyId: policy.policyId, chainId: policy.chainId, observation: null, reason: `Abstain: ${reasons.join('; ')}` };
   }
