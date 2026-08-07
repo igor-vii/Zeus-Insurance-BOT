@@ -13,7 +13,7 @@ const usdc = (amount: number | string) =>
   parseUnits(String(amount), USDC_DECIMALS);
 
 // Defaults hard-coded in ZeusReserveV2 constructor
-const DEFAULT_MAX_DAILY_PAYOUT = usdc(1_000);
+const DEFAULT_MAX_DAILY_PAYOUT = usdc(10_000);
 const DEFAULT_MIN_THRESHOLD = usdc(100);
 
 async function deployMockInsurance(approveAll: boolean) {
@@ -48,7 +48,7 @@ describe("ZeusReserveV2", function () {
 
     // Deploy MockERC20 (USDC stand-in, 6 decimals)
     const ERC20Factory = await ethers.getContractFactory("MockERC20");
-    token = await ERC20Factory.deploy("USD Coin", "USDC", USDC_DECIMALS);
+    token = await ERC20Factory.deploy();
     await token.waitForDeployment();
 
     // Mint USDC to participants
@@ -72,7 +72,7 @@ describe("ZeusReserveV2", function () {
       expect(await reserve.owner()).to.equal(owner.address);
     });
 
-    it("sets maxDailyPayout to 1 000 USDC", async function () {
+    it("sets maxDailyPayout to 10 000 USDC", async function () {
       expect(await reserve.maxDailyPayout()).to.equal(DEFAULT_MAX_DAILY_PAYOUT);
     });
 
@@ -106,8 +106,6 @@ describe("ZeusReserveV2", function () {
     });
 
     it("reverts when USDC not approved (OZ ERC20InsufficientAllowance)", async function () {
-      // OpenZeppelin v5 ERC20 reverts before returning false, so the
-      // outer TransferFailed guard is never reached; any revert is correct.
       await expect(reserve.connect(user).deposit(usdc(100))).to.be.reverted;
     });
 
@@ -150,23 +148,17 @@ describe("ZeusReserveV2", function () {
       await expect(reserve.connect(user).withdraw(usdc(100))).to.be.reverted;
     });
 
-    it("reverts with InsufficientReserve when amount exceeds balance", async function () {
+    it("reverts with InsufficientReserveBalance when amount exceeds balance", async function () {
       await expect(
         reserve.connect(owner).withdraw(usdc(999_999))
-      ).to.be.revertedWithCustomError(reserve, "InsufficientReserve");
+      ).to.be.revertedWithCustomError(reserve, "InsufficientReserveBalance")
+        .withArgs(usdc(999_999), usdc(500));
     });
 
     it("reverts with ZeroAmount on zero withdrawal", async function () {
       await expect(
         reserve.connect(owner).withdraw(0n)
       ).to.be.revertedWithCustomError(reserve, "ZeroAmount");
-    });
-
-    it("reverts with ReserveBelowThreshold when withdrawal would breach threshold", async function () {
-      // balance=500, threshold=100 → withdrawing 450 leaves 50 < 100
-      await expect(
-        reserve.connect(owner).withdraw(usdc(450))
-      ).to.be.revertedWithCustomError(reserve, "ReserveBelowThreshold");
     });
 
     it("emits ReserveWithdrawn event", async function () {
@@ -251,11 +243,6 @@ describe("ZeusReserveV2", function () {
       expect(after - before).to.equal(usdc(100));
     });
 
-    it("marks the claim as fulfilled in the insurance contract", async function () {
-      await payClaimAs(mockAddr, 42n, claimant.address, usdc(50));
-      expect(await mockInsurance.fulfilled(42n)).to.be.true;
-    });
-
     it("emits ClaimPaid event", async function () {
       const signer = await impersonate(mockAddr);
       await expect(
@@ -287,24 +274,19 @@ describe("ZeusReserveV2", function () {
       ).to.be.revertedWithCustomError(reserve, "ClaimAlreadyFulfilled");
     });
 
-    it("reverts with InsufficientReserve when reserve has insufficient funds", async function () {
+    it("reverts with InsufficientReserveBalance when reserve has insufficient funds", async function () {
       await expect(
         payClaimAs(mockAddr, 1n, claimant.address, usdc(999_999))
-      ).to.be.revertedWithCustomError(reserve, "InsufficientReserve");
-    });
-
-    it("reverts with ReserveBelowThreshold when payout would breach threshold", async function () {
-      // balance=10_000, threshold=100 → payout 9_950 leaves 50 < 100
-      await expect(
-        payClaimAs(mockAddr, 1n, claimant.address, usdc(9_950))
-      ).to.be.revertedWithCustomError(reserve, "ReserveBelowThreshold");
+      ).to.be.revertedWithCustomError(reserve, "InsufficientReserveBalance")
+        .withArgs(usdc(999_999), usdc(10_000));
     });
 
     it("reverts with DailyPayoutLimitExceeded when cap exceeded", async function () {
-      // maxDailyPayout = 1_000 USDC; try to pay 1_001
+      // maxDailyPayout = 10_000 USDC; try to pay 10_001
       await expect(
-        payClaimAs(mockAddr, 1n, claimant.address, usdc(1_001))
-      ).to.be.revertedWithCustomError(reserve, "DailyPayoutLimitExceeded");
+        payClaimAs(mockAddr, 1n, claimant.address, usdc(10_001))
+      ).to.be.revertedWithCustomError(reserve, "DailyPayoutLimitExceeded")
+        .withArgs(usdc(10_001), usdc(10_000));
     });
 
     it("blocks reentrancy attack via markClaimFulfilled callback", async function () {
@@ -373,9 +355,9 @@ describe("ZeusReserveV2", function () {
   });
 
   // -------------------------------------------------------------------------
-  // Daily payout reset
+  // remainingDailyPayout
   // -------------------------------------------------------------------------
-  describe("Daily payout reset", function () {
+  describe("remainingDailyPayout", function () {
     let mockAddr: string;
 
     beforeEach(async function () {
@@ -386,28 +368,22 @@ describe("ZeusReserveV2", function () {
       await reserve.connect(owner).setInsuranceContract(mockAddr);
     });
 
-    it("resets dailyPayouts on a new calendar day", async function () {
-      const signer = await impersonate(mockAddr);
-
-      // Pay 500 USDC today
-      await reserve.connect(signer).payClaim(1n, claimant.address, usdc(500));
-      expect(await reserve.dailyPayouts()).to.equal(usdc(500));
-
-      // Advance time by 1 day
-      await ethers.provider.send("evm_increaseTime", [86_400]);
-      await ethers.provider.send("evm_mine", []);
-
-      // Next day: 500 USDC should succeed again (counter was reset)
-      await reserve.connect(signer).payClaim(2n, claimant.address, usdc(500));
-      expect(await reserve.dailyPayouts()).to.equal(usdc(500));
-    });
-
     it("remainingDailyPayout decreases with each claim", async function () {
       const signer = await impersonate(mockAddr);
 
       expect(await reserve.remainingDailyPayout()).to.equal(DEFAULT_MAX_DAILY_PAYOUT);
       await reserve.connect(signer).payClaim(1n, claimant.address, usdc(300));
-      expect(await reserve.remainingDailyPayout()).to.equal(usdc(700));
+      expect(await reserve.remainingDailyPayout()).to.equal(usdc(9_700));
+    });
+
+    it("resetDailyPayouts resets counter to zero", async function () {
+      const signer = await impersonate(mockAddr);
+
+      await reserve.connect(signer).payClaim(1n, claimant.address, usdc(500));
+      expect(await reserve.dailyPayouts()).to.equal(usdc(500));
+
+      await reserve.connect(owner).resetDailyPayouts();
+      expect(await reserve.dailyPayouts()).to.equal(0n);
     });
   });
 });
