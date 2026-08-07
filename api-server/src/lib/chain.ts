@@ -76,3 +76,5 @@ export function getPublicClient(chainId: number) {
  * Default client (BOT Chain) for backward compatibility
  */
 export const publicClient = publicClients.botChain;
+
+export const getClient = getPublicClient;
