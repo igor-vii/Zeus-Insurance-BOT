@@ -18,9 +18,9 @@ export const gasWatcher = {
       const maxCost = BigInt(policy.premium) / 10n; // Не тратим >10% premium на газ
       
       if (cost > maxCost) {
-        return { watcher: 'gas', vote: 'abstain', reason: `Gas ${cost} > 10% of premium` };
+        return { watcher: 'gas', vote: 'no', reason: `Gas ${cost} > 10% of premium` };
       }
-      return { watcher: 'gas', vote: 'abstain', reason: `Gas acceptable` };
+      return { watcher: 'gas', vote: 'yes', reason: `Gas acceptable` };
     } catch (err: any) {
       return { watcher: 'gas', vote: 'abstain', reason: err.message };
     }
