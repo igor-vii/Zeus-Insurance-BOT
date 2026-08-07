@@ -140,7 +140,6 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     event SlashingResolved(uint256 indexed policyId, bool approved);
     event DeliveryConfirmed(uint256 indexed policyId, address indexed buyer, bytes32 indexed paymentHash, uint256 timestamp);
 
-
     // ── Constructor ───────────────────────────────────────────────────────────
 
     constructor(address _usdt, address _reserve) Ownable(msg.sender) {
@@ -187,7 +186,8 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
             retryDeadline: retryDeadline,
             maxRetries:    maxRetries,
             status:        PolicyStatus.Active,
-            coverageType:  coverageType
+            coverageType:  coverageType,
+            paymentHash:   bytes32(0)
         });
 
         activePolicyCount++;
@@ -221,7 +221,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         address validator,
         uint256 amount,
         uint256 timeoutSeconds,
-        uint256 premium  // ← ПРЕМИЯ ПРИХОДИТ ИЗ API (гибкая ставка)
+        uint256 premium
     ) external nonReentrant whenNotPaused returns (uint256) {
         return _buyInternal(
             msg.sender,
