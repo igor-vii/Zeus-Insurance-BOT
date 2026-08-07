@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, decimal, integer, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, decimal, integer, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const sellerRiskScoresTable = pgTable(
   "seller_risk_scores",
@@ -17,7 +17,7 @@ export const sellerRiskScoresTable = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("idx_seller_risk_seller_chain").on(t.seller, t.chainId).unique(),
+    uniqueIndex("idx_seller_risk_seller_chain").on(t.seller, t.chainId),
     index("idx_seller_risk_score").on(t.riskScore),
     index("idx_seller_risk_updated").on(t.updatedAt),
   ],
