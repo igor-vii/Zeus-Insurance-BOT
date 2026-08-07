@@ -19,6 +19,7 @@ contract ZeusReserveV2 is ReentrancyGuard, Ownable {
 
     uint256 public minReserveThreshold;
     uint256 public maxDailyPayout;
+    uint256 public lastResetTime;
     uint256 public dailyPayouts;
 
     mapping(uint256 => bool) public fulfilledClaims;
@@ -121,6 +122,7 @@ contract ZeusReserveV2 is ReentrancyGuard, Ownable {
     }
 
     function setMinReserveThreshold(uint256 newThreshold) external onlyOwner {
+        require(newThreshold <= 1_000_000 * 10**18, "Exceeds 1M USDT");
         uint256 old = minReserveThreshold;
         minReserveThreshold = newThreshold;
         emit MinReserveThresholdUpdated(old, newThreshold);
@@ -146,6 +148,8 @@ contract ZeusReserveV2 is ReentrancyGuard, Ownable {
     }
 
     function resetDailyPayouts() external onlyOwner {
+        require(block.timestamp >= lastResetTime + 24 hours, "24h delay not passed");
         dailyPayouts = 0;
+        lastResetTime = block.timestamp;
     }
 }
