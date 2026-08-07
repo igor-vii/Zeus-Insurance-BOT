@@ -17,7 +17,7 @@ services:
     region: oregon
     buildCommand: >
       npm install -g pnpm@10.28.0 &&
-      pnpm install --no-frozen-lockfile &&
+      pnpm install --no-frozen-lockfile --prefer-offline &&
       pnpm --filter @zeus/sdk build &&
       cd frontend && pnpm build
     staticPublishPath: ./frontend/dist/public
@@ -50,7 +50,7 @@ services:
     rootDir: api-server
     buildCommand: >
       npm install -g pnpm@10.28.0 &&
-      pnpm install --no-frozen-lockfile &&
+      pnpm install --no-frozen-lockfile --prefer-offline &&
       pnpm build
     startCommand: node ./dist/index.mjs
     healthCheckPath: /api/healthz
