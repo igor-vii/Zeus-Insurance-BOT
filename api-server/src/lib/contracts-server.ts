@@ -1,3 +1,4 @@
+import { getClient } from "./chain.js";
 import { encodeFunctionData, parseAbi } from "viem";
 
 // ─── Network config ──────────────────────────────────────────────────────────
@@ -92,3 +93,6 @@ export function encodeClaimPayout(policyId: bigint) {
 
 export const ZEUS_INSURANCE_ADDRESS = "0x8D10C2c6C92b613C1938fe532f0e391044e76188";
 export const ZEUS_RESERVE_ADDRESS = "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c";
+
+export const publicClient = getClient(677);
+
