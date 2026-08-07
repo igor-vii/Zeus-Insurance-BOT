@@ -1,84 +1,49 @@
-import { keccak256, toUtf8Bytes, SigningKey } from 'ethers';
-
-function hexToBytes(hex: string): Uint8Array {
-  hex = hex.replace(/^0x/, '');
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-  }
-  return bytes;
-}
-
-function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const res = new Uint8Array(a.length + b.length);
-  res.set(a, 0);
-  res.set(b, a.length);
-  return res;
-}
+import { privateKeyToAccount } from 'viem/accounts';
+import { keccak256, encodePacked } from 'viem';
 
 export class ObservationSigner {
-  private key: SigningKey;
+  private account: ReturnType<typeof privateKeyToAccount>;
 
   constructor(privateKeyHex: string) {
-    this.key = new SigningKey(privateKeyHex);
+    this.account = privateKeyToAccount(privateKeyHex as `0x${string}`);
   }
 
-  /**
-   * Формирует Observation согласно ZeusInsuranceV2.submitObservation
-   * requestId = keccak256(abi.encodePacked(buyer, seller, policyId, timestamp))
-   */
   async signObservation(params: {
     policyId: string;
     buyer: string;
     seller: string;
     timestamp: number;
-    status: number; // 1 = timeout/payout, 0 = reject
+    status: number;
     metadataHash?: string;
     nonce?: number;
   }) {
     const { policyId, buyer, seller, timestamp, status, metadataHash, nonce } = params;
 
-    // requestId как в контракте: keccak256(abi.encodePacked(buyer, seller, policyId, timestamp))
-    // Packed encoding: addresses are 20 bytes each, uint256 is 32 bytes
-    const packed = concatBytes(
-      concatBytes(
-        concatBytes(
-          hexToBytes(buyer),
-          hexToBytes(seller)
-        ),
-        hexToBytes('0x' + BigInt(policyId).toString(16).padStart(64, '0'))
-      ),
-      hexToBytes('0x' + BigInt(timestamp).toString(16).padStart(64, '0'))
-    );
-    const requestId = keccak256(packed);
-
-    const meta = metadataHash || '0x0000000000000000000000000000000000000000000000000000000000000000';
+    const policyIdBigInt = BigInt(policyId);
+    const timestampBigInt = BigInt(timestamp);
     const n = nonce ?? 0;
 
-    // msgHash = keccak256(abi.encodePacked(requestId, timestamp, status, metadataHash, nonce))
-    const msgPacked = concatBytes(
-      concatBytes(
-        concatBytes(
-          concatBytes(
-            hexToBytes(requestId),
-            hexToBytes('0x' + BigInt(timestamp).toString(16).padStart(64, '0'))
-          ),
-          hexToBytes('0x' + status.toString(16).padStart(2, '0'))
-        ),
-        hexToBytes(meta)
-      ),
-      hexToBytes('0x' + BigInt(n).toString(16).padStart(64, '0'))
+    // requestId = keccak256(abi.encodePacked(buyer, seller, policyId, timestamp))
+    const packedRequestId = encodePacked(
+      ['address', 'address', 'uint256', 'uint256'],
+      [buyer as `0x${string}`, seller as `0x${string}`, policyIdBigInt, timestampBigInt]
     );
+    const requestId = keccak256(packedRequestId);
 
+    const meta = metadataHash || '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+    // Contract verification expects:
+    // msgHash = keccak256(abi.encodePacked(requestId, policyId, timestamp, status, metadataHash, nonce))
+    const msgPacked = encodePacked(
+      ['bytes32', 'uint256', 'uint256', 'uint8', 'bytes32', 'uint256'],
+      [requestId, policyIdBigInt, timestampBigInt, status as unknown as number, meta as `0x${string}`, BigInt(n)]
+    );
     const msgHash = keccak256(msgPacked);
-    const ethPrefix = toUtf8Bytes('\x19Ethereum Signed Message:\n32');
-    const ethMsg = concatBytes(ethPrefix, hexToBytes(msgHash));
-    const ethHash = keccak256(ethMsg);
 
-    const sig = this.key.sign(ethHash);
-    const r = sig.r.slice(2).padStart(64, '0');
-    const s = sig.s.slice(2).padStart(64, '0');
-    const v = (sig.v).toString(16).padStart(2, '0');
+    // Sign the message using viem's account.signMessage
+    const signature = await this.account.signMessage({
+      message: { raw: msgHash },
+    });
 
     return {
       requestId,
@@ -86,7 +51,7 @@ export class ObservationSigner {
       status,
       metadataHash: meta,
       nonce: n,
-      signature: '0x' + r + s + v,
+      signature,
     };
   }
 }
