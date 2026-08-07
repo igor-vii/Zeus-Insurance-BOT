@@ -1,120 +1,148 @@
 import { expect } from "chai";
-import { ethers, network } from "hardhat";
-import { Signer, Contract } from "ethers";
+import { ethers } from "hardhat";
+import { ZeusInsuranceV2, ZeusReserveV2, MockERC20 } from "../typechain-types";
+import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { parseUnits } from "ethers";
 
-describe("ZeusInsuranceV2 with ERC20", () => {
-  let admin: Signer, buyer: Signer, seller: Signer, oracle: Signer;
-  let insurance: Contract;
-  let mockUSDC: Contract;
+describe("ZeusInsuranceV2 with ERC20", function () {
+  let insurance: ZeusInsuranceV2;
+  let reserve: ZeusReserveV2;
+  let mockUSDC: MockERC20;
+  let admin: HardhatEthersSigner;
+  let buyer: HardhatEthersSigner;
+  let seller: HardhatEthersSigner;
 
-  const XLAYER_CHAIN_ID = 196;
-  const DEFAULT_HARDHAT_CHAIN_ID = 31337;
+  const USDC_DECIMALS = 6;
+  const usdc = (n: number | string) => parseUnits(String(n), USDC_DECIMALS);
 
-  before(async () => {
-    [admin, buyer, seller, oracle] = await ethers.getSigners();
-  });
+  beforeEach(async function () {
+    [admin, buyer, seller] = await ethers.getSigners();
 
-  beforeEach(async () => {
-    // 1. Деплоим мок-токен
+    // Deploy mock token
     const TokenFactory = await ethers.getContractFactory("MockERC20");
     mockUSDC = await TokenFactory.deploy();
     await mockUSDC.waitForDeployment();
 
-    // 2. Деплоим страховку с привязкой к ERC20 (вместо ZeroAddress)
+    // Mint tokens to buyer and admin
+    await mockUSDC.mint(buyer.address, usdc(10_000));
+    await mockUSDC.mint(admin.address, usdc(100_000));
+
+    // Deploy reserve
+    const ReserveFactory = await ethers.getContractFactory("ZeusReserveV2");
+    reserve = await ReserveFactory.deploy(
+      await mockUSDC.getAddress(),
+      admin.address
+    );
+    await reserve.waitForDeployment();
+
+    // Deploy insurance with ERC20
     const InsFactory = await ethers.getContractFactory("ZeusInsuranceV2");
-    insurance = await InsFactory.deploy(await admin.getAddress(), await mockUSDC.getAddress());
+    insurance = await InsFactory.deploy(
+      await mockUSDC.getAddress(),
+      await reserve.getAddress()
+    );
     await insurance.waitForDeployment();
 
-    // 3. Выдаем права оракулу на выплату страховки
-    await insurance.grantRole(await insurance.CLAIM_EVALUATOR_ROLE(), await oracle.getAddress());
+    // Wire reserve → insurance
+    await reserve.setInsuranceContract(await insurance.getAddress());
 
-    // 4. Эмулируем X Layer сеть
-    await network.provider.send("hardhat_setChainId", [ethers.toBeHex(XLAYER_CHAIN_ID)]);
+    // Fund reserve
+    await mockUSDC.connect(admin).approve(await reserve.getAddress(), usdc(100_000));
+    await reserve.connect(admin).deposit(usdc(100_000));
+
+    // Raise daily limit
+    await reserve.setMaxDailyPayout(usdc(1_000_000));
+    await reserve.setMinReserveThreshold(0n);
   });
 
-  afterEach(async () => {
-    // Возвращаем дефолтный chainId, чтобы не сломать другие тесты
-    await network.provider.send("hardhat_setChainId", [ethers.toBeHex(DEFAULT_HARDHAT_CHAIN_ID)]);
-  });
+  it("should buy policy with ERC20 premium", async function () {
+    const amount = usdc(1000);
+    const premium = usdc(50);
 
-  it("3.1 should revert when paying with native token (msg.value > 0)", async () => {
-    const amount = ethers.parseUnits("1000", 18);
-    // Получаем точную премию с контракта
-    const premium = await insurance.quote(0x1F, await buyer.getAddress(), amount);
-    
-    // Даем покупателю токены
-    await mockUSDC.mint(await buyer.getAddress(), amount + premium);
+    // Approve premium
     await mockUSDC.connect(buyer).approve(await insurance.getAddress(), premium);
 
-    // Пытаемся купить с нативным value -> должно упасть
-    await expect(
-      insurance.connect(buyer).buyPolicy(
-        await seller.getAddress(),
-        amount,
-        0x1F, // All-inclusive mask
-        3600,
-        "",
-        { value: premium } // Ошибка: передаем нативный токен
-      )
-    ).to.be.revertedWith("Zeus: no native expected");
-  });
-
-  it("3.2 should buy policy with ERC20 and claim payout", async () => {
-    const amount = ethers.parseUnits("1000", 18);
-    const premium = await insurance.quote(0x1F, await buyer.getAddress(), amount);
-
-    // 1. Финансирование: даем покупателю токены на премию
-    await mockUSDC.mint(await buyer.getAddress(), premium);
-    
-    // 2. Approve: покупатель разрешает контракту списать премию
-    await mockUSDC.connect(buyer).approve(await insurance.getAddress(), premium);
-
-    // 3. Покупка полиса (value: 0!)
+    // Buy policy
     const tx = await insurance.connect(buyer).buyPolicy(
-      await seller.getAddress(),
+      seller.address,
       amount,
-      0x1F,
-      3600,
-      "ipfs://erc20-test"
+      3600, // 1 hour timeout
+      1,    // 1 retry
+      premium
     );
+
     await expect(tx).to.emit(insurance, "PolicyCreated");
-    
-    // Проверяем, что контракт действительно получил премию в ERC20
-    const contractBal = await mockUSDC.balanceOf(await insurance.getAddress());
-    expect(contractBal).to.equal(premium);
 
-    // 4. Имитируем наличие резерва на контракте для выплаты (например, добавил админ)
-    await mockUSDC.mint(await insurance.getAddress(), amount);
+    // Verify policy was created
+    const policyId = await insurance.nextPolicyId();
+    expect(policyId).to.equal(1n);
 
-    const policyId = await insurance.currentPolicyId();
-    const buyerBalBefore = await mockUSDC.balanceOf(await buyer.getAddress());
-
-    // 5. Оракул вызывает claim
-    await insurance.connect(oracle).claim(policyId, await buyer.getAddress(), amount);
-
-    const buyerBalAfter = await mockUSDC.balanceOf(await buyer.getAddress());
-    
-    // Проверяем, что покупатель получил выплату 1000 USDC
-    expect(buyerBalAfter - buyerBalBefore).to.equal(amount);
+    // Verify premium was transferred to reserve
+    const reserveBalance = await mockUSDC.balanceOf(await reserve.getAddress());
+    expect(reserveBalance).to.equal(usdc(100_050)); // 100_000 initial + 50 premium
   });
 
-  it("3.3 should revert if no approve before buyPolicy", async () => {
-    const amount = ethers.parseUnits("1000", 18);
-    const premium = await insurance.quote(0x1F, await buyer.getAddress(), amount);
-    
-    // Даем покупателю токены, но НЕ делаем approve
-    await mockUSDC.mint(await buyer.getAddress(), premium);
+  it("should claim payout after timeout with ERC20", async function () {
+    const amount = usdc(1000);
+    const premium = usdc(50);
 
-    // Покупка должна упасть с ошибкой SafeERC20: insufficient allowance
+    // Approve and buy policy
+    await mockUSDC.connect(buyer).approve(await insurance.getAddress(), premium);
+    await insurance.connect(buyer).buyPolicy(
+      seller.address,
+      amount,
+      60, // 1 minute timeout
+      1,
+      premium
+    );
+
+    // Advance time past retryDeadline
+    await ethers.provider.send("evm_increaseTime", [61]);
+    await ethers.provider.send("evm_mine", []);
+
+    // Claim payout
+    const buyerBefore = await mockUSDC.balanceOf(buyer.address);
+    await insurance.connect(buyer).claimPayout(0n);
+    const buyerAfter = await mockUSDC.balanceOf(buyer.address);
+
+    // Buyer should receive the insured amount
+    expect(buyerAfter - buyerBefore).to.equal(amount);
+  });
+
+  it("should revert buyPolicy without sufficient approve", async function () {
+    const amount = usdc(1000);
+    const premium = usdc(50);
+
+    // Do NOT approve premium
+
+    // Buy should fail
     await expect(
       insurance.connect(buyer).buyPolicy(
-        await seller.getAddress(),
+        seller.address,
         amount,
-        0x1F,
         3600,
-        "",
-        { value: 0 }
+        1,
+        premium
       )
-    ).to.be.revertedWith("ERC20: insufficient allowance"); // В SafeERC20 это кастомная ошибка, но текст совпадает
+    ).to.be.revertedWithCustomError(insurance, "PremiumTransferFailed");
+  });
+
+  it("should reject native token payment (msg.value > 0)", async function () {
+    const amount = usdc(1000);
+    const premium = usdc(50);
+
+    await mockUSDC.connect(buyer).approve(await insurance.getAddress(), premium);
+
+    // Try to send ETH with the transaction
+    await expect(
+      insurance.connect(buyer).buyPolicy(
+        seller.address,
+        amount,
+        3600,
+        1,
+        premium,
+        { value: ethers.parseEther("0.1") } // Send ETH
+      )
+    ).to.be.revertedWithCustomError(insurance, "NativePaymentNotAccepted");
   });
 });
