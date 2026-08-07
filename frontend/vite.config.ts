@@ -17,19 +17,16 @@ if (!isProd) {
 
 export default defineConfig({
   base: basePath,
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(import.meta.dirname, 'src'),
+      '@': path.resolve(__dirname, 'src'),
     },
     dedupe: ['react', 'react-dom'],
   },
-  root: path.resolve(import.meta.dirname),
+  root: __dirname,
   build: {
-    outDir: path.resolve(import.meta.dirname, 'dist/public'),
+    outDir: 'dist',
     emptyOutDir: true,
   },
   server: {
@@ -37,9 +34,7 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
-    fs: {
-      strict: true,
-    },
+    fs: { strict: true },
     proxy: {
       '/api': {
         target: process.env.API_URL || 'http://localhost:3001',
