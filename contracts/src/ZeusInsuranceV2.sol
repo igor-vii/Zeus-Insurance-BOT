@@ -398,12 +398,18 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
 
     // ─── Owner Configuration ──────────────────────────────────────────────────
 
+    function getActivePoliciesCount() external view returns (uint256) {
+        return activePolicyCount;
+    }
+
     function setReserve(address _reserve) external onlyOwner {
+        require(activePolicyCount == 0, "Active policies exist");
         if (_reserve == address(0)) revert InvalidReserveAddress();
         reserve = ZeusReserveV2(_reserve);
     }
 
     function setUsdt(address _usdt) external onlyOwner {
+        require(activePolicyCount == 0, "Active policies exist");
         if (_usdt == address(0)) revert InvalidUSDTAddress();
         usdt = IERC20(_usdt);
     }
