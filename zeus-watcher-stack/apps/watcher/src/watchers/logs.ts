@@ -1,7 +1,8 @@
 import { Policy, WatcherVote, NetworkConfig } from '@zeus/shared';
 import { JsonRpcProvider } from 'ethers';
 
-const DELIVERY_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+// DeliveryConfirmed(uint256 indexed policyId, address indexed buyer, bytes32 indexed paymentHash, uint256 timestamp)
+const DELIVERY_CONFIRMED_TOPIC = '';
 
 export const logWatcher = {
   name: 'logs',
@@ -12,8 +13,7 @@ export const logWatcher = {
       const logs = await provider.getLogs({
         address: cfg.insurance,
         topics: [
-          DELIVERY_TOPIC,
-          null,
+          DELIVERY_CONFIRMED_TOPIC,
           '0x' + BigInt(policy.policyId).toString(16).padStart(64, '0'),
         ],
         fromBlock: Math.max(0, current - 50000),
@@ -21,12 +21,11 @@ export const logWatcher = {
       });
 
       if (logs.length > 0) {
-        const success = logs[0].data !== '0x' + '0'.repeat(63) + '0';
-        return success
-          ? { watcher: 'logs', vote: 'no', reason: 'Delivery event: success' }
-          : { watcher: 'logs', vote: 'yes', reason: 'Delivery event: failure' };
+        // Delivery confirmed - vote NO (claim should be rejected)
+        return { watcher: 'logs', vote: 'no', reason: 'DeliveryConfirmed event found' };
       }
-      return { watcher: 'logs', vote: 'yes', reason: 'No delivery event' };
+      // No delivery confirmation - vote YES (claim should be approved)
+      return { watcher: 'logs', vote: 'yes', reason: 'No delivery confirmation' };
     } catch (err: any) {
       return { watcher: 'logs', vote: 'abstain', reason: err.message };
     }

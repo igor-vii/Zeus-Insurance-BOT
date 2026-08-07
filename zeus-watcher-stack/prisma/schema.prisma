@@ -57,3 +57,43 @@ model Claim {
 
   policy Policy @relation(fields: [policyId], references: [id])
 }
+
+
+model WatcherObservation {
+  id           String   @id @default(cuid())
+  chainId      Int
+  policyId     String
+  requestId    String
+  watcher      String
+  vote         Int?
+  reason       String?
+  signature    String?
+  metadataHash String?
+  nonce        Int?
+  timestamp    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([requestId])
+  @@index([chainId, policyId])
+  @@index([watcher])
+  @@index([timestamp])
+}
+
+model SellerRiskScore {
+  id                    String   @id @default(cuid())
+  seller                String
+  chainId               Int
+  riskScore             Decimal  @db.Decimal(5, 2)
+  totalPolicies         Int      @default(0)
+  successfulDeliveries  Int      @default(0)
+  failedDeliveries      Int      @default(0)
+  claimsPaid            Int      @default(0)
+  claimsRejected        Int      @default(0)
+  metadata              Json?
+  updatedAt             DateTime @updatedAt
+  createdAt             DateTime @default(now())
+
+  @@unique([seller, chainId])
+  @@index([riskScore])
+  @@index([updatedAt])
+}

@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "./ZeusReserveV2.sol";
@@ -63,6 +63,8 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     error InvalidPremium();
     error InvalidEvidenceHash();
     error CannotRenounceOwnership();
+    error InvalidPaymentHash();
+    error DeliveryAlreadyConfirmed();
 
     // ── Enums ─────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         uint256 maxRetries;
         PolicyStatus status;
         CoverageType coverageType;
+        bytes32 paymentHash;
     }
 
     struct Observation {
@@ -135,6 +138,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     event ClaimRejected(uint256 indexed policyId);
     event SlashingVoteCast(uint256 indexed policyId, address indexed watcher);
     event SlashingResolved(uint256 indexed policyId, bool approved);
+    event DeliveryConfirmed(uint256 indexed policyId, address indexed buyer, bytes32 indexed paymentHash, uint256 timestamp);
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -182,7 +186,8 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
             retryDeadline: retryDeadline,
             maxRetries:    maxRetries,
             status:        PolicyStatus.Active,
-            coverageType:  coverageType
+            coverageType:  coverageType,
+            paymentHash:   bytes32(0)
         });
 
         activePolicyCount++;
@@ -216,7 +221,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         address validator,
         uint256 amount,
         uint256 timeoutSeconds,
-        uint256 premium  // ← ПРЕМИЯ ПРИХОДИТ ИЗ API (гибкая ставка)
+        uint256 premium
     ) external nonReentrant whenNotPaused returns (uint256) {
         return _buyInternal(
             msg.sender,
@@ -462,5 +467,24 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         p.status = PolicyStatus.Rejected;
         activePolicyCount--;
         emit ClaimRejected(policyId);
+    }
+
+    // ─── Delivery Confirmation ──────────────────────────────────────────────
+
+    function confirmDelivery(uint256 policyId, bytes32 paymentHash) external nonReentrant whenNotPaused {
+        Policy storage p = policies[policyId];
+        
+        // Guards
+        if (p.buyer == address(0)) revert PolicyDoesNotExist();
+        if (p.buyer != msg.sender) revert OnlyBuyerCanClaim();
+        if (p.status != PolicyStatus.Active) revert PolicyNotActive();
+        if (paymentHash == bytes32(0)) revert InvalidPaymentHash();
+        if (p.paymentHash != bytes32(0)) revert DeliveryAlreadyConfirmed();
+        
+        p.paymentHash = paymentHash;
+        p.status = PolicyStatus.Claimed;
+        activePolicyCount--;
+        
+        emit DeliveryConfirmed(policyId, p.buyer, paymentHash, block.timestamp);
     }
 }

@@ -1,4 +1,4 @@
-import { keccak256, toUtf8Bytes, SigningKey, AbiCoder } from 'ethers';
+import { keccak256, toUtf8Bytes, SigningKey } from 'ethers';
 
 function hexToBytes(hex: string): Uint8Array {
   hex = hex.replace(/^0x/, '');
@@ -25,7 +25,7 @@ export class ObservationSigner {
 
   /**
    * Формирует Observation согласно ZeusInsuranceV2.submitObservation
-   * requestId = keccak256(abi.encodePacked(buyer, seller, timestamp))
+   * requestId = keccak256(abi.encodePacked(buyer, seller, policyId, timestamp))
    */
   async signObservation(params: {
     policyId: string;
@@ -36,18 +36,27 @@ export class ObservationSigner {
     metadataHash?: string;
     nonce?: number;
   }) {
-    const { buyer, seller, timestamp, status, metadataHash, nonce } = params;
+    const { policyId, buyer, seller, timestamp, status, metadataHash, nonce } = params;
 
-    // requestId как в контракте
-    const requestId = keccak256(
-      new AbiCoder().encode(['address', 'address', 'uint256'], [buyer, seller, timestamp])
+    // requestId как в контракте: keccak256(abi.encodePacked(buyer, seller, policyId, timestamp))
+    // Packed encoding: addresses are 20 bytes each, uint256 is 32 bytes
+    const packed = concatBytes(
+      concatBytes(
+        concatBytes(
+          hexToBytes(buyer),
+          hexToBytes(seller)
+        ),
+        hexToBytes('0x' + BigInt(policyId).toString(16).padStart(64, '0'))
+      ),
+      hexToBytes('0x' + BigInt(timestamp).toString(16).padStart(64, '0'))
     );
+    const requestId = keccak256(packed);
 
     const meta = metadataHash || '0x0000000000000000000000000000000000000000000000000000000000000000';
     const n = nonce ?? 0;
 
     // msgHash = keccak256(abi.encodePacked(requestId, timestamp, status, metadataHash, nonce))
-    const packed = concatBytes(
+    const msgPacked = concatBytes(
       concatBytes(
         concatBytes(
           concatBytes(
@@ -61,7 +70,7 @@ export class ObservationSigner {
       hexToBytes('0x' + BigInt(n).toString(16).padStart(64, '0'))
     );
 
-    const msgHash = keccak256(packed);
+    const msgHash = keccak256(msgPacked);
     const ethPrefix = toUtf8Bytes('\x19Ethereum Signed Message:\n32');
     const ethMsg = concatBytes(ethPrefix, hexToBytes(msgHash));
     const ethHash = keccak256(ethMsg);
