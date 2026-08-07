@@ -1,17 +1,21 @@
-## Render Blueprint — Zeus Insurance BOT (2 services + DB)
+## Render Blueprint — Zeus Insurance BOT (Frontend ONLY)
 ## Docs: https://render.com/docs/blueprint-spec
+##
+## Архитектура:
+##   - Frontend  → Render (Static Site)
+##   - API       → Railway
+##   - PostgreSQL → Railway
+##   - Watchers  → Railway
 ##
 ## Deploy steps:
 ##   1. Push this file to GitHub
 ##   2. Go to render.com → New → Blueprint → connect your repo
-##   3. Render reads this file and creates all services automatically
-##   4. After first deploy, fill in the CORS_ORIGINS and VITE_API_BASE_URL
-##      values (see comments) and redeploy
-##   5. Set all secrets marked "sync: false" in the Render dashboard
+##   3. Render creates ONLY the frontend static site
+##   4. After first deploy, fill VITE_API_BASE_URL with your Railway API URL
 
 services:
 
-  # ── 1. Frontend — Static Site ────────────────────────────────────────────
+  # ── Frontend — Static Site ───────────────────────────────────────────────
   - type: static
     name: Zeus-Insurance-BOT
     region: oregon
@@ -34,93 +38,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # After first deploy copy the zeus-insurance-bot-api URL here and redeploy:
-      #   https://zeus-insurance-bot-api.onrender.com/api
+      # After first deploy copy the Railway API URL here and redeploy:
+      #   https://<your-api>.up.railway.app/api
       - key: VITE_API_BASE_URL
-        value: ""             # ← fill with https://<your-api>.onrender.com/api
+        value: ""             # ← fill with https://<your-api>.up.railway.app/api
       - key: VITE_WATCHER_API_URL
-        value: ""             # ← fill with https://<your-watcher>.onrender.com  (optional)
-
-  # ── 2. API Server — Web Service ──────────────────────────────────────────
-  - type: web
-    name: Zeus-Insurance-BOT-API
-    runtime: node
-    region: oregon
-    plan: free               # upgrade to starter ($7/mo) for always-on + custom domain
-    rootDir: api-server
-    buildCommand: >
-      npm install -g pnpm@10.28.0 &&
-      pnpm install --no-frozen-lockfile --prefer-offline &&
-      pnpm build
-    startCommand: node ./dist/index.mjs
-    healthCheckPath: /api/healthz
-    buildFilter:
-      paths:
-        - api-server/**
-        - sdk/**
-        - lib/**
-        - pnpm-lock.yaml
-    envVars:
-      - key: NODE_VERSION
-        value: "20"
-      - key: PORT
-        value: "10000"       # Render injects PORT automatically; keep in sync
-      - key: NODE_ENV
-        value: production
-
-      # ── Network ───────────────────────────────────────────────────────────
-      - key: ZEUS_NETWORK
-        value: bot-chain
-      - key: ZEUS_INSURANCE_NETWORK
-        value: bot-chain
-
-      # ── BOT Chain contracts (chain 677) ────────────────────────────────────
-      - key: ZEUS_INSURANCE_ADDRESS
-        value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
-      - key: ZEUS_ESCROW_BOT_ADDRESS
-        value: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5"
-      - key: ZEUS_RESERVE_ADDRESS
-        value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
-
-      # ── X Layer Mainnet contracts ──────────────────────────────────────────
-      - key: ZEUS_INSURANCE_ADDRESS_XLAYER
-        value: "0x8D10C2c6C92b613C1938fe532f0e391044e76188"
-      - key: ZEUS_ESCROW_ADDRESS_XLAYER
-        value: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5"
-      - key: ZEUS_ESCROW_BOT_ADDRESS_XLAYER
-        value: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5"
-      - key: ZEUS_RESERVE_ADDRESS_XLAYER
-        value: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c"
-      - key: XLAYER_MAINNET_RPC_URL
-        value: "https://rpc.xlayer.tech"
-
-      # ── Payment token ──────────────────────────────────────────────────────
-      - key: ZEUS_PAYMENT_TOKEN
-        value: "USDT"
-
-      # ── Database (auto-injected by Render from the DB below) ──────────────
-      - key: DATABASE_URL
-        fromDatabase:
-          name: zeus-insurance-db
-          property: connectionString
-
-      # ── CORS — add your frontend URL after first deploy ───────────────────
-      # Example: https://zeus-frontend.onrender.com
-      - key: CORS_ORIGINS
-        value: ""             # ← fill after first deploy
-
-      # ── Secrets — set in Render dashboard, never commit ───────────────────
-      - key: SESSION_SECRET
-        sync: false
-      - key: SERVER_PRIVATE_KEY
-        sync: false           # enables automatic mode (optional)
-      - key: OKLINK_API_KEY
-        sync: false
-
-# ── PostgreSQL ──────────────────────────────────────────────────────────────
-databases:
-  - name: zeus-insurance-db
-    databaseName: zeus_insurance
-    user: zeus_user
-    plan: free               # 1 GB; upgrade to starter for persistence SLA
-    region: oregon
+        value: ""             # ← fill with https://<your-watcher>.up.railway.app (optional)
