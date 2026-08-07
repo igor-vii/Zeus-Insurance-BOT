@@ -2,7 +2,7 @@
 
 Express v5 API server for the Zeus Insurance Protocol. Exposes REST endpoints for insurance/escrow operations, an x402 payment gateway, and an **MCP server** for AI agent integration.
 
-- **Port:** `8080`
+- **Port:** `3001`
 - **Stack:** TypeScript, Express v5, viem, ethers v6, Drizzle ORM, pino
 
 ---
@@ -12,10 +12,9 @@ Express v5 API server for the Zeus Insurance Protocol. Exposes REST endpoints fo
 The Zeus API server implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) over **Streamable HTTP** (spec version 2025-03-26), allowing any MCP-compatible AI agent or tool to interact with the protocol without custom integration code.
 
 ### Endpoint
+POST https://zeus-insurance-bot-api-production.up.railway.app/mcp
 
-```
-POST https://api.zeus-insurance.com/mcp
-```
+text
 
 **Required headers:**
 
@@ -54,70 +53,49 @@ Get a dynamic price quote for an insurance policy. Calculates a risk score based
   "riskScore": 1.2500,
   "premiumAmount": "75000"
 }
-```
+2. insurance_prepare_buy
+Get the calldata required to call buyInsurance on-chain. The agent signs and broadcasts this transaction.
 
----
+Input:
 
-### 2. `insurance_prepare_buy`
+Field	Type	Description
+seller	string	Seller wallet address (0x…)
+amount	string	Coverage amount in USDC smallest units
+timeoutSeconds	integer	Policy timeout in seconds (min 60)
+maxRetries	integer	Maximum delivery retries (1–10)
+Output:
 
-Get the calldata required to call `buyInsurance` on-chain. The agent signs and broadcasts this transaction.
-
-**Input:**
-
-| Field | Type | Description |
-|---|---|---|
-| `seller` | `string` | Seller wallet address (`0x…`) |
-| `amount` | `string` | Coverage amount in USDC smallest units |
-| `timeoutSeconds` | `integer` | Policy timeout in seconds (min 60) |
-| `maxRetries` | `integer` | Maximum delivery retries (1–10) |
-
-**Output:**
-
-```json
+json
 {
-  "to": "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+  "to": "0x7483bB3C605f3187808b028d9e086AbCa2a34676",
   "data": "0x...",
   "riskScore": 1.2500,
   "premiumAmount": "75000"
 }
-```
+3. insurance_claim
+Get the calldata required to call claimPayout on-chain for an expired or failed policy. The buyer signs and broadcasts this transaction.
 
----
+Input:
 
-### 3. `insurance_claim`
+Field	Type	Description
+policyId	string	Policy ID as a non-negative integer string
+Output:
 
-Get the calldata required to call `claimPayout` on-chain for an expired or failed policy. The buyer signs and broadcasts this transaction.
-
-**Input:**
-
-| Field | Type | Description |
-|---|---|---|
-| `policyId` | `string` | Policy ID as a non-negative integer string |
-
-**Output:**
-
-```json
+json
 {
-  "to": "0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b",
+  "to": "0x7483bB3C605f3187808b028d9e086AbCa2a34676",
   "data": "0x..."
 }
-```
-
----
-
-### 4. `insurance_get_policies`
-
+4. insurance_get_policies
 List all insurance policies for a buyer address. Returns cached data when available; falls back to fetching directly from the chain.
 
-**Input:**
+Input:
 
-| Field | Type | Description |
-|---|---|---|
-| `buyer` | `string` | Buyer wallet address (`0x…`) |
+Field	Type	Description
+buyer	string	Buyer wallet address (0x…)
+Output:
 
-**Output:**
-
-```json
+json
 {
   "policies": [
     {
@@ -132,19 +110,14 @@ List all insurance policies for a buyer address. Returns cached data when availa
   ],
   "source": "cache"
 }
-```
-
----
-
-### 5. `insurance_reserve_stats`
-
+5. insurance_reserve_stats
 Get the current reserve fund statistics directly from the chain.
 
-**Input:** _(none)_
+Input: (none)
 
-**Output:**
+Output:
 
-```json
+json
 {
   "balance": "50000000000",
   "minThreshold": "10000000000",
@@ -152,71 +125,48 @@ Get the current reserve fund statistics directly from the chain.
   "remainingDailyPayout": "4750000000",
   "isAdequatelyFunded": true
 }
-```
-
----
-
-### 6. `escrow_prepare_deposit`
-
+6. escrow_prepare_deposit
 Get the calldata required to deposit USDC and create an escrow agreement on-chain. The initiator signs and broadcasts this transaction.
 
-**Input:**
+Input:
 
-| Field | Type | Description |
-|---|---|---|
-| `executor` | `string` | Executor wallet address (`0x…`) — the party performing the work |
-| `amount` | `string` | Escrow amount in USDC smallest units |
-| `timeoutSeconds` | `integer` | Agreement timeout in seconds (min 60) |
+Field	Type	Description
+executor	string	Executor wallet address (0x…) — the party performing the work
+amount	string	Escrow amount in USDC smallest units
+timeoutSeconds	integer	Agreement timeout in seconds (min 60)
+Output:
 
-**Output:**
-
-```json
+json
 {
-  "to": "0x87365462353bCBAB2CF0DF57c7Cb15519C5B7c76",
+  "to": "0x6d250b4Eb62E7c8501C4C0319869fC1F1B68a6C2",
   "data": "0x..."
 }
-```
-
----
-
-### 7. `escrow_prepare_confirm`
-
+7. escrow_prepare_confirm
 Get the calldata required to confirm successful execution of an escrow agreement and release funds to the executor.
 
-**Input:**
+Input:
 
-| Field | Type | Description |
-|---|---|---|
-| `agreementId` | `string` | Agreement ID as a non-negative integer string |
-| `proof` | `string` | _(optional)_ Execution proof — hex string (`0x…`) or plain UTF-8 text |
+Field	Type	Description
+agreementId	string	Agreement ID as a non-negative integer string
+proof	string	(optional) Execution proof — hex string (0x…) or plain UTF-8 text
+Output:
 
-**Output:**
-
-```json
+json
 {
-  "to": "0x87365462353bCBAB2CF0DF57c7Cb15519C5B7c76",
+  "to": "0x6d250b4Eb62E7c8501C4C0319869fC1F1B68a6C2",
   "data": "0x..."
 }
-```
-
----
-
-## Usage Examples
-
-### Discover available tools (curl)
-
-```bash
-curl -X POST https://api.zeus-insurance.com/mcp \
+Usage Examples
+Discover available tools (curl)
+bash
+curl -X POST https://zeus-insurance-bot-api-production.up.railway.app/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "mcp-session-id: my-session-1" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":"1"}'
-```
-
-### Get a price quote (curl)
-
-```bash
-curl -X POST https://api.zeus-insurance.com/mcp \
+Get a price quote (curl)
+bash
+curl -X POST https://zeus-insurance-bot-api-production.up.railway.app/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "mcp-session-id: my-session-1" \
@@ -233,67 +183,54 @@ curl -X POST https://api.zeus-insurance.com/mcp \
       }
     }
   }'
-```
+Use with Claude Desktop (mcp_servers config)
+Add to your claude_desktop_config.json:
 
-### Use with Claude Desktop (mcp_servers config)
-
-Add to your `claude_desktop_config.json`:
-
-```json
+json
 {
   "mcpServers": {
     "zeus-insurance": {
-      "url": "https://api.zeus-insurance.com/mcp",
+      "url": "https://zeus-insurance-bot-api-production.up.railway.app/mcp",
       "transport": "streamable-http"
     }
   }
 }
-```
-
 Claude can then call Zeus tools directly during conversations, e.g.:
-> "Buy insurance from seller `0xABC…` for 5 USDC with a 24-hour timeout and 3 retries."
 
----
+"Buy insurance from seller 0xABC… for 5 USDC with a 24-hour timeout and 3 retries."
 
-## Running Tests
-
-```bash
+Running Tests
+bash
 cd api-server
 pnpm install
 pnpm test
-```
+The test file is tests/mcp-server.test.ts. It calls the live server at http://localhost:3001 (override with API_URL env var). Requires the API server to be running.
 
-The test file is `tests/mcp-server.test.ts`. It calls the live server at `http://localhost:8080` (override with `API_URL` env var). Requires the API server to be running.
+Environment Variables
+Variable	Description
+SESSION_SECRET	Cookie signing secret (required)
+ZEUS_NETWORK	Default network (bot-chain or x-layer)
+ZEUS_INSURANCE_NETWORK	Override network for insurance contract only
+SERVER_PRIVATE_KEY	Enables automatic mode — server signs transactions
+BOT_CHAIN_RPC_URL	Custom RPC for BOT Chain
+XLAYER_MAINNET_RPC_URL	Custom RPC for X Layer
+ZEUS_TREASURY	Wallet receiving x402 API fees
+DATABASE_URL	PostgreSQL connection string
+PORT	Server port (default: 3001)
+NODE_ENV	production / development
+REST API
+Base path: /api
 
----
-
-## Environment Variables
-
-| Variable | Description |
-|---|---|
-| `SESSION_SECRET` | Cookie signing secret (required) |
-| `ZEUS_NETWORK` | Default network (`base-sepolia` or `base-mainnet`) |
-| `ZEUS_INSURANCE_NETWORK` | Override network for insurance contract only |
-| `SERVER_PRIVATE_KEY` | Enables automatic mode — server signs transactions |
-| `BASE_SEPOLIA_RPC_URL` | Custom RPC for Base Sepolia (defaults to public) |
-| `BASE_MAINNET_RPC_URL` | Custom RPC for Base Mainnet (defaults to public) |
-| `ZEUS_TREASURY` | Wallet receiving x402 API fees |
-
----
-
-## REST API
-
-Base path: `/api`
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/quote` | — | Calculate premium for amount + retries |
-| `POST` | `/insurance/prepare-buy` | **x402** | Prepare `buyInsurance` calldata |
-| `GET` | `/insurance/policies?buyer=` | — | List policies for an address |
-| `GET` | `/insurance/policies/:id` | — | Get single policy |
-| `POST` | `/insurance/claim` | — | Prepare `claimPayout` calldata |
-| `GET` | `/insurance/reserve` | — | Reserve fund status |
-| `POST` | `/escrow/prepare-deposit` | — | Prepare escrow deposit calldata |
-| `POST` | `/escrow/prepare-confirm` | — | Prepare escrow confirm calldata |
-| `GET` | `/x402/info` | — | x402 payment terms discovery |
-| `POST` | `/mcp` | — | MCP Streamable HTTP server (7 tools) |
+Method	Path	Auth	Description
+GET	/quote	—	Calculate premium for amount + retries
+POST	/insurance/prepare-buy	x402	Prepare buyInsurance calldata
+GET	/insurance/policies?buyer=	—	List policies for an address
+GET	/insurance/policies/:id	—	Get single policy
+POST	/insurance/claim	—	Prepare claimPayout calldata
+GET	/insurance/reserve	—	Reserve fund status
+POST	/escrow/prepare-deposit	—	Prepare escrow deposit calldata
+POST	/escrow/prepare-confirm	—	Prepare escrow confirm calldata
+GET	/x402/info	—	x402 payment terms discovery
+POST	/mcp	—	MCP Streamable HTTP server (7 tools)
+License
+MIT © 2026 Igor Ivanov — Zeus
