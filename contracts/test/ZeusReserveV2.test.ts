@@ -48,7 +48,7 @@ describe("ZeusReserveV2", function () {
 
     // Deploy MockERC20 (USDC stand-in, 6 decimals)
     const ERC20Factory = await ethers.getContractFactory("MockERC20");
-    token = await ERC20Factory.deploy();
+    token = await ERC20Factory.deploy("USD Coin", "USDC", USDC_DECIMALS);
     await token.waitForDeployment();
 
     // Mint USDC to participants

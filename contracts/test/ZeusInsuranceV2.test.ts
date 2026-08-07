@@ -61,7 +61,7 @@ async function deploy() {
 
   // MockERC20 as USDC (6 decimals)
   const ERC20 = await ethers.getContractFactory("MockERC20");
-  const token: MockERC20 = await ERC20.deploy();
+  const token: MockERC20 = await ERC20.deploy("Mock USDC", "USDC", USDC_DECIMALS);
   await token.waitForDeployment();
 
   // Mint tokens to buyer and provide reserve funding

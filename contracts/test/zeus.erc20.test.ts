@@ -20,7 +20,7 @@ describe("ZeusInsuranceV2 with ERC20", function () {
 
     // Deploy mock token
     const TokenFactory = await ethers.getContractFactory("MockERC20");
-    mockUSDC = await TokenFactory.deploy();
+    mockUSDC = await TokenFactory.deploy("Mock USDC", "USDC", 6);
     await mockUSDC.waitForDeployment();
 
     // Mint tokens to buyer and admin
