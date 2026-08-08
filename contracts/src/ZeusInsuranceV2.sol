@@ -328,6 +328,17 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
     function removeWatcher(address watcher) external onlyOwner {
         if (!isWatcher[watcher]) revert NotWatcher();
         isWatcher[watcher] = false;
+        
+        // Swap-and-pop to prevent unbounded array growth
+        uint256 len = watcherList.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (watcherList[i] == watcher) {
+                watcherList[i] = watcherList[len - 1];
+                watcherList.pop();
+                break;
+            }
+        }
+        
         emit WatcherRemoved(watcher);
     }
 
