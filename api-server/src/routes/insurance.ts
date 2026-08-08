@@ -1,4 +1,5 @@
 import { Router } from "express";
+import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { encodeFunctionData, isAddress } from "viem";
 import {
@@ -705,16 +706,23 @@ const resetAgentSchema = z.object({
 });
 
 router.post("/admin/reset-agent", (req, res) => {
-  const secret = process.env["ADMIN_SECRET"];
-  if (!secret) {
-    res.status(503).json({ error: "Admin endpoint not configured (ADMIN_SECRET not set)" });
+  const jwtSecret = process.env["ADMIN_JWT_SECRET"];
+  if (!jwtSecret) {
+    res.status(503).json({ error: "Admin endpoint not configured (ADMIN_JWT_SECRET not set)" });
     return;
   }
 
   const authHeader = req.headers["authorization"];
-  const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!provided || provided !== secret) {
-    res.status(401).json({ error: "Unauthorized" });
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: "Unauthorized: missing Bearer token" });
+    return;
+  }
+
+  try {
+    jwt.verify(token, jwtSecret);
+  } catch {
+    res.status(401).json({ error: "Unauthorized: invalid or expired token" });
     return;
   }
 
