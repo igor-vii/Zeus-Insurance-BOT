@@ -41,6 +41,7 @@ const allowedOrigins = new Set([
   ...(corsOriginsEnv
     ? corsOriginsEnv.split(",").map((o) => o.trim()).filter(Boolean)
     : []),
+  "https://zeus-insurance-frontend.onrender.com", // Production frontend
 ]);
 
 app.use(
@@ -49,10 +50,7 @@ app.use(
       // Allow requests with no origin (e.g. curl, server-to-server)
       if (!origin) return callback(null, true);
       if (allowedOrigins.has(origin)) return callback(null, true);
-      // Also allow any *.replit.app / *.repl.co subdomain for deployed previews
-      if (/^https:\/\/[^.]+\.(replit\.app|repl\.co|netlify\.app)$/.test(origin)) {
-        return callback(null, true);
-      }
+      // Wildcard dev domains removed for security
       callback(new Error(`CORS: origin not allowed — ${origin}`));
     },
     credentials: true,
