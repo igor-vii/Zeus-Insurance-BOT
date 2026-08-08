@@ -19,6 +19,25 @@ It provides:
 
 ---
 
+
+
+## Security Audit (August 2026)
+
+Protocol audit completed on 2026-08-08. Applied fixes:
+
+- watcherList swap-and-pop (contracts/ZeusInsuranceV2.sol)
+- Strict CORS allowlist (api-server/app.ts)
+- JWT authentication (api-server/routes/insurance.ts)
+
+Known architectural decisions (not fixed):
+- Centralized reserve withdrawals
+- API gas sponsorship
+- reportSlashing blind relay
+
+See DEPLOY.md for deployment instructions.
+
+---
+
 ## Contract Addresses
 
 ### BOT Chain (chainId 677)
