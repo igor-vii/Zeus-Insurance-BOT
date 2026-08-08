@@ -160,10 +160,11 @@ router.get("/agreements", async (req, res) => {
     const idSet = new Set<string>();
     const ids: bigint[] = [];
     for (const log of [...asInitiator, ...asExecutor]) {
-      const id = log.args.agreementId?.toString() ?? "";
+      const args = log.args as { agreementId?: bigint };
+      const id = args.agreementId?.toString() ?? "";
       if (!idSet.has(id)) {
         idSet.add(id);
-        ids.push(log.args.agreementId!);
+        ids.push(args.agreementId!);
       }
     }
 

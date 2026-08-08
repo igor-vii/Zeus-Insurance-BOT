@@ -70,7 +70,7 @@ export async function fetchAndCachePolicies(buyer: string): Promise<CachedPolicy
 
   const results = await publicClient.multicall({
     contracts: ids.map((id) => ({
-      address: ZEUS_INSURANCE_ADDRESS,
+      address: ZEUS_INSURANCE_ADDRESS as `0x${string}`,
       abi: ZEUS_INSURANCE_ABI,
       functionName: "getPolicy" as const,
       args: [id] as const,
@@ -81,7 +81,7 @@ export async function fetchAndCachePolicies(buyer: string): Promise<CachedPolicy
   for (let i = 0; i < ids.length; i++) {
     const r = results[i];
     if (r.status !== "success") continue;
-    const p = r.result as {
+    const p = r.result as unknown as {
       buyer: string; seller: string; amount: bigint; premium: bigint;
       retryDeadline: bigint; maxRetries: bigint;
       // V2 contract: PolicyStatus enum (0=Active,1=Claimed,2=Rejected,3=Expired)
@@ -117,9 +117,9 @@ export async function fetchAndCachePolicy(id: string): Promise<CachedPolicy | nu
     const p = (await publicClient.readContract({
       address: ZEUS_INSURANCE_ADDRESS,
       abi: ZEUS_INSURANCE_ABI,
-      functionName: "getPolicy",
+      functionName: "getPolicy" as never,
       args: [BigInt(id)],
-    })) as {
+    })) as unknown as {
       buyer: string; seller: string; amount: bigint; premium: bigint;
       retryDeadline: bigint; maxRetries: bigint;
       status?: number;

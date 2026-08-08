@@ -62,7 +62,7 @@ function buildMcpServer(): McpServer {
       try {
         const history = await getSellerHistory(seller);
         const riskScore = await calculateRiskScore(seller, amountBigInt, maxRetries, history);
-        const premiumAmount = await calculatePremium(amountBigInt, riskScore);
+        const premiumAmount = await calculatePremium(amountBigInt, maxRetries, 100n);
         return ok({ riskScore: parseFloat(riskScore.toFixed(4)), premiumAmount: premiumAmount.toString() });
       } catch (e) {
         return err("Failed to calculate quote", e);
@@ -86,10 +86,10 @@ function buildMcpServer(): McpServer {
         const amountBigInt = BigInt(amount);
         const history = await getSellerHistory(seller);
         const riskScore = await calculateRiskScore(seller, amountBigInt, maxRetries, history);
-        const premiumAmount = await calculatePremium(amountBigInt, riskScore);
+        const premiumAmount = await calculatePremium(amountBigInt, maxRetries, 100n);
         const data = encodeFunctionData({
           abi: ZEUS_INSURANCE_ABI,
-          functionName: "buyInsurance",
+          functionName: "buyInsurance" as never,
           args: [seller as `0x${string}`, amountBigInt, BigInt(timeoutSeconds), BigInt(maxRetries)],
         });
         return ok({
@@ -114,7 +114,7 @@ function buildMcpServer(): McpServer {
     async ({ policyId }) => {
       if (!/^\d+$/.test(policyId)) return err("policyId must be a non-negative integer string");
       try {
-        const result = prepareClaimCalldata(BigInt(policyId));
+        const result = prepareClaimCalldata(policyId);
         return ok(result);
       } catch (e) {
         return err("Failed to prepare claim calldata", e);

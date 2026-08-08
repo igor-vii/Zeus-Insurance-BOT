@@ -58,7 +58,7 @@ router.patch("/users/:address/role", async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const actor = (req as AuthedRequest).user.walletAddress;
+  const actor = (req as unknown as AuthedRequest).user.walletAddress;
   try {
     const [updated] = await db
       .update(usersTable)
@@ -112,7 +112,7 @@ router.post("/api-keys", async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const actor = (req as AuthedRequest).user.walletAddress;
+  const actor = (req as unknown as AuthedRequest).user.walletAddress;
   try {
     const plaintext = "zk_live_" + crypto.randomBytes(24).toString("hex");
     const keyHash = sha256(plaintext);
@@ -141,7 +141,7 @@ router.delete("/api-keys/:id", async (req, res) => {
     res.status(400).json({ error: "Missing key id" });
     return;
   }
-  const actor = (req as AuthedRequest).user.walletAddress;
+  const actor = (req as unknown as AuthedRequest).user.walletAddress;
   try {
     const [revoked] = await db
       .update(apiKeysTable)

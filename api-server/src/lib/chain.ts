@@ -6,7 +6,6 @@ import { createPublicClient, http, Chain } from "viem";
 export const botChain: Chain = {
   id: 677,
   name: "BOT Chain",
-  network: "bot-chain",
   nativeCurrency: {
     decimals: 18,
     name: "BOT",
@@ -27,7 +26,6 @@ export const botChain: Chain = {
 export const xLayer: Chain = {
   id: 196,
   name: "X Layer",
-  network: "x-layer",
   nativeCurrency: {
     decimals: 18,
     name: "OKB",

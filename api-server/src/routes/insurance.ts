@@ -146,7 +146,7 @@ router.post("/prepare-buy", async (req, res) => {
     const dailyErrors = getDailyErrorCount(seller);
 
     const errorHistory: ErrorHistory = {
-      total: history.totalErrors ?? history.errors?.length ?? dailyErrors,
+      total: history.totalPolicies,
       errors: dailyErrors,
       windowHours: 24,
     };
@@ -215,7 +215,7 @@ router.post("/prepare-buy", async (req, res) => {
 
   const data = encodeFunctionData({
     abi: ZEUS_INSURANCE_ABI,
-    functionName: "buyInsurance",
+    functionName: "buyInsurance" as never,
     args: [seller as `0x${string}`, amountBigInt, BigInt(timeoutSeconds), BigInt(maxRetries)],
   });
 
@@ -521,7 +521,7 @@ router.post("/slashing-protection", async (req, res) => {
   const data = encodeFunctionData({
     abi: ZEUS_INSURANCE_ABI,
     functionName: "buySlashingProtection",
-    args: [validator as `0x${string}`, amountBigInt, BigInt(timeoutSeconds)],
+    args: [validator as `0x${string}`, amountBigInt, BigInt(timeoutSeconds)] as never,
   });
 
   res.json({
