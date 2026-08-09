@@ -5,7 +5,12 @@ export class ObservationSigner {
   private account: ReturnType<typeof privateKeyToAccount>;
 
   constructor(privateKeyHex: string) {
-    this.account = privateKeyToAccount(privateKeyHex as `0x${string}`);
+    const raw = (privateKeyHex ?? "").trim().replace(/^["']+|["']+$/g, "");
+    const key = raw.startsWith("0x") ? raw : `0x${raw}`;
+    if (!/^0x[0-9a-fA-F]{64}$/.test(key)) {
+      throw new Error("WATCHER_PRIVATE_KEY must be 0x + 64 hex chars, got: " + key.slice(0, 6) + "...");
+    }
+    this.account = privateKeyToAccount(key as `0x${string}`);
   }
 
   async signObservation(params: {
