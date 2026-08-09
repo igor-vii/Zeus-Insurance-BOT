@@ -372,6 +372,49 @@ router.get("/reserve", async (_req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
+// 8b. GET /api/reserve/status (alias for frontend compatibility)
+// ──────────────────────────────────────────────────────────────────────────────
+
+router.get("/reserve/status", async (_req, res) => {
+  try {
+    const results = await publicClient.multicall({
+      contracts: [
+        { address: ZEUS_RESERVE_ADDRESS, abi: ZEUS_RESERVE_ABI, functionName: "getReserveBalance" },
+        { address: ZEUS_RESERVE_ADDRESS, abi: ZEUS_RESERVE_ABI, functionName: "minReserveThreshold" },
+        { address: ZEUS_RESERVE_ADDRESS, abi: ZEUS_RESERVE_ABI, functionName: "maxDailyPayout" },
+        { address: ZEUS_RESERVE_ADDRESS, abi: ZEUS_RESERVE_ABI, functionName: "remainingDailyPayout" },
+        { address: ZEUS_RESERVE_ADDRESS, abi: ZEUS_RESERVE_ABI, functionName: "isAdequatelyFunded" },
+      ],
+    });
+
+    const [balance, minThreshold, maxDailyPayout, remainingDailyPayout, isAdequatelyFunded] = results;
+
+    if (
+      balance.status !== "success" ||
+      minThreshold.status !== "success" ||
+      maxDailyPayout.status !== "success" ||
+      remainingDailyPayout.status !== "success" ||
+      isAdequatelyFunded.status !== "success"
+    ) {
+      res.status(502).json({ error: "One or more reserve reads failed" });
+      return;
+    }
+
+    res.json({
+      balance: (balance.result as bigint).toString(),
+      minThreshold: (minThreshold.result as bigint).toString(),
+      maxDailyPayout: (maxDailyPayout.result as bigint).toString(),
+      remainingDailyPayout: (remainingDailyPayout.result as bigint).toString(),
+      isAdequatelyFunded: isAdequatelyFunded.result as boolean,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ error: "Failed to fetch reserve data from chain", detail: msg });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 // 9. POST /api/observation
 // ──────────────────────────────────────────────────────────────────────────────
 
