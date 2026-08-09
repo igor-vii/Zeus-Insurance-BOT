@@ -20,7 +20,7 @@ async function tick() {
 
       if (result.observation === null) continue; // abstain — не отправляем
 
-      await fetch(`${process.env.API_URL}/observations/submit`, {
+      await fetch(`${process.env.API_URL}/observation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
