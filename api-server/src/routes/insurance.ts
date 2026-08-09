@@ -48,18 +48,22 @@ import { getRedis } from "../lib/redis.js";
 
 
 const chainLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  store: new RedisStore({
-    // @ts-ignore - known compat issue with v4
-    sendCommand: async (...args: string[]) => {
-      const r = await getRedis();
-      if (!r) return 0;
-      return (r as any).sendCommand(args);
-    },
-  }),
+  ...(process.env.REDIS_URL
+    ? {
+        store: new RedisStore({
+          // @ts-ignore - known compat workaround
+          sendCommand: async (...args: string[]) => {
+            const r = await getRedis();
+            if (!r) throw new Error("redis unavailable");
+            return (r as any).sendCommand(args);
+          },
+        }),
+      }
+    : {}),
   message: { error: "Too many on-chain requests, try again later" },
   skip: () => !process.env.REDIS_URL,
 });
