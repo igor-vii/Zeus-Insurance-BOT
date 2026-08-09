@@ -4,7 +4,7 @@ import { evaluateAndSign } from './engine';
 import { ObservationSigner } from './signer';
 import { NETWORKS } from './config';
 
-const signer = new ObservationSigner(process.env.PRIVATE_KEY!);
+const signer = new ObservationSigner(process.env.WATCHER_PRIVATE_KEY!);
 
 async function tick() {
   for (const [name, cfg] of Object.entries(NETWORKS)) {
