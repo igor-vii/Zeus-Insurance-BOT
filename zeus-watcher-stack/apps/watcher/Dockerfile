@@ -1,3 +1,4 @@
+# cache-bust 2026-08-09
 # Build context: zeus-watcher-stack/ (monorepo root)
 FROM node:20-alpine AS builder
 WORKDIR /app
