@@ -75,7 +75,7 @@ async function tick(): Promise<void> {
 
     if (await isSlashed(pos.validatorPubkey)) {
       reported.add(pos.positionId);
-      await reportSlashing(positionId).catch((e) => {
+      await reportSlashing(pos.positionId).catch((e) => {
         reported.delete(pos.positionId);
         console.error('[consensus-monitor] report failed:', e.message);
       });
