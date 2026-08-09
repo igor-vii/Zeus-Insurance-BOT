@@ -704,7 +704,7 @@ const agentErrorSchema = z.object({
   eventId: z.string().min(1).max(128).optional(),
 });
 
-router.post("/agent-error", (req, res) => {
+router.post("/agent-error", async (req, res) => {
   const secret = process.env["AGENT_ERROR_SECRET"];
   if (!secret) {
     res.status(503).json({ error: "agent-error endpoint not configured (AGENT_ERROR_SECRET not set)" });
@@ -757,7 +757,7 @@ const resetAgentSchema = z.object({
   agent: z.string().refine(isAddress, "Invalid agent address"),
 });
 
-router.post("/admin/reset-agent", (req, res) => {
+router.post("/admin/reset-agent", async (req, res) => {
   const jwtSecret = process.env["ADMIN_JWT_SECRET"];
   if (!jwtSecret) {
     res.status(503).json({ error: "Admin endpoint not configured (ADMIN_JWT_SECRET not set)" });
@@ -795,8 +795,8 @@ router.post("/admin/reset-agent", (req, res) => {
     return;
   }
 
-  dailyErrorTimestamps.delete(agentLower);
-  agentStatusMap.delete(agentLower);
+  await clearAgentErrors(agent);
+
 
   res.json({
     success: true,
@@ -809,7 +809,7 @@ router.post("/admin/reset-agent", (req, res) => {
 // 15. GET /api/agent-status/:agent
 // ──────────────────────────────────────────────────────────────────────────────
 
-router.get("/agent-status/:agent", (req, res) => {
+router.get("/agent-status/:agent", async (req, res) => {
   const { agent } = req.params;
 
   if (!agent || !isAddress(agent)) {
