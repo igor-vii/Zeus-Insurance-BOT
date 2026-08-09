@@ -34,6 +34,35 @@ import {
   fetchAndCachePolicy,
 } from "../lib/chain-sync.js";
 import { syncAllBuyers } from "../lib/background-sync.js";
+import rateLimit from "express-rate-limit";
+import RedisStore from "rate-limit-redis";
+import {
+  getAgentStatus as getAgentStatusFromStore,
+  setAgentStatus,
+  deleteAgentStatus,
+  recordDailyError as recordDailyErrorInStore,
+  getDailyErrorCount as getDailyErrorCountFromStore,
+  clearAgentErrors as clearAgentErrorsInStore,
+} from "../lib/agent-store.js";
+import { getRedis } from "../lib/redis.js";
+
+
+const chainLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({
+    // @ts-ignore - known compat issue with v4
+    sendCommand: async (...args: string[]) => {
+      const r = await getRedis();
+      if (!r) return 0;
+      return (r as any).sendCommand(args);
+    },
+  }),
+  message: { error: "Too many on-chain requests, try again later" },
+  skip: () => !process.env.REDIS_URL,
+});
 
 const router = Router();
 
@@ -44,53 +73,33 @@ const router = Router();
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_EXTRA_MS = 24 * 60 * 60 * 1000;
 
-const agentStatusMap = new Map<string, AgentStatus>();
-const dailyErrorTimestamps = new Map<string, number[]>();
-
-function getAgentStatus(address: string): AgentStatus {
-  return agentStatusMap.get(address.toLowerCase()) ?? {
-    blockedUntil: 0,
-    cooldownEnd: 0,
-    currentMultiplier: 1.0,
-  };
+async function getAgentStatus(address: string): Promise<AgentStatus> {
+  return await getAgentStatusFromStore(address);
 }
 
-function getDailyErrorCount(address: string): number {
-  const key = address.toLowerCase();
-  const cutoff = Date.now() - DAY_MS;
-  const ts = dailyErrorTimestamps.get(key);
-  if (!ts) return 0;
-  const pruned = ts.filter(t => t > cutoff);
-  dailyErrorTimestamps.set(key, pruned);
-  return pruned.length;
+async function getDailyErrorCount(address: string): Promise<number> {
+  return await getDailyErrorCountFromStore(address, DAY_MS);
 }
 
-function recordDailyError(address: string): { count: number; blockedUntil: number | null } {
+async function recordDailyError(address: string): Promise<{ count: number; blockedUntil: number | null }> {
   const key = address.toLowerCase();
   const now = Date.now();
-  const cutoff = now - DAY_MS;
-  const existing = dailyErrorTimestamps.get(key) ?? [];
-  const pruned = existing.filter(t => t > cutoff);
-  pruned.push(now);
-  dailyErrorTimestamps.set(key, pruned);
-  const count = pruned.length;
+  const { count } = await recordDailyErrorInStore(address, DAY_MS);
 
   let blockedUntil: number | null = null;
   if (count > DAILY_ERROR_HARD_THRESHOLD) {
     blockedUntil = now + DAY_MS;
-    agentStatusMap.set(key, {
+    await setAgentStatus(key, {
       blockedUntil,
       cooldownEnd: now + DAY_MS + COOLDOWN_EXTRA_MS,
       currentMultiplier: 2.0,
-    });
+    }, DAY_MS + COOLDOWN_EXTRA_MS);
   }
   return { count, blockedUntil };
 }
 
-function clearAgentErrors(address: string): void {
-  const key = address.toLowerCase();
-  dailyErrorTimestamps.delete(key);
-  agentStatusMap.delete(key);
+async function clearAgentErrors(address: string): Promise<void> {
+  await clearAgentErrorsInStore(address);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -130,7 +139,7 @@ const prepareBuySchema = z.object({
   timeoutSeconds: d.timeoutSeconds ?? d.timeout ?? 3600,
 }));
 
-router.post("/prepare-buy", async (req, res) => {
+router.post("/prepare-buy", chainLimiter, async (req, res) => {
   const parsed = prepareBuySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -143,7 +152,7 @@ router.post("/prepare-buy", async (req, res) => {
   let premiumAmount: bigint;
   try {
     const history = await getSellerHistory(seller);
-    const dailyErrors = getDailyErrorCount(seller);
+    const dailyErrors = await getDailyErrorCount(seller);
 
     const errorHistory: ErrorHistory = {
       total: history.totalPolicies,
@@ -159,7 +168,7 @@ router.post("/prepare-buy", async (req, res) => {
       return;
     }
 
-    const agentStatus = getAgentStatus(seller);
+    const agentStatus = await getAgentStatus(seller);
     const agentMultiplier = getAgentMultiplier(seller, agentStatus, errorHistory);
 
     if (agentMultiplier === null) {
@@ -172,7 +181,7 @@ router.post("/prepare-buy", async (req, res) => {
 
     // Автоматическая очистка при полной реабилитации
     if (agentStatus.cooldownEnd > 0 && agentStatus.cooldownEnd < Date.now() && agentMultiplier === 100n) {
-      clearAgentErrors(seller);
+      await clearAgentErrors(seller);
     }
 
     riskScore = await calculateRiskScore(seller, amountBigInt, maxRetries, history);
@@ -184,7 +193,7 @@ router.post("/prepare-buy", async (req, res) => {
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    recordDailyError(seller);
+    await recordDailyError(seller);
     res.status(500).json({ error: "Failed to calculate risk score", detail: msg });
     return;
   }
@@ -207,7 +216,7 @@ router.post("/prepare-buy", async (req, res) => {
       return;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      recordDailyError(seller);
+      await recordDailyError(seller);
       res.status(502).json({ error: "Automatic mode failed", detail: msg });
       return;
     }
@@ -457,7 +466,7 @@ const observationBodySchema = z.object({
   }),
 });
 
-router.post("/observation", async (req, res) => {
+router.post("/observation", chainLimiter, async (req, res) => {
   const parsed = observationBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -528,7 +537,7 @@ const slashingBuySchema = z.object({
   timeoutSeconds: z.coerce.number().int().min(60).optional().default(86400),
 });
 
-router.post("/slashing-protection", async (req, res) => {
+router.post("/slashing-protection", chainLimiter, async (req, res) => {
   const parsed = slashingBuySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -642,7 +651,7 @@ const REPORT_SLASHING_ABI = [
   },
 ] as const;
 
-router.post("/report-slashing", async (req, res) => {
+router.post("/report-slashing", chainLimiter, async (req, res) => {
   const parsed = reportSlashingSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -729,7 +738,7 @@ router.post("/agent-error", (req, res) => {
     seenEventIds.add(eventId);
   }
 
-  const { count, blockedUntil } = recordDailyError(agent);
+  const { count, blockedUntil } = await recordDailyError(agent);
   const blocked = count > DAILY_ERROR_HARD_THRESHOLD;
 
   res.json({
@@ -808,8 +817,8 @@ router.get("/agent-status/:agent", (req, res) => {
     return;
   }
 
-  const status = getAgentStatus(agent);
-  const dailyErrors = getDailyErrorCount(agent);
+  const status = await getAgentStatus(agent);
+  const dailyErrors = await getDailyErrorCount(agent);
   const now = Date.now();
   const isBlocked = status.blockedUntil > now || dailyErrors > DAILY_ERROR_HARD_THRESHOLD;
 
