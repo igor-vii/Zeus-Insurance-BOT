@@ -38,11 +38,12 @@ export const txHashWatcher = {
         ? Number(receipt.confirmations) 
         : receipt.confirmations;
       
-      if (confirmations < 1) {
+      const resolvedConfirmations = typeof confirmations === 'function' ? await confirmations() : confirmations;
+      if (resolvedConfirmations < 1) {
         return { watcher: 'txhash', vote: 'no', reason: 'Transaction not confirmed' };
       }
 
-      return { watcher: 'txhash', vote: 'yes', reason: `Payment confirmed (${confirmations} blocks)` };
+      return { watcher: 'txhash', vote: 'yes', reason: `Payment confirmed (${resolvedConfirmations} blocks)` };
     } catch (err: any) {
       return { watcher: 'txhash', vote: 'abstain', reason: err.message };
     }
