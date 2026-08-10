@@ -38,4 +38,5 @@ export interface NetworkConfig {
   quorum: number;
   gasThresholdGwei: number;
   minProfitMultiplier: number;
+  supportedWatchers?: string[];
 }
