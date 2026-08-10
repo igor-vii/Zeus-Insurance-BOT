@@ -21,6 +21,7 @@ import Policies from '@/pages/policies';
 import Reserve from '@/pages/reserve';
 import EscrowPage from '@/pages/escrow';
 import NotFound from '@/pages/not-found';
+import Constitution from '@/pages/constitution';
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,10 @@ function Router() {
       </Route>
       <Route path="/escrow">
         <Layout><EscrowPage /></Layout>
+      </Route>
+
+      <Route path="/constitution">
+        <PublicLayout><Constitution /></PublicLayout>
       </Route>
 
       <Route component={NotFound} />

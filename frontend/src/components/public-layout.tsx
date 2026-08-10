@@ -118,6 +118,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   { href: '/dashboard', label: 'Insurance' },
                   { href: '/reserve', label: 'Reserve' },
                   { href: '/escrow', label: 'Escrow' },
+                  { href: '/constitution', label: 'Constitution' },
                   { href: '/dashboard', label: 'Dashboard' },
                   { href: '/docs', label: 'Docs' },
                   { href: '/about', label: 'About' },

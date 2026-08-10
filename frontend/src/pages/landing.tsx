@@ -700,6 +700,63 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Constitution Teaser ── */}
+      <section className="py-24 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        <div className="max-w-7xl mx-auto px-8 lg:px-12">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="text-center mb-16"
+          >
+            <h2 className="font-brand text-4xl md:text-5xl font-bold mb-6">
+              Principles That <span className="text-primary">Endure</span>
+            </h2>
+            <p className="text-lg text-white/60 max-w-3xl mx-auto leading-relaxed">
+              Technology evolves. Architectures change. But the foundational principles of trust, 
+              transparency, and long-term thinking remain constant.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { article: 'I', title: 'Trust is Infrastructure', 
+                excerpt: 'Trust is not a feature. Trust is infrastructure. It must be measurable, observable, auditable, composable.', delay: 0 },
+              { article: 'II', title: 'Uncertainty Cannot Be Eliminated',
+                excerpt: 'Every complex system fails. The purpose of Zeus is not to promise perfection, but to reduce the economic consequences of imperfection.', delay: 0.15 },
+              { article: 'X', title: 'The Long View',
+                excerpt: 'Success should be measured not only by adoption, but by usefulness. Zeus contributes to the institutional foundations of a sustainable autonomous AI economy.', delay: 0.3 }
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.6, delay: item.delay, ease: [0.22, 1, 0.36, 1] }}
+                className="relative group"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent rounded-2xl blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="relative h-full p-8 rounded-2xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="font-mono text-xs text-primary/60 uppercase tracking-wider">Article</span>
+                    <span className="font-brand text-5xl font-bold text-primary">{item.article}</span>
+                  </div>
+                  <h3 className="font-brand text-2xl font-bold mb-4 text-white">{item.title}</h3>
+                  <p className="text-white/50 leading-relaxed text-sm mb-6">{item.excerpt}</p>
+                  <Link href="/constitution">
+                    <button className="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
+                      Read Constitution
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </Link>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Developer SDK ─────────────────────────────────────────────────── */}
       <section className="py-24 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <div className="max-w-7xl mx-auto px-8 lg:px-12">
