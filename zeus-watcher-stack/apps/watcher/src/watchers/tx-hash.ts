@@ -18,7 +18,8 @@ export const txHashWatcher = {
         return { watcher: 'txhash', vote: 'abstain', reason: 'No paymentHash available' };
       }
 
-      const provider = new JsonRpcProvider(cfg.rpcs[0]);
+      const rpcUrl = cfg.rpcs.length > 1 ? cfg.rpcs[1] : cfg.rpcs[0];
+      const provider = new JsonRpcProvider(rpcUrl);
       const tx = await provider.getTransaction(paymentHash);
       if (!tx) {
         return { watcher: 'txhash', vote: 'no', reason: 'Transaction not found' };
