@@ -53,48 +53,45 @@ export async function evaluateAndSign(
     SENSORS.map(s => s.check(policy, cfg))
   );
   
-  const sensorVotes: Record<string, 'yes' | 'no' | 'abstain'> = {};
-  const reasons: string[] = [];
-  
-  for (let i = 0; i < results.length; i++) {
-    const res = results[i];
-    const name = SENSORS[i].name;
-    
-    if (res.status === 'rejected') {
-      sensorVotes[name] = 'abstain';
-      reasons.push(`${name}: abstain (${res.reason?.message || 'error'})`);
-    } else {
-      sensorVotes[name] = res.value.vote;
-      reasons.push(`${name}: ${res.value.vote}`);
-    }
-  }
-  
-  const logs = sensorVotes['logs'] || 'abstain';
-  const txhash = sensorVotes['txhash'] || 'abstain';
+  const logs = results[0]?.status === 'fulfilled' ? results[0].value.vote : 'abstain';
+  const txhash = results[1]?.status === 'fulfilled' ? results[1].value.vote : 'abstain';
   
   let status: number;
   let reason: string;
   
-  // Decision logic (CORRECTED)
-  // logs: yes = "no delivery seen" (failure), no = "delivery confirmed" (success)
-  // txhash: yes = "payment confirmed" (success), no = "payment not found" (failure)
-  
-  if (logs === 'yes' || txhash === 'no') {
-    // logs sees failure OR txhash sees no payment
-    status = 1;
-    reason = `Payout: ${reasons.join('; ')}`;
-  } else if (logs === 'no' && txhash === 'yes') {
-    // logs confirms delivery AND txhash confirms payment
-    status = 0;
-    reason = `Rejected: ${reasons.join('; ')}`;
+  // Conditional logic based on RPC count
+  if (cfg.rpcs.length === 1) {
+    // Single RPC: require consensus from both sensors (Model A)
+    if (logs === 'yes' && txhash === 'no') {
+      status = 1;  // both see failure → payout
+      reason = 'Payout: both sensors confirm failure';
+    } else if (logs === 'no' && txhash === 'yes') {
+      status = 0;  // both see success → reject
+      reason = 'Rejected: both sensors confirm success';
+    } else {
+      return { 
+        policyId: policy.policyId, 
+        chainId: policy.chainId, 
+        observation: null, 
+        reason: 'Retry: sensors disagree or insufficient data' 
+      };
+    }
   } else {
-    // Abstain - unclear situation
-    return { 
-      policyId: policy.policyId, 
-      chainId: policy.chainId, 
-      observation: null, 
-      reason: `Abstain: ${reasons.join('; ')}` 
-    };
+    // Dual RPC: Model B (any failure from different sources)
+    if (logs === 'yes' || txhash === 'no') {
+      status = 1;  // at least one sensor sees failure → payout
+      reason = `Payout: ${logs === 'yes' ? 'logWatcher' : 'txHashWatcher'} detected failure`;
+    } else if (logs === 'no' && txhash === 'yes') {
+      status = 0;  // both see success → reject
+      reason = 'Rejected: both sensors confirm success';
+    } else {
+      return { 
+        policyId: policy.policyId, 
+        chainId: policy.chainId, 
+        observation: null, 
+        reason: 'Retry: insufficient data' 
+      };
+    }
   }
   
   const timestamp = Math.floor(Date.now() / 1000);
