@@ -1,8 +1,10 @@
 import { Policy, WatcherVote, NetworkConfig } from '@zeus/shared';
 import { JsonRpcProvider } from 'ethers';
+import { keccak256, toHex } from 'viem';
 
-// DeliveryConfirmed(uint256 indexed policyId, address indexed buyer, bytes32 indexed paymentHash, uint256 timestamp)
-const DELIVERY_CONFIRMED_TOPIC = '';
+const DELIVERY_CONFIRMED_TOPIC = keccak256(
+  toHex("DeliveryConfirmed(uint256,address,bytes32,uint256)")
+);
 
 export const logWatcher = {
   name: 'logs',
