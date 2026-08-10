@@ -1,28 +1,23 @@
-import { Policy, WatcherVote, NetworkConfig } from '@zeus/shared';
+import { Policy, NetworkConfig } from '@zeus/shared';
 import { JsonRpcProvider } from 'ethers';
 
-export const gasWatcher = {
-  name: 'gas',
-  async check(policy: Policy, cfg: NetworkConfig): Promise<WatcherVote> {
-    try {
-      const provider = new JsonRpcProvider(cfg.rpcs[0]);
-      const feeData = await provider.getFeeData();
-      const gasPrice = feeData.gasPrice ?? 0n;
-      
-      // submitObservation ~ 80k gas (SSTORE + ECDSA recover)
-      const estimatedGas = 80_000n;
-      const cost = gasPrice * estimatedGas;
-      
-      // Если газ слишком дорогой даже для отправки observation — abstain
-      // Но observation дешёвая, так что порог ниже
-      const maxCost = BigInt(policy.premium) / 10n; // Не тратим >10% premium на газ
-      
-      if (cost > maxCost) {
-        return { watcher: 'gas', vote: 'no', reason: `Gas ${cost} > 10% of premium` };
-      }
-      return { watcher: 'gas', vote: 'yes', reason: `Gas acceptable` };
-    } catch (err: any) {
-      return { watcher: 'gas', vote: 'abstain', reason: err.message };
-    }
+export async function checkGasEconomics(policy: Policy, cfg: NetworkConfig): Promise<{
+  shouldLog: boolean;
+  reason: string;
+}> {
+  const provider = new JsonRpcProvider(cfg.rpcs[0]);
+  const { maxFeePerGas } = await provider.getFeeData();
+  if (!maxFeePerGas) return { shouldLog: false, reason: 'Gas price unavailable' };
+  
+  const gasCost = maxFeePerGas * 80000n;  // ~80k gas for observation
+  const maxCost = BigInt(policy.premium) / 10n;  // 10% threshold
+  
+  if (gasCost > maxCost) {
+    const ratio = Number(gasCost * 100n / BigInt(policy.premium));
+    return {
+      shouldLog: true,
+      reason: `High gas cost: ${gasCost} wei (${ratio}% of premium ${policy.premium})`
+    };
   }
-};
+  return { shouldLog: false, reason: 'Gas acceptable' };
+}
