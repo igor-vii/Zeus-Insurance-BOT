@@ -20,13 +20,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  const navItems = [
-    { href: "/dashboard",  label: "Dashboard",          icon: LayoutDashboard },
-    { href: "/buy",        label: "Buy Policy",          icon: Shield },
-    { href: "/slashing",   label: "Slashing Protection", icon: ShieldAlert },
-    { href: "/policies",   label: "My Policies",         icon: FileText },
-    { href: "/reserve",    label: "Reserve",             icon: Database },
-    { href: "/escrow",     label: "Escrow",              icon: Handshake },
+  const navSections = [
+    {
+      title: "Overview",
+      items: [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: "Insurance",
+      items: [
+        { href: "/policies", label: "My Policies", icon: FileText },
+        { href: "/buy", label: "Buy Policy", icon: Shield },
+        { href: "/slashing", label: "Slashing Protection", icon: ShieldAlert },
+        { href: "/escrow", label: "Escrow", icon: Handshake },
+      ],
+    },
+    {
+      title: "Infrastructure",
+      items: [
+        { href: "/reserve", label: "Reserve", icon: Database },
+      ],
+    },
   ];
 
   return (
@@ -44,26 +59,37 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          {navItems.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  buttonVariants({ variant: isActive ? "secondary" : "ghost" }),
-                  "w-full justify-start gap-3 text-sm font-medium",
-                  isActive
-                    ? "text-primary border-l-2 border-primary rounded-none bg-primary/5"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 px-4 space-y-6 mt-4">
+          {navSections.map((section) => (
+            <div key={section.title}>
+              <div className="px-2 mb-2">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {section.title}
+                </span>
+              </div>
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = location === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        buttonVariants({ variant: isActive ? "secondary" : "ghost" }),
+                        "w-full justify-start gap-3 text-sm font-medium",
+                        isActive
+                          ? "text-primary border-l-2 border-primary rounded-none bg-primary/5"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <item.icon className="w-4 h-4" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div className="p-4 border-t border-border space-y-3">
@@ -125,7 +151,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Nav */}
         <div className="md:hidden flex overflow-x-auto border-b border-border bg-card/50 no-scrollbar">
-          {navItems.map((item) => {
+          {navSections.flatMap((section) => section.items).map((item) => {
             const isActive = location === item.href;
             return (
               <Link key={item.href} href={item.href}>
