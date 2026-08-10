@@ -1,15 +1,15 @@
 import { Policy } from '@zeus/shared';
 import { ObservationSigner } from './signer';
 import { logWatcher } from './watchers/logs';
-import { rpcWatcher } from './watchers/rpc';
 import { txHashWatcher } from './watchers/tx-hash';
 import { checkGasEconomics } from './watchers/gas';
+import { checkRpcHealth } from './watchers/rpc';
 import { NETWORKS } from './config';
 import pino from 'pino';
 
 const logger = pino();
 
-const SENSORS = [logWatcher, rpcWatcher, txHashWatcher];
+const SENSORS = [logWatcher, txHashWatcher];
 
 export interface ObservationResult {
   policyId: string;
@@ -30,6 +30,17 @@ export async function evaluateAndSign(
   signer: ObservationSigner
 ): Promise<ObservationResult> {
   const cfg = Object.values(NETWORKS).find(n => n.chainId === policy.chainId)!;
+  
+  // Pre-gate: check RPC health
+  const rpcOk = await checkRpcHealth(cfg);
+  if (!rpcOk) {
+    return { 
+      policyId: policy.policyId, 
+      chainId: policy.chainId, 
+      observation: null, 
+      reason: 'RPC down: abstain this cycle' 
+    };
+  }
   
   // Gas check (logging only, not voting)
   const gasCheck = await checkGasEconomics(policy, cfg);
@@ -58,19 +69,22 @@ export async function evaluateAndSign(
     }
   }
   
-  const log = sensorVotes['logs'] || 'abstain';
-  const txHash = sensorVotes['tx-hash'] || 'abstain';
+  const logs = sensorVotes['logs'] || 'abstain';
+  const txhash = sensorVotes['txhash'] || 'abstain';
   
   let status: number;
   let reason: string;
   
-  // Decision logic
-  if (log === 'yes' || txHash === 'yes') {
-    // Any sensor sees failure
+  // Decision logic (CORRECTED)
+  // logs: yes = "no delivery seen" (failure), no = "delivery confirmed" (success)
+  // txhash: yes = "payment confirmed" (success), no = "payment not found" (failure)
+  
+  if (logs === 'yes' || txhash === 'no') {
+    // logs sees failure OR txhash sees no payment
     status = 1;
     reason = `Payout: ${reasons.join('; ')}`;
-  } else if (log === 'no' && txHash === 'no') {
-    // Both sensors see success
+  } else if (logs === 'no' && txhash === 'yes') {
+    // logs confirms delivery AND txhash confirms payment
     status = 0;
     reason = `Rejected: ${reasons.join('; ')}`;
   } else {
