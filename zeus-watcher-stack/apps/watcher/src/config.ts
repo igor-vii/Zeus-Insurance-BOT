@@ -19,6 +19,6 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     quorum: 3,
     gasThresholdGwei: 80,
     minProfitMultiplier: 1.3,
-    supportedWatchers: ['log', 'gas', 'rpc', 'tx-hash', 'okx', 'api'],
+    supportedWatchers: ['log', 'gas', 'rpc', 'tx-hash'],
   }
 };
