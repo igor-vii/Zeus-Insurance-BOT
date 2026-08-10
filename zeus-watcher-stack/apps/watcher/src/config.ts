@@ -4,11 +4,12 @@ export const NETWORKS: Record<string, NetworkConfig> = {
   'bot-chain': {
     chainId: 677,
     rpcs: ['https://rpc.botchain.ai'],
-    insurance: '0x8D10C2c6C92b613C1938fe532f0e391044e76188',
+    insurance: '0x2E592BEBbcC38FC3976125CB2E11312068670C45',
     graphUrl: process.env.GRAPH_URL_BOT,
     quorum: 3,
     gasThresholdGwei: 150,
     minProfitMultiplier: 1.3,
+    supportedWatchers: ['log', 'gas', 'rpc', 'tx-hash'],
   },
   'x-layer': {
     chainId: 196,
@@ -18,5 +19,6 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     quorum: 3,
     gasThresholdGwei: 80,
     minProfitMultiplier: 1.3,
+    supportedWatchers: ['log', 'gas', 'rpc', 'tx-hash', 'okx', 'api'],
   }
 };
