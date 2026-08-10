@@ -13,7 +13,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
   },
   'x-layer': {
     chainId: 196,
-    rpcs: ['https://rpc.xlayer.tech'],
+    rpcs: ['https://rpc.xlayer.tech', 'https://xlayerrpc.okx.com'],
     insurance: '0x8D10C2c6C92b613C1938fe532f0e391044e76188',
     graphUrl: process.env.GRAPH_URL_XLAYER,
     quorum: 3,
