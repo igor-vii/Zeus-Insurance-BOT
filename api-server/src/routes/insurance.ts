@@ -753,6 +753,52 @@ router.post("/agent-error", async (req, res) => {
   });
 });
 
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 13b. POST /api/client-error (frontend error reporting)
+// ──────────────────────────────────────────────────────────────────────────────
+
+const clientErrorSchema = z.object({
+  error: z.string().min(1).max(10000),
+  ua: z.string().min(1).max(500).optional(),
+  url: z.string().url().optional(),
+});
+
+router.post("/client-error", async (req, res) => {
+  const secret = process.env["CLIENT_ERROR_SECRET"];
+  if (!secret) {
+    // Если secret не настроен, просто логируем без авторизации
+    console.warn("[client-error]", req.body);
+    res.json({ logged: true });
+    return;
+  }
+
+  const authHeader = req.headers["authorization"];
+  const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!provided || provided !== secret) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const parsed = clientErrorSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  const { error, ua, url } = parsed.data;
+  
+  console.error("[client-error]", {
+    error,
+    userAgent: ua,
+    pageUrl: url,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.json({ logged: true });
+});
+
+
 // ──────────────────────────────────────────────────────────────────────────────
 // 14. POST /api/admin/reset-agent
 // ──────────────────────────────────────────────────────────────────────────────
