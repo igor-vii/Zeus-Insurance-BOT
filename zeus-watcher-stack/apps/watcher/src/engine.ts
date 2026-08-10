@@ -5,9 +5,6 @@ import { txHashWatcher } from './watchers/tx-hash';
 import { checkGasEconomics } from './watchers/gas';
 import { checkRpcHealth } from './watchers/rpc';
 import { NETWORKS } from './config';
-import pino from 'pino';
-
-const logger = pino();
 
 const SENSORS = [logWatcher, txHashWatcher];
 
@@ -45,7 +42,7 @@ export async function evaluateAndSign(
   // Gas check (logging only, not voting)
   const gasCheck = await checkGasEconomics(policy, cfg);
   if (gasCheck.shouldLog) {
-    logger.warn({ policyId: policy.policyId, chainId: policy.chainId }, gasCheck.reason);
+    console.warn(`[gas-check] policyId=${policy.policyId} chainId=${policy.chainId} ${gasCheck.reason}`);
   }
   
   // Call only sensors
