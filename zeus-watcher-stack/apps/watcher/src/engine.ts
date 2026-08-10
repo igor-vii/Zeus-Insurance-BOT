@@ -1,14 +1,15 @@
 import { Policy } from '@zeus/shared';
 import { ObservationSigner } from './signer';
-import { apiWatcher } from './watchers/api';
 import { logWatcher } from './watchers/logs';
-import { gasWatcher } from './watchers/gas';
-import { okxWatcher } from './watchers/okx';
 import { rpcWatcher } from './watchers/rpc';
 import { txHashWatcher } from './watchers/tx-hash';
+import { checkGasEconomics } from './watchers/gas';
 import { NETWORKS } from './config';
+import pino from 'pino';
 
-const WATCHERS = [apiWatcher, logWatcher, gasWatcher, okxWatcher, rpcWatcher, txHashWatcher];
+const logger = pino();
+
+const SENSORS = [logWatcher, rpcWatcher, txHashWatcher];
 
 export interface ObservationResult {
   policyId: string;
@@ -30,41 +31,58 @@ export async function evaluateAndSign(
 ): Promise<ObservationResult> {
   const cfg = Object.values(NETWORKS).find(n => n.chainId === policy.chainId)!;
   
-  let yes = 0, no = 0;
-  const reasons: string[] = [];
-
+  // Gas check (logging only, not voting)
+  const gasCheck = await checkGasEconomics(policy, cfg);
+  if (gasCheck.shouldLog) {
+    logger.warn({ policyId: policy.policyId, chainId: policy.chainId }, gasCheck.reason);
+  }
+  
+  // Call only sensors
   const results = await Promise.allSettled(
-    WATCHERS.map(w => w.check(policy, cfg))
+    SENSORS.map(s => s.check(policy, cfg))
   );
-
+  
+  const sensorVotes: Record<string, 'yes' | 'no' | 'abstain'> = {};
+  const reasons: string[] = [];
+  
   for (let i = 0; i < results.length; i++) {
     const res = results[i];
-    const name = WATCHERS[i].name;
+    const name = SENSORS[i].name;
+    
     if (res.status === 'rejected') {
-      reasons.push(`${name}: abstain (${res.reason.message})`);
-      continue;
+      sensorVotes[name] = 'abstain';
+      reasons.push(`${name}: abstain (${res.reason?.message || 'error'})`);
+    } else {
+      sensorVotes[name] = res.value.vote;
+      reasons.push(`${name}: ${res.value.vote}`);
     }
-    if (res.value.vote === 'yes') { yes++; reasons.push(`${name}: yes`); }
-    else if (res.value.vote === 'no') { no++; reasons.push(`${name}: no`); }
-    else reasons.push(`${name}: abstain`);
   }
-
-  // Вето: если хоть один watcher сказал "no" — отправляем status=0 (reject)
-  // Если >=2 yes (контракту нужно 2 из 3 для payout) — отправляем status=1
-  // Но мы не знаем, сколько уже голосов on-chain. Отправляем наш вердикт.
+  
+  const log = sensorVotes['logs'] || 'abstain';
+  const txHash = sensorVotes['tx-hash'] || 'abstain';
+  
   let status: number;
   let reason: string;
-
-  if (yes >= cfg.quorum) {
+  
+  // Decision logic
+  if (log === 'yes' || txHash === 'yes') {
+    // Any sensor sees failure
     status = 1;
     reason = `Payout: ${reasons.join('; ')}`;
-  } else if (no > 0) {
+  } else if (log === 'no' && txHash === 'no') {
+    // Both sensors see success
     status = 0;
     reason = `Rejected: ${reasons.join('; ')}`;
   } else {
-    return { policyId: policy.policyId, chainId: policy.chainId, observation: null, reason: `Abstain: ${reasons.join('; ')}` };
+    // Abstain - unclear situation
+    return { 
+      policyId: policy.policyId, 
+      chainId: policy.chainId, 
+      observation: null, 
+      reason: `Abstain: ${reasons.join('; ')}` 
+    };
   }
-
+  
   const timestamp = Math.floor(Date.now() / 1000);
   const obs = await signer.signObservation({
     policyId: policy.policyId,
@@ -73,7 +91,7 @@ export async function evaluateAndSign(
     timestamp,
     status,
   });
-
+  
   return {
     policyId: policy.policyId,
     chainId: policy.chainId,
