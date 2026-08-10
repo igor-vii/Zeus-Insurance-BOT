@@ -158,8 +158,8 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {stats.map((stat, i) => (
-            <Card key={i} className="bg-card/50 border-border/50 backdrop-blur-sm">
-              <CardHeader className="pb-2">
+            <Card key={i} className="bg-card/50 border-border/50 backdrop-blur-sm min-h-[160px] flex flex-col">
+              <CardHeader className="pb-2 flex-1">
                 <CardDescription className="font-mono uppercase tracking-wider text-xs">{stat.title}</CardDescription>
                 <CardTitle className="text-3xl font-mono-numbers">
                   {stat.isLoading
@@ -167,8 +167,8 @@ export default function Dashboard() {
                     : stat.value}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">{stat.description}</p>
+              <CardContent className="pt-0">
+                <p className="text-xs text-muted-foreground leading-relaxed">{stat.description}</p>
               </CardContent>
             </Card>
           ))}
