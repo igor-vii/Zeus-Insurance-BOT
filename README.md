@@ -44,8 +44,8 @@ See DEPLOY.md for deployment instructions.
 
 | Contract | Address | Decimals |
 |----------|---------|----------|
-| **ZeusInsuranceV2** | `0x6D84aa31073D4C51b579e468bdb02cc11343296E` | — |
-| **ZeusReserveV2** | `0x6d250b4Eb62E7c8501C4C0319869fC1F1B68a6C2` | — |
+| **ZeusInsuranceV2** | `0x2E592BEBbcC38FC3976125CB2E11312068670C45` | — |
+| **ZeusReserveV2** | `0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56` | — |
 | **ZeusEscrowBOT** | `0x04DbB961817B94EE99e1eAa7cc5c07E1BD042364` | — |
 | **USDT** | `0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C` | 6 |
 
