@@ -25,6 +25,7 @@ import { Slider } from "@/components/ui/slider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
+import { encodeFunctionData } from 'viem';
 
 const isEthAddress = (val: string): boolean => isAddress(val);
 
@@ -125,6 +126,36 @@ export default function BuyInsurance() {
           premium: premiumAmount.toString(), // 🔧 ДОБАВЛЕНО
           chainId,
 });
+        // 🔧 ШАГ 1: Approve USDT на контракт insurance
+        const USDT_ADDRESS = '0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C' as const;
+        const erc20Abi = [{
+          name: 'approve',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' }
+          ],
+          outputs: [{ name: '', type: 'bool' }]
+        }] as const;
+
+        const approveData = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: 'approve',
+          args: [result.to as `0x${string}`, BigInt(result.premiumAmount)],
+        });
+
+        const approveHash = await sendTransactionAsync({
+          to: USDT_ADDRESS,
+          data: approveData,
+        });
+
+        // Ждём подтверждения approve
+        toast({ title: "Step 1/2: Approving USDT...", description: "Waiting for confirmation" });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 🔧 ШАГ 2: Теперь buyPolicy
+        toast({ title: "Step 2/2: Buying policy...", description: "Please confirm the purchase" });
         const hash = await sendTransactionAsync({ to: result.to, data: result.data });
         setApiBuyHash(hash);
       } catch (e: unknown) {

@@ -1,6 +1,6 @@
 import { createConfig, http } from "wagmi";
 import { defineChain, fallback } from "viem"; // ← ДОБАВЛЕН fallback
-import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
+import { injected, walletConnect } from "wagmi/connectors";
 
 // ─── Supported chains ─────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ const wcProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string | un
 
 const connectors = [
   injected({ shimDisconnect: true }),
-  coinbaseWallet({ appName: "Zeus Insurance", appLogoUrl: "/favicon.svg" }),
+  // 🔧 УДАЛЁН coinbaseWallet для уменьшения шума Base SDK
   ...(wcProjectId
     ? [walletConnect({
         projectId: wcProjectId,
