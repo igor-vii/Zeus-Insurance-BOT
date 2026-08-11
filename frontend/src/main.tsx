@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import API_BASE from './lib/api-base';
 
 // === Error Reporting for Mobile Wallet Browsers ===
 function showErrorOverlay(text: string) {
@@ -18,8 +19,7 @@ function showErrorOverlay(text: string) {
 
 function report(msg: string) {
   try {
-    import API_BASE from './lib/api-base';
-    const apiUrl = API_BASE + '/api/client-error';
+    const apiUrl = API_BASE + '/client-error';
     fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
