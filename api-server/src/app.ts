@@ -9,6 +9,7 @@ import { startBackgroundSync } from "./lib/background-sync";
 import { startEventListener } from "./lib/event-listener";
 import { ZEUS_TREASURY, x402Routes } from "./config/x402.js";
 import { connectMCPServer } from "./mcp-server/index.js";
+import testRouter from "./routes/test.js";
 import rateLimit from "express-rate-limit";
 
 const app: Express = express();
