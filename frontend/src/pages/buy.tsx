@@ -5,7 +5,7 @@ import * as z from "zod";
 import {
   useAccount, useWaitForTransactionReceipt, useSendTransaction, useChainId,
 } from "wagmi";
-import { isAddress, parseUnits } from "viem";
+import { isAddress, parseUnits, encodeFunctionData, createPublicClient, http } from "viem";
 import { Shield, ArrowRight, Loader2, AlertTriangle, ShieldCheck, ServerCrash } from "lucide-react";
 import {
   formatUsdc, parseUsdc, computePremium,
@@ -25,7 +25,7 @@ import { Slider } from "@/components/ui/slider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
-import { encodeFunctionData } from 'viem';
+import API_BASE from "@/lib/api-base";
 
 const isEthAddress = (val: string): boolean => isAddress(val);
 
@@ -56,6 +56,12 @@ export default function BuyInsurance() {
   const { sendTransactionAsync, isPending: isBuyingApi } = useSendTransaction();
   const [apiBuyHash, setApiBuyHash] = useState<`0x${string}` | undefined>();
   const { isLoading: isWaitingApiBuy, isSuccess: isApiBuySuccess } = useWaitForTransactionReceipt({ hash: apiBuyHash });
+
+  // Create public client for waitForTransactionReceipt
+  const publicClient = createPublicClient({
+    chain: chainId === 677 ? { id: 677, name: "BOT Chain", nativeCurrency: { name: "BOT", symbol: "BOT", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.botchain.ai"] } } } : { id: 196, name: "X Layer", nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.xlayer.tech"] } } },
+    transport: http(),
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -98,98 +104,115 @@ export default function BuyInsurance() {
 
   // ─── Отправка формы ────────────────────────────────────────────────────────
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!isConnected) {
-      toast({ variant: "destructive", title: "Wallet not connected", description: "Please connect your wallet first." });
-      return;
-    }
+    try {
+      // 🔧 DEBUG: Начало onSubmit
+      console.log('[Buy] onSubmit called');
+      console.log('[Buy] isConnected:', isConnected);
+      console.log('[Buy] chainId:', chainId);
+      console.log('[Buy] isApiMode:', isApiMode);
+      console.log('[Buy] API_BASE:', API_BASE);
+      console.log('[Buy] values:', values);
 
-    // 🔧 ПРОВЕРКА СЕТИ
-    if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
-      toast({
-        variant: "destructive",
-        title: "Wrong Network",
-        description: `Please switch to BOT Chain (677) or X Layer (196). Current network: ${chainId}`,
-      });
-      return;
-    }
-
-    setApiError(null);
-
-    if (isApiMode) {
-      // ─── API MODE ───────────────────────────────────────────────────────────
-      try {
-        const result = await fetchPrepareBuy({
-          seller: values.sellerAddress,
-          amount: amountBigInt.toString(),
-          timeoutSeconds: values.timeoutSeconds,
-          maxRetries: values.retries,
-          premium: premiumAmount.toString(), // 🔧 ДОБАВЛЕНО
-          chainId,
-});
-        // 🔧 ШАГ 1: Approve USDT на контракт insurance
-        const USDT_ADDRESS = '0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C' as const;
-        const erc20Abi = [{
-          name: 'approve',
-          type: 'function',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'spender', type: 'address' },
-            { name: 'amount', type: 'uint256' }
-          ],
-          outputs: [{ name: '', type: 'bool' }]
-        }] as const;
-
-        const approveData = encodeFunctionData({
-          abi: erc20Abi,
-          functionName: 'approve',
-          args: [result.to as `0x${string}`, BigInt(result.premiumAmount)],
-        });
-
-        const approveHash = await sendTransactionAsync({
-          to: USDT_ADDRESS,
-          data: approveData,
-        });
-
-        // Ждём подтверждения approve
-        toast({ title: "Step 1/2: Approving USDT...", description: "Waiting for confirmation" });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // 🔧 ШАГ 2: Теперь buyPolicy
-        toast({ title: "Step 2/2: Buying policy...", description: "Please confirm the purchase" });
-        const hash = await sendTransactionAsync({ to: result.to, data: result.data });
-        setApiBuyHash(hash);
-      } catch (e: unknown) {
-        if (e instanceof ApiError) {
-          setApiError(`API error ${e.status}: ${e.message}`);
-          toast({ variant: "destructive", title: "API Error", description: e.message });
-        } else {
-          const msg = e instanceof Error ? e.message.split("\n")[0] : "Unknown error";
-          toast({ variant: "destructive", title: "Purchase Failed", description: msg });
-        }
-      }
-    } else {
-      // ─── DIRECT MODE ──────────────────────────────────────────────────────
-      if (!isSdkReady) {
-        toast({ variant: "destructive", title: "SDK not ready", description: "Wallet connection still initialising, please wait." });
+      if (!isConnected) {
+        toast({ variant: "destructive", title: "Wallet not connected", description: "Please connect your wallet first." });
         return;
       }
-      setIsBuyingSdk(true);
-      try {
-        const { policyId } = await sdk.insurance.createPolicy(
-          values.sellerAddress,
-          amountBigInt,
-          values.timeoutSeconds,
-          values.retries,
-          premiumAmount // 🔧 ДОБАВЛЕНО (5-й аргумент)
-        );
-        toast({ title: "Policy Created!", description: `Policy #${policyId} is now active.` });
-        form.reset({ ...form.getValues(), sellerAddress: "" });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message.split("\n")[0] : "Unknown error";
-        toast({ variant: "destructive", title: "Purchase Failed", description: msg });
-      } finally {
-        setIsBuyingSdk(false);
+
+      // 🔧 ПРОВЕРКА СЕТИ
+      if (!SUPPORTED_CHAIN_IDS.includes(chainId)) {
+        toast({
+          variant: "destructive",
+          title: "Wrong Network",
+          description: `Please switch to BOT Chain (677) or X Layer (196). Current network: ${chainId}`,
+        });
+        return;
       }
+
+      setApiError(null);
+
+      if (isApiMode) {
+        // ─── API MODE ───────────────────────────────────────────────────────────
+        try {
+          console.log('[Buy] About to call fetchPrepareBuy');
+          const result = await fetchPrepareBuy({
+            seller: values.sellerAddress,
+            amount: amountBigInt.toString(),
+            timeoutSeconds: values.timeoutSeconds,
+            maxRetries: values.retries,
+            premium: premiumAmount.toString(),
+            chainId,
+          });
+          console.log('[Buy] fetchPrepareBuy result:', result);
+
+          // 🔧 ШАГ 1: Approve USDT
+          console.log('[Buy] About to approve');
+          const USDT_ADDRESS = '0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C' as const;
+          const erc20Abi = [{
+            name: 'approve',
+            type: 'function',
+            stateMutability: 'nonpayable',
+            inputs: [
+              { name: 'spender', type: 'address' },
+              { name: 'amount', type: 'uint256' }
+            ],
+            outputs: [{ name: '', type: 'bool' }]
+          }] as const;
+
+          const approveData = encodeFunctionData({
+            abi: erc20Abi,
+            functionName: 'approve',
+            args: [result.to as `0x${string}`, BigInt(result.premiumAmount)],
+          });
+
+          const approveHash = await sendTransactionAsync({
+            to: USDT_ADDRESS,
+            data: approveData,
+          });
+          
+          console.log('[Buy] Approve tx sent:', approveHash);
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          console.log('[Buy] Approve confirmed');
+
+          // 🔧 ШАГ 2: Buy policy
+          console.log('[Buy] About to send buy tx');
+          const hash = await sendTransactionAsync({ to: result.to, data: result.data });
+          setApiBuyHash(hash);
+        } catch (e: unknown) {
+          if (e instanceof ApiError) {
+            setApiError(`API error ${e.status}: ${e.message}`);
+            toast({ variant: "destructive", title: "API Error", description: e.message });
+          } else {
+            const msg = e instanceof Error ? e.message.split("\n")[0] : "Unknown error";
+            toast({ variant: "destructive", title: "Purchase Failed", description: msg });
+          }
+        }
+      } else {
+        // ─── DIRECT MODE ──────────────────────────────────────────────────────
+        if (!isSdkReady) {
+          toast({ variant: "destructive", title: "SDK not ready", description: "Wallet connection still initialising, please wait." });
+          return;
+        }
+        setIsBuyingSdk(true);
+        try {
+          const { policyId } = await sdk.insurance.createPolicy(
+            values.sellerAddress,
+            amountBigInt,
+            values.timeoutSeconds,
+            values.retries,
+            premiumAmount
+          );
+          toast({ title: "Policy Created!", description: `Policy #${policyId} is now active.` });
+          form.reset({ ...form.getValues(), sellerAddress: "" });
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message.split("\n")[0] : "Unknown error";
+          toast({ variant: "destructive", title: "Purchase Failed", description: msg });
+        } finally {
+          setIsBuyingSdk(false);
+        }
+      }
+    } catch (e) {
+      console.error('[Buy] CATCH ERROR:', e);
+      throw e;
     }
   }
 
