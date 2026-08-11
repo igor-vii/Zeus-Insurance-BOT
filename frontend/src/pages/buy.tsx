@@ -188,12 +188,47 @@ export default function BuyInsurance() {
         }
       } else {
         // ─── DIRECT MODE ──────────────────────────────────────────────────────
+        console.log('[Buy-DIRECT] Using SDK path');
         if (!isSdkReady) {
           toast({ variant: "destructive", title: "SDK not ready", description: "Wallet connection still initialising, please wait." });
           return;
         }
         setIsBuyingSdk(true);
         try {
+          // 🔧 ШАГ 1: Approve USDT на insurance contract
+          console.log('[Buy-DIRECT] About to approve USDT');
+          const USDT_ADDRESS = '0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C' as const;
+          const erc20Abi = [{
+            name: 'approve',
+            type: 'function',
+            stateMutability: 'nonpayable',
+            inputs: [
+              { name: 'spender', type: 'address' },
+              { name: 'amount', type: 'uint256' }
+            ],
+            outputs: [{ name: '', type: 'bool' }]
+          }] as const;
+          
+          const insuranceAddress = (sdk as any).getInsuranceAddress 
+            ? (sdk as any).getInsuranceAddress(chainId) 
+            : '0x2E592BEBbcC38FC3976125CB2E11312068670C45';
+          
+          const approveData = encodeFunctionData({
+            abi: erc20Abi,
+            functionName: 'approve',
+            args: [insuranceAddress as `0x${string}`, BigInt(premiumAmount)],
+          });
+          
+          const approveHash = await sendTransactionAsync({
+            to: USDT_ADDRESS,
+            data: approveData,
+          });
+          console.log('[Buy-DIRECT] Approve tx sent:', approveHash);
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          console.log('[Buy-DIRECT] Approve confirmed');
+          
+          // 🔧 ШАГ 2: Теперь вызов SDK
+          console.log('[Buy-DIRECT] About to create policy via SDK');
           const { policyId } = await sdk.insurance.createPolicy(
             values.sellerAddress,
             amountBigInt,
