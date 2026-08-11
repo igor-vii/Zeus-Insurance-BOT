@@ -18,7 +18,8 @@ function showErrorOverlay(text: string) {
 
 function report(msg: string) {
   try {
-    const apiUrl = (import.meta.env.VITE_API_BASE_URL || '/api') + '/client-error';
+    import API_BASE from './lib/api-base';
+    const apiUrl = API_BASE + '/api/client-error';
     fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
