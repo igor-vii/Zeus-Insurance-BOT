@@ -51,6 +51,7 @@ export function fetchPrepareBuy(params: {
   amount: string;
   timeoutSeconds: number;
   maxRetries: number;
+  chainId: number;
 }): Promise<PrepareBuyResult> {
   return apiFetch("/prepare-buy", { method: "POST", body: JSON.stringify(params) });
 }

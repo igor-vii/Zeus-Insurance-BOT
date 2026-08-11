@@ -19,6 +19,7 @@ import {
 } from "../services/pricing.js";
 import { publicClient } from "../lib/chain.js";
 import {
+  getInsuranceAddress,
   ZEUS_INSURANCE_ADDRESS,
   ZEUS_INSURANCE_ABI,
   ZEUS_RESERVE_ADDRESS,
@@ -149,7 +150,13 @@ router.post("/prepare-buy", chainLimiter, async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const { seller, amount, timeoutSeconds, maxRetries, apiEndpoint } = parsed.data;
+  const { seller, amount, timeoutSeconds, maxRetries, apiEndpoint, chainId } = parsed.data;
+  
+  // Выбираем сеть на основе chainId
+  const network = chainId === 677 ? "bot-chain" 
+                 : chainId === 196 ? "x-layer" 
+                 : "base-sepolia";
+  const insuranceAddress = getInsuranceAddress(network);
   const amountBigInt = BigInt(amount);
 
   let riskScore: number;
@@ -234,7 +241,7 @@ router.post("/prepare-buy", chainLimiter, async (req, res) => {
 
   res.json({
     mode: "hybrid",
-    to: ZEUS_INSURANCE_ADDRESS,
+    to: insuranceAddress,
     data,
     riskScore,
     premiumAmount: premiumAmount.toString(),
@@ -339,7 +346,7 @@ router.post("/claim", async (req, res) => {
   });
 
   void invalidatePolicy(policyId);
-  res.json({ to: ZEUS_INSURANCE_ADDRESS, data });
+  res.json({ to: insuranceAddress, data });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -524,7 +531,7 @@ router.post("/observation", chainLimiter, async (req, res) => {
         },
       ],
     });
-    res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data, policyId });
+    res.json({ mode: "hybrid", to: insuranceAddress, data, policyId });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Failed to encode calldata", detail: msg });
@@ -582,7 +589,7 @@ router.post("/slashing-protection", chainLimiter, async (req, res) => {
 
   res.json({
     mode: "hybrid",
-    to: ZEUS_INSURANCE_ADDRESS,
+    to: insuranceAddress,
     data,
     coverageType: "SlashingProtection",
     premiumAmount: premiumAmount.toString(),
@@ -693,7 +700,7 @@ router.post("/report-slashing", chainLimiter, async (req, res) => {
     args: [BigInt(policyId), evidenceHash as `0x${string}`],
   });
 
-  res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data, policyId });
+  res.json({ mode: "hybrid", to: insuranceAddress, data, policyId });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -123,7 +123,8 @@ export default function BuyInsurance() {
           timeoutSeconds: values.timeoutSeconds,
           maxRetries: values.retries,
           premium: premiumAmount.toString(), // 🔧 ДОБАВЛЕНО
-        });
+          chainId,
+});
         const hash = await sendTransactionAsync({ to: result.to, data: result.data });
         setApiBuyHash(hash);
       } catch (e: unknown) {
