@@ -13,7 +13,11 @@ export class ApiError extends Error {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  // Interceptor: ensure absolute URL even if caller passes relative path
+  if (path.startsWith('/') && !path.startsWith('//')) {
+    path = API_BASE + path;
+  }
+  const res = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
