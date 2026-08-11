@@ -28,6 +28,21 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
   </head>
+      <script>
+      // Убиваем старый кеш и service worker при загрузке
+      if ('caches' in window) {
+        caches.keys().then(names => names.forEach(n => caches.delete(n)));
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => 
+          regs.forEach(r => r.unregister())
+        );
+      }
+      // Форсированный reload если есть флаг refresh
+      if (location.hash === '#refresh') {
+        location.reload(true);
+      }
+    </script>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

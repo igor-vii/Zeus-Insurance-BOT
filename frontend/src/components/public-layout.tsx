@@ -153,7 +153,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="mt-8 pt-6 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <p className="text-xs text-white/20">© 2026 Zeus Insurance Protocol. All rights reserved.</p>
+            <p className="text-xs text-white/20">© 2026 Zeus Insurance Protocol. All rights reserved. | <a href="/#refresh" className="text-primary hover:underline">🔄 Refresh app</a></p>
           </div>
         </div>
       </footer>
