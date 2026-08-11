@@ -235,8 +235,8 @@ router.post("/prepare-buy", chainLimiter, async (req, res) => {
 
   const data = encodeFunctionData({
     abi: ZEUS_INSURANCE_ABI,
-    functionName: "buyInsurance" as never,
-    args: [seller as `0x${string}`, amountBigInt, BigInt(timeoutSeconds), BigInt(maxRetries)],
+    functionName: "buyPolicy",
+    args: [seller as `0x${string}`, amountBigInt, BigInt(timeoutSeconds), BigInt(maxRetries), premiumAmount],
   });
 
   res.json({

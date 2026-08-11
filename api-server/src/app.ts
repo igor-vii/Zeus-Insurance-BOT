@@ -13,6 +13,7 @@ import testRouter from "./routes/test.js";
 import rateLimit from "express-rate-limit";
 
 const app: Express = express();
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
