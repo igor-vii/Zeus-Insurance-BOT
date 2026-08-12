@@ -44,6 +44,8 @@ const allowedOrigins = new Set([
     ? corsOriginsEnv.split(",").map((o) => o.trim()).filter(Boolean)
     : []),
   "https://zeus-insurance-frontend.onrender.com", // Production frontend
+  "https://zeus-insurance-bot.onrender.com", // actual Render origin (from user report)
+  "https://zeus-insurance-bot-frontend.onrender.com", // alt Render origin
 ]);
 
 app.use(
