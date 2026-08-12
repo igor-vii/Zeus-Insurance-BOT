@@ -319,14 +319,24 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
           for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
               console.log(`[Buy-DIRECT] createPolicy attempt ${attempt}/${MAX_RETRIES}`);
-              const result = await sdk.insurance.createPolicy(
-                values.sellerAddress,
-                amountBigInt,
-                values.timeoutSeconds,
-                values.retries,
-                premiumAmount
-              );
-              policyId = result.policyId ?? result;
+              const prepResp = await fetch(`${API_BASE}/prepare-buy`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  seller: values.sellerAddress,
+                  amount: amountBigInt.toString(),
+                  timeoutSeconds: values.timeoutSeconds,
+                  maxRetries: values.retries,
+                  chainId,
+                }),
+              });
+              if (!prepResp.ok) throw new Error(`prepare-buy HTTP ${prepResp.status}`);
+              const prep = await prepResp.json();
+              console.log('[Buy-DIRECT] prepare-buy OK → to:', prep.to);
+              const buyHash = await sendTransactionAsync({ to: prep.to as `0x${string}`, data: prep.data as `0x${string}` });
+              console.log('[Buy-DIRECT] ✅ Buy tx sent:', buyHash);
+              await waitForTransaction(buyHash);
+              const policyId = prep.policyId ?? 'confirmed';
               console.log('[Buy-DIRECT] ✅ Policy created:', policyId);
               break;
             } catch (innerErr: any) {
