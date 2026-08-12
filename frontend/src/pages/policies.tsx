@@ -101,7 +101,10 @@ export default function Policies() {
     try {
       const CHUNK = 2000n;
       const latestBlock = await publicClient.getBlockNumber();
-      const totalBlocks = latestBlock - INSURANCE_DEPLOY_BLOCK + 1n;
+      
+      // 🔧 FIX: clamp deployBlock to never exceed latestBlock (prevents negative range)
+      const effectiveDeployBlock = INSURANCE_DEPLOY_BLOCK < latestBlock ? INSURANCE_DEPLOY_BLOCK : 0n;
+      const totalBlocks = latestBlock - effectiveDeployBlock + 1n;
       
       // 🔧 ИСПРАВЛЕНО: добавлен coverageType
       const event = parseAbiItem(
@@ -109,9 +112,9 @@ export default function Policies() {
       );
       
       const allLogs: Awaited<ReturnType<typeof publicClient.getLogs>> = [];
-      let cursor = INSURANCE_DEPLOY_BLOCK;
+      let cursor = effectiveDeployBlock;
 
-      console.info(`[policies] Scanning ${totalBlocks.toLocaleString()} blocks (${INSURANCE_DEPLOY_BLOCK}–${latestBlock}) in chunks of ${CHUNK}`);
+      console.info(`[policies] Scanning ${totalBlocks.toLocaleString()} blocks (${effectiveDeployBlock}–${latestBlock}) in chunks of ${CHUNK}`);
 
       while (cursor <= latestBlock) {
         const chunkEnd = cursor + CHUNK - 1n < latestBlock ? cursor + CHUNK - 1n : latestBlock;
@@ -123,7 +126,7 @@ export default function Policies() {
           toBlock: chunkEnd,
         });
         allLogs.push(...chunk);
-        const scanned = chunkEnd - INSURANCE_DEPLOY_BLOCK + 1n;
+        const scanned = chunkEnd - effectiveDeployBlock + 1n;
         setScanProgress({ scanned, total: totalBlocks });
         cursor = chunkEnd + 1n;
       }
@@ -137,6 +140,7 @@ export default function Policies() {
       setPolicyIds(unique);
       setSyncedBlock(latestBlock);
       setSyncedAt(new Date());
+
     } catch (err) {
       console.error("[policies] Error fetching logs:", err);
       toast({
