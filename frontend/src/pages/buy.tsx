@@ -294,6 +294,30 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
             console.warn('[Buy-DIRECT] reconnect failed:', ce?.message);
           }
 
+          // 🔧 FIX: вызываем connect() напрямую на ТЕКУЩЕМ sdk (React closure держит старый объект)
+          {
+            const anySdk = sdk as any;
+            if (typeof anySdk.connect === 'function') {
+              const signer = anySdk.signer ?? anySdk._signer ?? anySdk.client?.signer ?? anySdk.getSigner?.();
+              const network = chainId === 677 ? 'bot-chain' : 'x-layer';
+              console.log('[Buy-DIRECT] Direct sdk.connect, signer present:', !!signer);
+              try {
+                await anySdk.connect(network, signer);
+                console.log('[Buy-DIRECT] ✅ connect(network,signer) done');
+              } catch (e1: any) {
+                console.warn('[Buy-DIRECT] (network,signer) failed:', e1?.message);
+                try {
+                  await anySdk.connect(chainId, signer);
+                  console.log('[Buy-DIRECT] ✅ connect(chainId,signer) done');
+                } catch (e2: any) {
+                  console.warn('[Buy-DIRECT] connect failed:', e2?.message);
+                }
+              }
+            } else {
+              console.warn('[Buy-DIRECT] sdk.connect is NOT a function');
+            }
+          }
+
           // 🔧 ШАГ 2: SDK createPolicy с retry (MM Mobile иногда роняет второй запрос)
           console.log('[Buy-DIRECT] About to create policy via SDK');
           console.log('[Buy-DIRECT] SDK params:', {
