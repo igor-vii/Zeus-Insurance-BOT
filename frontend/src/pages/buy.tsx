@@ -278,7 +278,12 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
           await waitForTransaction(approveHash);
           console.log('[Buy-DIRECT] ✅ Approve confirmed');
           
-          // 🔧 ШАГ 2: SDK createPolicy
+          // 🔧 КРИТИЧНО: пауза 2 сек — MM Mobile теряет второй wallet-запрос
+          // если отправить сразу после approve (ObjectMultiplex orphaned data bug)
+          console.log('[Buy-DIRECT] ⏳ Waiting 2s for MM Mobile to stabilize...');
+          await new Promise((r) => setTimeout(r, 2000));
+          
+          // 🔧 ШАГ 2: SDK createPolicy с retry (MM Mobile иногда роняет второй запрос)
           console.log('[Buy-DIRECT] About to create policy via SDK');
           console.log('[Buy-DIRECT] SDK params:', {
             seller: values.sellerAddress,
@@ -288,16 +293,37 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
             premium: premiumAmount
           });
           
-          const createPromise = sdk.insurance.createPolicy(
-            values.sellerAddress,
-            amountBigInt,
-            values.timeoutSeconds,
-            values.retries,
-            premiumAmount
-          );
-          
-          const { policyId } = await createPromise;
-          console.log('[Buy-DIRECT] ✅ Policy created:', policyId);
+          let policyId: string | bigint | undefined;
+          const MAX_RETRIES = 2;
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              console.log(`[Buy-DIRECT] createPolicy attempt ${attempt}/${MAX_RETRIES}`);
+              const result = await sdk.insurance.createPolicy(
+                values.sellerAddress,
+                amountBigInt,
+                values.timeoutSeconds,
+                values.retries,
+                premiumAmount
+              );
+              policyId = result.policyId ?? result;
+              console.log('[Buy-DIRECT] ✅ Policy created:', policyId);
+              break;
+            } catch (innerErr: any) {
+              const msg = String(innerErr?.message || innerErr || '');
+              console.error(`[Buy-DIRECT] createPolicy attempt ${attempt} failed:`, msg);
+              // Если последняя попытка — выбрасываем наружу
+              if (attempt === MAX_RETRIES) {
+                // Показываем пользователю читаемое сообщение
+                const userMsg = /disconnect|orphan|rejected|timeout/i.test(msg)
+                  ? 'MetaMask Mobile connection dropped. Please try again (this is a known MM Mobile issue).'
+                  : msg || 'Policy creation failed';
+                toast({ variant: "destructive", title: "Buy failed", description: userMsg });
+                throw innerErr;
+              }
+              // Пауза перед retry
+              await new Promise((r) => setTimeout(r, 1500));
+            }
+          }
           
           toast({ title: "Policy Created!", description: `Policy #${policyId} is now active.` });
           form.reset({ ...form.getValues(), sellerAddress: "" });
