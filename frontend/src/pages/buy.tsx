@@ -232,7 +232,9 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
         console.log('[Buy-DIRECT] Entering try block');
         
         try {
-          // 🔧 ШАГ 1: Approve USDT на insurance contract
+          console.log('[Buy-DIRECT] 🔥 ENTERING TRY BLOCK');
+          
+          // 🔧 ШАГ 1: Approve USDT
           console.log('[Buy-DIRECT] About to approve USDT');
           const USDT_ADDRESS = '0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C' as const;
           const erc20Abi = [{
@@ -250,31 +252,56 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
             ? (sdk as any).getInsuranceAddress(chainId) 
             : '0x2E592BEBbcC38FC3976125CB2E11312068670C45';
           
+          console.log('[Buy-DIRECT] Approve params:', {
+            to: USDT_ADDRESS,
+            spender: insuranceAddress,
+            amount: premiumAmount,
+            chainId
+          });
+          
           const approveData = encodeFunctionData({
             abi: erc20Abi,
             functionName: 'approve',
             args: [insuranceAddress as `0x${string}`, BigInt(premiumAmount)],
           });
           
-          const approveHash = await sendTransactionAsync({
+          console.log('[Buy-DIRECT] Calling sendTransactionAsync for approve...');
+          const approvePromise = sendTransactionAsync({
             to: USDT_ADDRESS,
             data: approveData,
           });
-          console.log('[Buy-DIRECT] Approve tx sent:', approveHash);
-          await waitForTransaction(approveHash);
-          console.log('[Buy-DIRECT] Approve confirmed');
           
-          // 🔧 ШАГ 2: Теперь вызов SDK
+          const approveHash = await approvePromise;
+          console.log('[Buy-DIRECT] ✅ Approve tx sent:', approveHash);
+          
+          console.log('[Buy-DIRECT] Waiting for approve confirmation...');
+          await waitForTransaction(approveHash);
+          console.log('[Buy-DIRECT] ✅ Approve confirmed');
+          
+          // 🔧 ШАГ 2: SDK createPolicy
           console.log('[Buy-DIRECT] About to create policy via SDK');
-          const { policyId } = await sdk.insurance.createPolicy(
+          console.log('[Buy-DIRECT] SDK params:', {
+            seller: values.sellerAddress,
+            amount: amountBigInt,
+            timeout: values.timeoutSeconds,
+            retries: values.retries,
+            premium: premiumAmount
+          });
+          
+          const createPromise = sdk.insurance.createPolicy(
             values.sellerAddress,
             amountBigInt,
             values.timeoutSeconds,
             values.retries,
             premiumAmount
           );
+          
+          const { policyId } = await createPromise;
+          console.log('[Buy-DIRECT] ✅ Policy created:', policyId);
+          
           toast({ title: "Policy Created!", description: `Policy #${policyId} is now active.` });
           form.reset({ ...form.getValues(), sellerAddress: "" });
+
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message.split("\n")[0] : "Unknown error";
           toast({ variant: "destructive", title: "Purchase Failed", description: msg });
