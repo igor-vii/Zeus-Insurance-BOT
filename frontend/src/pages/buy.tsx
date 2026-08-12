@@ -5,7 +5,7 @@ import * as z from "zod";
 import {
   useAccount, useWaitForTransactionReceipt, useSendTransaction, useChainId,
 } from "wagmi";
-import { isAddress, parseUnits, encodeFunctionData, createPublicClient, http } from "viem";
+import { isAddress, parseUnits, encodeFunctionData } from "viem";
 import { Shield, ArrowRight, Loader2, AlertTriangle, ShieldCheck, ServerCrash } from "lucide-react";
 import {
   formatUsdc, parseUsdc, computePremium,
@@ -57,11 +57,6 @@ export default function BuyInsurance() {
   const [apiBuyHash, setApiBuyHash] = useState<`0x${string}` | undefined>();
   const { isLoading: isWaitingApiBuy, isSuccess: isApiBuySuccess } = useWaitForTransactionReceipt({ hash: apiBuyHash });
 
-  // Create public client for waitForTransactionReceipt
-  const publicClient = createPublicClient({
-    chain: chainId === 677 ? { id: 677, name: "BOT Chain", nativeCurrency: { name: "BOT", symbol: "BOT", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.botchain.ai"] } } } : { id: 196, name: "X Layer", nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 }, rpcUrls: { default: { http: ["https://rpc.xlayer.tech"] } } },
-    transport: http(),
-  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -101,6 +96,35 @@ export default function BuyInsurance() {
   const isBuying = isApiMode ? isBuyingApi : isBuyingSdk;
   const isWaiting = isApiMode ? isWaitingApiBuy : false;
   const totalCost = amountBigInt > 0 ? premiumAmount : 0n;
+
+
+// Helper function to wait for transaction confirmation
+const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void> => {
+  const rpcUrl = chainId === 677 ? 'https://rpc.botchain.ai' : 'https://rpc.xlayer.tech';
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getTransactionReceipt',
+          params: [hash],
+          id: 1
+        })
+      });
+      const data = await response.json();
+      if (data.result && data.result.status) {
+        console.log('[Buy] Transaction confirmed:', hash);
+        return;
+      }
+    } catch (err) {
+      console.warn('[Buy] Polling attempt', i + 1, 'failed:', err);
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+  }
+  console.warn('[Buy] Transaction not confirmed after', maxAttempts, 'attempts');
+};
 
   // ─── Отправка формы ────────────────────────────────────────────────────────
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -170,7 +194,7 @@ export default function BuyInsurance() {
           });
           
           console.log('[Buy] Approve tx sent:', approveHash);
-          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          await waitForTransaction(approveHash);
           console.log('[Buy] Approve confirmed');
 
           // 🔧 ШАГ 2: Buy policy
@@ -224,7 +248,7 @@ export default function BuyInsurance() {
             data: approveData,
           });
           console.log('[Buy-DIRECT] Approve tx sent:', approveHash);
-          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          await waitForTransaction(approveHash);
           console.log('[Buy-DIRECT] Approve confirmed');
           
           // 🔧 ШАГ 2: Теперь вызов SDK
