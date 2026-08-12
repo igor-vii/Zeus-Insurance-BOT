@@ -44,7 +44,7 @@ export default function BuyInsurance() {
   const chainId = useChainId();
   const { toast } = useToast();
   const { isApiMode } = useApiMode();
-  const { sdk, isSdkReady, sdkError } = useZeusSDK();
+  const { sdk, isSdkReady, sdkError, reconnect } = useZeusSDK();
 
   const [premiumBps, setPremiumBps] = useState(700n);
   const [premiumAmount, setPremiumAmount] = useState(0n);
@@ -283,6 +283,17 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
           console.log('[Buy-DIRECT] ⏳ Waiting 2s for MM Mobile to stabilize...');
           await new Promise((r) => setTimeout(r, 2000));
           
+          // 🔧 FIX: MM Mobile теряет SDK-соединение — переподключаем перед createPolicy
+          try {
+            if (typeof reconnect === 'function') {
+              console.log('[Buy-DIRECT] Calling reconnect() before createPolicy...');
+              await reconnect();
+              console.log('[Buy-DIRECT] ✅ reconnect() done');
+            }
+          } catch (ce: any) {
+            console.warn('[Buy-DIRECT] reconnect failed:', ce?.message);
+          }
+
           // 🔧 ШАГ 2: SDK createPolicy с retry (MM Mobile иногда роняет второй запрос)
           console.log('[Buy-DIRECT] About to create policy via SDK');
           console.log('[Buy-DIRECT] SDK params:', {
