@@ -213,11 +213,24 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
       } else {
         // ─── DIRECT MODE ──────────────────────────────────────────────────────
         console.log('[Buy-DIRECT] Using SDK path');
+        console.log('[Buy-DIRECT] isSdkReady:', isSdkReady);
+        
         if (!isSdkReady) {
+          console.warn('[Buy-DIRECT] SDK not ready, showing toast');
           toast({ variant: "destructive", title: "SDK not ready", description: "Wallet connection still initialising, please wait." });
           return;
         }
+        
+        console.log('[Buy-DIRECT] Calling setIsBuyingSdk(true)');
+        if (typeof setIsBuyingSdk !== 'function') {
+          console.error('[Buy-DIRECT] setIsBuyingSdk is not a function!');
+          toast({ variant: "destructive", title: "Internal Error", description: "State setter missing" });
+          return;
+        }
+        
         setIsBuyingSdk(true);
+        console.log('[Buy-DIRECT] Entering try block');
+        
         try {
           // 🔧 ШАГ 1: Approve USDT на insurance contract
           console.log('[Buy-DIRECT] About to approve USDT');
@@ -270,7 +283,9 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
         }
       }
     } catch (e) {
-      console.error('[Buy] CATCH ERROR:', e);
+      console.error('[Buy] OUTER CATCH ERROR:', e);
+      console.error('[Buy] Error stack:', e instanceof Error ? e.stack : 'no stack');
+      toast({ variant: "destructive", title: "Fatal Error", description: e instanceof Error ? e.message : String(e) });
       throw e;
     }
   }
