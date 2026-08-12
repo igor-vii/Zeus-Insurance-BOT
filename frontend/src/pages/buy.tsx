@@ -44,7 +44,7 @@ export default function BuyInsurance() {
   const chainId = useChainId();
   const { toast } = useToast();
   const { isApiMode } = useApiMode();
-  const { sdk, isReady: isSdkReady, sdkError } = useZeusSDK();
+  const { sdk, isSdkReady, sdkError } = useZeusSDK();
 
   const [premiumBps, setPremiumBps] = useState(700n);
   const [premiumAmount, setPremiumAmount] = useState(0n);
