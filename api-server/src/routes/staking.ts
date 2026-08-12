@@ -53,11 +53,11 @@ router.get("/positions", async (_req, res) => {
         functionName: "getPosition",
         args: [id],
       });
-      if (p.status === 0 && Number(p.expiry) > now) {
+      if (Number(p.status) === 0 && Number(p.expiry) > now) {
         positions.push({
           positionId: id.toString(),
           validatorKey: p.validatorKey,
-          validatorPubkey: (log.args as any).validatorPubkey || "", // filled by dApp at buy time via metadata
+          validatorPubkey: "", // v1: пока не передаётся on-chain; consensus-monitor вернёт isSlashed=false для пустых
           owner: p.owner,
           expiry: Number(p.expiry),
         });
