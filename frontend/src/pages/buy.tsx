@@ -26,6 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import API_BASE from "@/lib/api-base";
+import { ethers } from "ethers";
 
 const isEthAddress = (val: string): boolean => isAddress(val);
 
@@ -283,38 +284,23 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
           console.log('[Buy-DIRECT] ⏳ Waiting 2s for MM Mobile to stabilize...');
           await new Promise((r) => setTimeout(r, 2000));
           
-          // 🔧 FIX: MM Mobile теряет SDK-соединение — переподключаем перед createPolicy
-          try {
-            if (typeof reconnect === 'function') {
-              console.log('[Buy-DIRECT] Calling reconnect() before createPolicy...');
-              await reconnect();
-              console.log('[Buy-DIRECT] ✅ reconnect() done');
-            }
-          } catch (ce: any) {
-            console.warn('[Buy-DIRECT] reconnect failed:', ce?.message);
-          }
-
-          // 🔧 FIX: вызываем connect() напрямую на ТЕКУЩЕМ sdk (React closure держит старый объект)
+          // 🔧 ФИНАЛЬНЫЙ ФИКС: создаём ethers-совместимый signer и подключаем SDK к правильной сети
           {
-            const anySdk = sdk as any;
-            if (typeof anySdk.connect === 'function') {
-              const signer = anySdk.signer ?? anySdk._signer ?? anySdk.client?.signer ?? anySdk.getSigner?.();
-              const network = chainId === 677 ? 'bot-chain' : 'x-layer';
-              console.log('[Buy-DIRECT] Direct sdk.connect, signer present:', !!signer);
-              try {
-                await anySdk.connect(network, signer);
-                console.log('[Buy-DIRECT] ✅ connect(network,signer) done');
-              } catch (e1: any) {
-                console.warn('[Buy-DIRECT] (network,signer) failed:', e1?.message);
-                try {
-                  await anySdk.connect(chainId, signer);
-                  console.log('[Buy-DIRECT] ✅ connect(chainId,signer) done');
-                } catch (e2: any) {
-                  console.warn('[Buy-DIRECT] connect failed:', e2?.message);
-                }
-              }
-            } else {
-              console.warn('[Buy-DIRECT] sdk.connect is NOT a function');
+            console.log('[Buy-DIRECT] Creating ethers BrowserProvider signer for SDK...');
+            const provider = new ethers.BrowserProvider((window as any).ethereum);
+            const ethersSigner = await provider.getSigner();
+            console.log('[Buy-DIRECT] ✅ ethersSigner created, address:', await ethersSigner.getAddress());
+            
+            const networkKey = chainId === 677 ? 'bot-chain-mainnet' : 'x-layer';
+            console.log('[Buy-DIRECT] Connecting SDK to network:', networkKey);
+            
+            try {
+              await (sdk as any).connect(networkKey, ethersSigner);
+              console.log('[Buy-DIRECT] ✅ SDK connected to', networkKey);
+            } catch (e: any) {
+              console.error('[Buy-DIRECT] SDK connect failed:', e?.message);
+              toast({ variant: "destructive", title: "SDK Error", description: e?.message || 'Failed to connect SDK' });
+              throw e;
             }
           }
 
