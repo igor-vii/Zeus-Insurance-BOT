@@ -213,10 +213,10 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
       } else {
         // ─── DIRECT MODE ──────────────────────────────────────────────────────
         console.log('[Buy-DIRECT] Using SDK path');
-        console.log('[Buy-DIRECT] isSdkReady:', isSdkReady);
+        console.log('[Buy-DIRECT] isSdkReady:', isSdkReady, 'sdk:', !!sdk, 'sdk.insurance:', !!(sdk && (sdk as any).insurance));
         
-        if (!isSdkReady) {
-          console.warn('[Buy-DIRECT] SDK not ready, showing toast');
+        if (!isSdkReady && !sdk) {
+          console.warn('[Buy-DIRECT] SDK not ready (no sdk object), showing toast');
           toast({ variant: "destructive", title: "SDK not ready", description: "Wallet connection still initialising, please wait." });
           return;
         }
