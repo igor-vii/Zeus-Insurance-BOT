@@ -440,3 +440,14 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
     </motion.div>
   );
 }
+
+
+// 🔍 TEMP DIAGNOSTICS: показать скрытые async-ошибки на мобилке
+if (typeof window !== "undefined") {
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("[Zeus] UNHANDLED REJECTION:", e.reason);
+  });
+  window.addEventListener("error", (e) => {
+    console.error("[Zeus] WINDOW ERROR:", e.message);
+  });
+}
