@@ -29,7 +29,7 @@ import {
  */
 const INSURANCE_ABI = [
   // ── Policy management ──────────────────────────────────────────────────────
-  "function buyInsurance(address seller, uint256 amount, uint256 timeoutSeconds, uint256 maxRetries) external",
+  "function buyPolicy(address seller, uint256 amount, uint256 timeoutSeconds, uint256 maxRetries) external",
   "function claimPayout(uint256 policyId) external",
   "function getPolicy(uint256 policyId) external view returns (tuple(address buyer, address seller, uint256 amount, uint256 premium, uint256 retryDeadline, uint256 maxRetries, uint8 status))",
   // ── SlashingProtection ─────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ export class ZeusInsurance {
    * Purchase an insurance policy.
    *
    * This method automatically approves the USDC premium transfer before
-   * calling `buyInsurance` on the contract, so callers do not need a
+   * calling `buyPolicy` on the contract, so callers do not need a
    * separate approve step.
    *
    * Premium formula (mirrors the contract):
@@ -133,6 +133,10 @@ export class ZeusInsurance {
     timeout: number,
     retries: number,
   ): Promise<{ policyId: number; tx: TransactionResult }> {
+    console.log('[ZeusSDK] createPolicy called');
+    console.log('[ZeusSDK] chainId:', this.client.getNetwork().chainId);
+    console.log('[ZeusSDK] insuranceAddress:', this.client.getNetwork().insuranceAddress);
+
     const parsed = CreatePolicySchema.safeParse({ seller, amount, timeout, retries });
     if (!parsed.success) {
       throw new ZeusValidationError(
@@ -167,9 +171,9 @@ export class ZeusInsurance {
       );
     }
 
-    // --- Call buyInsurance on-chain ---
+    // --- Call buyPolicy on-chain ---
     try {
-      const tx = await contract.buyInsurance(
+      const tx = await contract.buyPolicy(
         parsed.data.seller,
         parsed.data.amount,
         BigInt(parsed.data.timeout),
