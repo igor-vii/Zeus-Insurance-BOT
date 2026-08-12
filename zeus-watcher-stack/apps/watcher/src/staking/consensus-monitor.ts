@@ -1,4 +1,4 @@
-import { createWalletClient, createPublicClient, http, keccak256, encodeAbiParameters } from 'viem';
+import { createWalletClient, http, keccak256, encodeAbiParameters } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const REGISTRY_ABI = [
@@ -89,4 +89,8 @@ export function startConsensusMonitor(): void {
 }
 
 // Direct run support
-if (require.main === module) startConsensusMonitor();
+// Прямой запуск: npx tsx src/staking/consensus-monitor.ts
+// ESM-safe: проверяем оба варианта (require.main для CJS, undefined для ESM)
+if (typeof require !== 'undefined' && require.main === module) {
+  startConsensusMonitor();
+}
