@@ -15,7 +15,7 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
     reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
     token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on X Layer
     escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
-    deployBlock: 1_000_000n,
+    deployBlock: 0n, // TODO: set actual deploy block after mainnet deployment
   },
   // BOT Chain Mainnet (chain 677)
   677: {
@@ -23,7 +23,7 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
     reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
     token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain Mainnet
     escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
-    deployBlock: 44_268_060n,
+    deployBlock: 0n, // TODO: set actual deploy block after mainnet deployment
   },
 };
 
