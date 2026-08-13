@@ -59,5 +59,8 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 // === End Error Reporting ===
 
-createRoot(document.getElementById('root')!).render(<App />
-  </Sentry.ErrorBoundary>);
+createRoot(document.getElementById('root')!).render(
+  <Sentry.ErrorBoundary fallback={<div>Something went wrong</div>}>
+    <App />
+  </Sentry.ErrorBoundary>
+);
