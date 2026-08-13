@@ -12,18 +12,18 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
   // X Layer Mainnet (chain 196)
   196: {
     insurance:   "0xe43e55d96925a3FBFdB5DE0a4AeC1a4bab4dDdB0" as `0x${string}`,
-    reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
-    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on X Layer
-    escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
-    deployBlock: 0n, // TODO: set actual deploy block after mainnet deployment
+    reserve:     "0x6D84aa31073D4C51b579e468bdb02cc11343296E" as `0x${string}`,
+    token:       "0x74b7f16337b8972027f6196a17a631ac6de26d22" as `0x${string}`, // USDC on X Layer
+    escrow:      "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56" as `0x${string}`, // ⚠️ проверить — код есть но функции ревертятся
+    deployBlock: 67300000n, // ≈ приблизительный (RPC таймауты на точном поиске)
   },
   // BOT Chain Mainnet (chain 677)
   677: {
-    insurance:   "0xe43e55d96925a3FBFdB5DE0a4AeC1a4bab4dDdB0" as `0x${string}`,
-    reserve:     "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c" as `0x${string}`,
-    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain Mainnet
-    escrow:      "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5" as `0x${string}`,
-    deployBlock: 0n, // TODO: set actual deploy block after mainnet deployment
+    insurance:   "0x2E592BEBbcC38FC3976125CB2E11312068670C45" as `0x${string}`,
+    reserve:     "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56" as `0x${string}`,
+    token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain
+    escrow:      "0xa5404EaE15938Dc2cA1aad914CD868b86d8A0eC8" as `0x${string}`,
+    deployBlock: 19080279n, // точный (бинарный поиск через RPC)
   },
 };
 
