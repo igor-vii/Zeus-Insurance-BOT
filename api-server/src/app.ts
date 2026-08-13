@@ -96,6 +96,7 @@ app.get(["/health", "/healthz"], (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use(llmsTxtRouter);
 app.use("/api", router);
 
 // MCP server — AI agent interface at POST /mcp
