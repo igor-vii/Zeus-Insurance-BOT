@@ -13,6 +13,14 @@ import { connectMCPServer } from "./mcp-server/index.js";
 // import testRouter from "./routes/test.js";
 import rateLimit from "express-rate-limit";
 
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+  dsn: process.env["SENTRY_DSN"] ?? "",
+  environment: process.env["NODE_ENV"] ?? "development",
+  tracesSampleRate: 0.1,
+});
+
 const app: Express = express();
 app.set("trust proxy", 1);
 
@@ -98,5 +106,7 @@ startBackgroundSync();
 
 // Start on-chain event listener (disable with ENABLE_EVENT_LISTENER=false)
 startEventListener();
+
+app.use(Sentry.Handlers.errorHandler());
 
 export default app;
