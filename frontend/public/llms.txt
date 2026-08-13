@@ -1,0 +1,37 @@
+# Zeus Insurance Protocol
+
+> Decentralized insurance and escrow protocol for autonomous AI agents. Provides on-chain coverage against API failures, validator slashing, and oracle downtime. Supports MCP (Model Context Protocol) for direct agent integration. Live on X Layer (chainId 196) and BOT Chain Mainnet (chainId 677).
+
+## For AI Agents
+
+### MCP Server (Recommended)
+- Endpoint: POST https://zeus-insurance-bot-api-production.up.railway.app/mcp
+- Transport: Streamable HTTP (JSON-RPC 2.0)
+- Tools: insurance_quote, insurance_prepare_buy, insurance_claim, insurance_get_policies, insurance_reserve_stats, escrow_prepare_deposit, escrow_prepare_confirm
+
+### REST API
+- Base URL: https://zeus-insurance-bot-api-production.up.railway.app/api
+- Health: GET /health
+- Rate limit: 100 req / 15 min
+
+## Smart Contracts
+
+| Contract | X Layer (196) | BOT Chain (677) |
+|----------|--------------|-----------------|
+| ZeusInsuranceV2 | 0xe43e55d96925a3FBFdB5DE0a4AeC1a4bab4dDdB0 | 0x2E592BEBbcC38FC3976125CB2E11312068670C45 |
+| ZeusReserveV2 | 0x6D84aa31073D4C51b579e468bdb02cc11343296E | 0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56 |
+| ZeusEscrowBOT | pending redeploy | 0xa5404EaE15938Dc2cA1aad914CD868b86d8A0eC8 |
+
+## SDK
+
+Install: pnpm add @zeus/sdk ethers
+
+## Documentation
+- Frontend docs: https://zeus-insurance-bot.onrender.com/docs
+- GitHub: https://github.com/igor-vii/Zeus-Insurance-BOT
+- Deploy guide: DEPLOY.md
+- Security audit: August 2026
+
+## Optional
+- Smart contract source: https://github.com/igor-vii/Zeus-Insurance-BOT/tree/main/contracts/src
+- Watcher stack: https://github.com/igor-vii/Zeus-Insurance-BOT/tree/main/zeus-watcher-stack
