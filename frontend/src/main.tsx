@@ -3,6 +3,20 @@ import App from './App';
 import './index.css';
 import API_BASE from './lib/api-base';
 
+import * as Sentry from "@sentry/react";
+
+Sentry.init({
+  dsn: import.meta.env.VITE_SENTRY_DSN,
+  environment: import.meta.env.MODE,
+  integrations: [
+    new Sentry.BrowserTracing(),
+    new Sentry.Replay(),
+  ],
+  tracesSampleRate: 0.1,
+  replaysSessionSampleRate: 0.05,
+  replaysOnErrorSampleRate: 1.0,
+});
+
 // === Error Reporting for Mobile Wallet Browsers ===
 function showErrorOverlay(text: string) {
   let el = document.getElementById('zeus-error-overlay') as HTMLDivElement | null;
@@ -45,4 +59,5 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 // === End Error Reporting ===
 
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(<App />
+  </Sentry.ErrorBoundary>);
