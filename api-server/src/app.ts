@@ -109,6 +109,6 @@ startBackgroundSync();
 // Start on-chain event listener (disable with ENABLE_EVENT_LISTENER=false)
 startEventListener();
 
-app.use(Sentry.Handlers.errorHandler());
+app.use(Sentry.expressErrorHandler());
 
 export default app;
