@@ -17,6 +17,8 @@ export type Network = z.infer<typeof NetworkSchema>;
 export interface NetworkConfig {
   name: string;
   chainId: number;
+  /** Block number where the first contract was deployed (used for efficient event scanning). */
+  deployBlock?: number;
   /** ZeusEscrowBOT contract address */
   escrowAddress: string;
   /** ZeusInsuranceV2 contract address */
@@ -78,11 +80,12 @@ export const NETWORKS: Record<Network, NetworkConfig> = {
   "x-layer": {
     name: "x-layer",
     chainId: 196,
-    escrowAddress: "0x0d4AD4C6b60F445d0e478E0AF48075340AC51Cf5",
-    insuranceAddress: "0x8D10C2c6C92b613C1938fe532f0e391044e76188",
-    reserveAddress: "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c",
+    escrowAddress: "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56",
+    insuranceAddress: "0xe43e55d96925a3FBFdB5DE0a4AeC1a4bab4dDdB0",
+    reserveAddress: "0x6D84aa31073D4C51b579e468bdb02cc11343296E",
     usdcAddress: "0x74b7f16337b8972027f6196a17a631ac6de26d22",
     rpcUrl: "https://rpc.xlayer.tech",
+    deployBlock: 67506529,
   },
   "bot-chain-mainnet": {
     name: "bot-chain-mainnet",
@@ -92,6 +95,7 @@ export const NETWORKS: Record<Network, NetworkConfig> = {
     reserveAddress:   "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56",
     usdcAddress:      "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C", // USDT on BOT Chain
     rpcUrl: "https://rpc.botchain.ai",
+    deployBlock: 19080279,
   },
 };
 
