@@ -1,137 +1,142 @@
 # Zeus Insurance Protocol
 
-**Decentralized Trust Layer for Autonomous AI Commerce**
+**Decentralized insurance for autonomous AI agents.** Live on X Layer (196) and BOT Chain (677).
 
-**Version:** v2.4  
-**Deployed:** 2026-08-05
-
----
-
-## Overview
-
-Zeus is a modular protocol for trust infrastructure in autonomous AI economies.
-
-It provides:
-- **Insurance** — protects against API failures, validator slashing, and oracle downtime
-- **Escrow** — secures agent-to-agent transactions with 0.7% + $0.02 fee
-- **Slashing Protection** — validator coverage with flexible rates (10–20%)
-- **Reserve Management** — liquidity pool with daily payout caps and threshold protection
+AI agents buy delivery-failure and slashing protection policies via MCP or REST API. Premiums are priced dynamically using HUMI/WAMI trust scores. Claims are paid automatically from on-chain reserves.
 
 ---
 
+## For AI Agents
 
+### Quick Start (MCP)
 
-## Security Audit (August 2026)
+Connect to the MCP endpoint and call tools directly:
 
-Protocol audit completed on 2026-08-08. Applied fixes:
+    POST https://zeus-insurance-bot-api-production.up.railway.app/mcp
+    Content-Type: application/json
 
-- watcherList swap-and-pop (contracts/ZeusInsuranceV2.sol)
-- Strict CORS allowlist (api-server/app.ts)
-- JWT authentication (api-server/routes/insurance.ts)
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "insurance_quote",
+        "arguments": {
+          "amount": "1000",
+          "timeoutSeconds": 86400,
+          "maxRetries": 3,
+          "chainId": 196
+        }
+      }
+    }
 
-Known architectural decisions (not fixed):
-- Centralized reserve withdrawals
-- API gas sponsorship
-- reportSlashing blind relay
+### Available MCP Tools
 
-See DEPLOY.md for deployment instructions.
+| Tool | Description | Read/Write |
+|------|-------------|------------|
+| insurance_quote | Calculate premium for a policy | Read |
+| insurance_prepare_buy | Get signed calldata for buyPolicy() | Write |
+| insurance_get_policies | List active policies by buyer address | Read |
+| insurance_claim | File a claim for a failed delivery | Write |
+| insurance_reserve_stats | Check reserve fund health | Read |
+| escrow_prepare_deposit | Prepare escrow deposit calldata | Write |
+| escrow_prepare_confirm | Confirm execution and release funds | Write |
+
+### Example: Buy a Policy in 3 Steps
+
+**Step 1 - Get a quote:**
+
+    {
+      "jsonrpc": "2.0", "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "insurance_quote",
+        "arguments": { "amount": "500", "timeoutSeconds": 86400, "maxRetries": 2, "chainId": 196 }
+      }
+    }
+
+Response: { "premium": "35.00", "totalCost": "535.00", "token": "USDC" }
+
+**Step 2 - Prepare calldata:**
+
+    {
+      "jsonrpc": "2.0", "id": 2,
+      "method": "tools/call",
+      "params": {
+        "name": "insurance_prepare_buy",
+        "arguments": {
+          "seller": "0xExecutorAddress...",
+          "amount": "500",
+          "timeoutSeconds": 86400,
+          "maxRetries": 2,
+          "chainId": 196,
+          "buyerPrivateKey": "0x..."
+        }
+      }
+    }
+
+Response: { "to": "0xa540...", "data": "0x...", "value": "0" }
+
+**Step 3 - Submit on-chain:**
+Send the returned to + data as a transaction on X Layer (chain 196). The agent must have approved USDC spending to the insurance contract first.
+
+### Discovery
+
+- llms.txt (API): https://zeus-insurance-bot-api-production.up.railway.app/llms.txt
+- llms.txt (Frontend): https://zeus-insurance-bot.onrender.com/llms.txt
+- MCP Endpoint: POST /mcp (JSON-RPC 2.0, stateless)
+- Health Check: GET /health
+
+### Supported Networks
+
+| Network | Chain ID | Token | Insurance Contract |
+|---------|----------|-------|--------------------|
+| X Layer Mainnet | 196 | USDC (0x74b7...6d22) | 0xa540...0eC8 |
+| BOT Chain Mainnet | 677 | USDT (0xaBab...7a3C) | 0x2E59...69ef |
+
+### Rate Limiting
+
+100 requests per 15 minutes per IP. No API key required for public endpoints.
+
+### SDK
+
+    npm install @zeus/sdk
+
+    import { ZeusClient } from "@zeus/sdk";
+    const client = new ZeusClient({ chainId: 196 });
+    const quote = await client.getQuote({ amount: "1000", timeoutSeconds: 86400, maxRetries: 3 });
+    console.log("Premium: " + quote.premium + " USDC");
 
 ---
 
-## Contract Addresses
+## Architecture
 
-### BOT Chain (chainId 677)
+    AI Agent
+      |
+      +-- MCP (JSON-RPC 2.0) --> api-server --> X Layer / BOT Chain
+      +-- REST API -----------> api-server --> Smart Contracts
+      +-- SDK (@zeus/sdk) -----> ethers.js ---> On-chain directly
 
-| Contract | Address | Decimals |
+### Smart Contracts (X Layer)
+
+| Contract | Address | Verified |
 |----------|---------|----------|
-| **ZeusInsuranceV2** | `0x2E592BEBbcC38FC3976125CB2E11312068670C45` | — |
-| **ZeusReserveV2** | `0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56` | — |
-| **ZeusEscrowBOT** | `0x04DbB961817B94EE99e1eAa7cc5c07E1BD042364` | — |
-| **USDT** | `0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C` | 6 |
+| ZeusReserveV2 (delivery) | 0xeB6A...591c | done |
+| ZeusInsuranceV2 | 0xa540...0eC8 | pending |
+| ZeusEscrowBOT | 0x882c...1546 | done |
+| WatcherRegistry | 0xC175...b3c1 | pending |
+| ZeusReserveV2 (staking) | 0x9d3D...19dE | pending |
+| ZeusStakingInsurance | 0x230f...B96b | pending |
 
-**Explorer:** [https://scan.botchain.ai](https://scan.botchain.ai)
+### Trust Layer (HUMI/WAMI)
 
----
-
-### X Layer (chainId 196)
-
-| Contract | Address | Decimals |
-|----------|---------|----------|
-| **ZeusInsuranceV2** | `0x7483bB3C605f3187808b028d9e086AbCa2a34676` | — |
-| **ZeusReserveV2** | `0xc931c85EDeeb4949DE752c57bf768fe865554b56` | — |
-| **ZeusEscrowBOT** | `0x6d250b4Eb62E7c8501C4C0319869fC1F1B68a6C2` | — |
-| **USDC** | `0x74b7f16337b8972027f6196a17a631ac6de26d22` | 6 |
-
-**Explorer:** [https://www.oklink.com/xlayer](https://www.oklink.com/xlayer)
+Agent trust scores influence premium pricing:
+- Elite agents (HUMI >= 800) -> base premium
+- Standard agents (HUMI 400-799) -> base + 3%
+- New/unknown agents (HUMI < 400) -> base + 5%
 
 ---
 
-## RPC Endpoints
+## License
 
-| Network | Primary RPC | Fallback RPC |
-|---------|-------------|--------------|
-| **BOT Chain** | `https://rpc.botchain.ai` | — |
-| **X Layer** | `https://rpc.xlayer.tech` | `https://xlayerrpc.okx.com` |
-
----
-
-## Quick Start
-
-### Buy Policy via API (AI Agent)
-
-```bash
-curl -X POST https://zeus-insurance-bot-api-production.up.railway.app/api/prepare-buy \
-  -H "Content-Type: application/json" \
-  -d '{
-    "seller": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    "amount": "1000000",
-    "timeoutSeconds": 86400,
-    "maxRetries": 3,
-    "premium": "25000",
-    "chainId": 196
-  }'
-Response:
-
-json
-{
-  "to": "0x7483bB3C605f3187808b028d9e086AbCa2a34676",
-  "data": "0x...",
-  "policyId": "42"
-}
-Send the returned data to to via your wallet or eth_sendRawTransaction.
-
-Clone & Install
-bash
-git clone https://github.com/igor-vii/Zeus-Insurance-BOT
-cd Zeus-Insurance-BOT
-pnpm install
-Deploy Contracts
-bash
-cd contracts
-pnpm compile
-pnpm deploy:bot-chain-mainnet
-pnpm deploy:x-layer-mainnet
-Run API Server
-bash
-cd api-server
-pnpm dev
-Run Frontend
-bash
-cd frontend
-pnpm dev
-Deployment Status
-Component	Status	URL
-Frontend	✅ Live	https://zeus-insurance-frontend.onrender.com
-API	✅ Live	https://zeus-insurance-bot-api-production.up.railway.app
-Watcher	✅ Live	Internal service (Railway)
-Verified ABI & Source
-Contract source code and ABI are verified on the respective chain explorers (links above).
-
-Contact
-Igor Ivanov — Founder
-GitHub: @igor-vii
-Telegram: @IvanovVII
-Email: zeusinsurance@mail.ru
-
-License
-MIT © 2026 Igor Ivanov — Zeus
+MIT
