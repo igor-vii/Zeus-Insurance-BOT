@@ -7,6 +7,9 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
   reserve:   `0x${string}`;
   token:     `0x${string}`;
   escrow:    `0x${string}`;
+  stakingInsurance: `0x${string}`;
+  stakingReserve:   `0x${string}`;
+  watcherRegistry:  `0x${string}`;
   deployBlock: bigint;
 }> = {
   // X Layer Mainnet (chain 196) — fresh deploy Aug 14, 2026
@@ -15,6 +18,9 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
     reserve:     "0xeB6A9d8b1aD63898EfC2031A5572a84a567c591c" as `0x${string}`,
     token:       "0x74b7f16337b8972027f6196a17a631ac6de26d22" as `0x${string}`, // USDC on X Layer
     escrow:      "0x882c34d59E2d46a91534244e8B042e4A1fe01546" as `0x${string}`,
+    stakingInsurance: "0xe7345AC64cCaceBA4eC87DC7F0b20a3bc5d1590b" as `0x${string}`,
+    stakingReserve:   "0x9d3D405b0f1CA5F347F126F29323328e14E519dE" as `0x${string}`,
+    watcherRegistry:  "0xC1758e1a289d85F18961aFbF2eD28a473791b3c1" as `0x${string}`,
     deployBlock: 0n, // TODO: set exact block from OKLink
   },
   // BOT Chain Mainnet (chain 677)
@@ -23,6 +29,9 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
     reserve:     "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56" as `0x${string}`,
     token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain
     escrow:      "0xa5404EaE15938Dc2cA1aad914CD868b86d8A0eC8" as `0x${string}`,
+    stakingInsurance: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    stakingReserve:   "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    watcherRegistry:  "0x0000000000000000000000000000000000000000" as `0x${string}`,
     deployBlock: 19080279n, // точный (бинарный поиск через RPC)
   },
 };
