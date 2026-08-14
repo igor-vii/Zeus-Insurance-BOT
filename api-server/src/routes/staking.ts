@@ -13,7 +13,7 @@ const RPC_URL = process.env.BOT_CHAIN_MAINNET_RPC_URL || "https://rpc.botchain.a
 const client = createPublicClient({ transport: http(RPC_URL) });
 
 const COVER_BOUGHT = parseAbiItem(
-  "event CoverBought(uint256 indexed positionId, bytes32 indexed validatorKey, address indexed owner, uint256 coveredAmount, uint256 premium, uint256 expiry)"
+  "event CoverBought(uint256 indexed positionId, bytes32 indexed validatorKey, address indexed owner, uint256 stakedAmount, uint256 coveredAmount, uint256 premium, uint256 collateral, uint256 expiry)"
 );
 
 const STAKING_ABI = [
@@ -25,6 +25,7 @@ const STAKING_ABI = [
       { name: "stakedAmount", type: "uint256" },
       { name: "coveredAmount", type: "uint256" },
       { name: "premium", type: "uint256" },
+      { name: "collateral", type: "uint256" },
       { name: "start", type: "uint256" },
       { name: "expiry", type: "uint256" },
       { name: "status", type: "uint8" },
@@ -57,8 +58,11 @@ router.get("/positions", async (_req, res) => {
         positions.push({
           positionId: id.toString(),
           validatorKey: p.validatorKey,
-          validatorPubkey: "", // v1: пока не передаётся on-chain; consensus-monitor вернёт isSlashed=false для пустых
           owner: p.owner,
+          stakedAmount: p.stakedAmount.toString(),
+          coveredAmount: p.coveredAmount.toString(),
+          premium: p.premium.toString(),
+          collateral: p.collateral.toString(),
           expiry: Number(p.expiry),
         });
       }
@@ -71,25 +75,30 @@ router.get("/positions", async (_req, res) => {
   }
 });
 
-/** POST /api/staking/quote — premium quote */
+/** POST /api/staking/quote — First Loss premium quote */
 router.post("/quote", (req, res) => {
-  const { stakedAmount, termDays, metrics } = req.body as {
+  const { stakedAmount, termDays, chainId, metrics } = req.body as {
     stakedAmount: string;
     termDays: number;
+    chainId?: number;
     metrics?: Partial<ValidatorMetrics>;
   };
 
   if (!stakedAmount || !termDays) {
-    return res.status(400).json({ error: "stakedAmount and termDays required" });
+    res.status(400).json({ error: "stakedAmount and termDays required" });
+    return;
   }
 
   const m: ValidatorMetrics = {
     downtimePct: metrics?.downtimePct ?? 1,
     priorSlashes: metrics?.priorSlashes ?? 0,
     clientSharePct: metrics?.clientSharePct ?? 20,
+    hasCircuitBreakers: metrics?.hasCircuitBreakers ?? true,
+    hasKeySegregation: metrics?.hasKeySegregation ?? true,
+    humiScore: metrics?.humiScore ?? 500,
   };
 
-  const quote = quoteStaking(BigInt(stakedAmount), termDays, m);
+  const quote = quoteStaking(BigInt(stakedAmount), termDays, chainId ?? 196, m);
   res.json(quote);
 });
 
