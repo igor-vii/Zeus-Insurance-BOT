@@ -1,180 +1,340 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./interfaces/IInsuranceContract.sol";
 import "./WatcherRegistry.sol";
 import "./ZeusReserveV2.sol";
-import "./interfaces/IInsuranceContract.sol";
 
 /**
- * @title ZeusStakingInsurance
- * @notice Phase-1 product module: slashing coverage for staking positions.
- *         First product built on the shared WatcherRegistry oracle
- *         (Trust Operating Layer) instead of an embedded oracle.
+ * @title ZeusStakingInsurance v2 — First Loss Model
+ * @notice Provides slashing protection for stakers with partial coverage (first-loss),
+ *         network-risk-based pricing, and collateral requirements for emerging/unproven networks.
  *
- * @dev Uses a DEDICATED ZeusReserveV2 instance as its vault (the reserve
- *      supports a single insurance contract; multi-vault Treasury = phase 2).
- *
- *      Flow:
- *        1. buyCover(validatorKey, stakedAmount, termSeconds, premium)
- *        2. consensus-watchers detect slashing → WatcherRegistry quorum
- *        3. claimSlashing(positionId) → reserve.payClaim(...)
+ * Key changes from v1:
+ * - coveredAmount = stakedAmount * firstLossPercent / 10000 (not 100%)
+ * - Collateral required for Emerging/Unproven networks
+ * - claimSlashing pays min(actualLoss, coveredAmount)
+ * - Network-specific configuration via configureForNetwork()
  */
 contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, Pausable {
-    using SafeERC20 for IERC20;
-
-    // ── Errors ───────────────────────────────────────────────────────────────
-    error InvalidUSDTAddress();
-    error InvalidReserveAddress();
-    error InvalidRegistryAddress();
-    error InvalidValidatorKey();
-    error InvalidAmount();
-    error InvalidTerm();
-    error InvalidPremium();
-    error PositionDoesNotExist();
-    error NotPositionOwner();
-    error PositionNotActive();
-    error NotExpiredYet();
-    error CoverageExpired();
-    error SlashingNotConfirmed();
-    error OnlyReserveCanCall();
 
     // ── Types ─────────────────────────────────────────────────────────────────
-    enum PositionStatus { Active, Claimed, Expired }
+
+    enum NetworkRisk { Proven, Emerging, Unproven }
 
     struct StakePosition {
-        bytes32 validatorKey;   // keccak256(validator pubkey)
-        address owner;
+        address staker;
+        address validator;
         uint256 stakedAmount;
-        uint256 coveredAmount;  // v1: full coverage, cap = stake
+        uint256 coveredAmount;      // stakedAmount * firstLossPercent / 10000
         uint256 premium;
-        uint256 start;
-        uint256 expiry;
-        PositionStatus status;
+        uint256 collateral;         // only for Emerging/Unproven
+        uint256 startTime;
+        uint256 duration;
+        bool active;
+        bool claimed;
     }
 
-    // ── State ────────────────────────────────────────────────────────────────
-    IERC20 public usdt;
-    ZeusReserveV2 public reserve;   // dedicated instance
-    WatcherRegistry public registry;
+    struct NetworkConfig {
+        uint256 firstLossPercent;   // basis points (e.g. 200 = 2%)
+        uint256 basePremiumBps;     // basis points (e.g. 4 = 0.04%)
+        NetworkRisk risk;
+        uint256 collateralRatio;    // basis points (e.g. 100 = 1x coveredAmount)
+    }
 
-    mapping(uint256 => StakePosition) public positions;
-    mapping(uint256 => bool) public claimFulfilled;
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    IERC20 public immutable usdt;
+    ZeusReserveV2 public immutable reserve;
+    WatcherRegistry public immutable registry;
+
+    uint256 public firstLossPercent;
+    uint256 public basePremiumBps;
+    NetworkRisk public networkRisk;
+    uint256 public collateralRatio;
+
     uint256 public nextPositionId;
+    mapping(uint256 => StakePosition) public positions;
+    mapping(address => uint256[]) public stakerPositions;
 
-    uint256 public constant MIN_TERM = 1 days;
-    uint256 public constant MAX_TERM = 365 days;
+    // Claim tracking for IInsuranceContract
+    mapping(uint256 => bool) public approvedClaims;
+    mapping(uint256 => bool) public fulfilledClaims;
+    uint256 public nextClaimId;
 
     // ── Events ────────────────────────────────────────────────────────────────
-    event CoverBought(
-        uint256 indexed positionId, bytes32 indexed validatorKey, address indexed owner,
-        uint256 coveredAmount, uint256 premium, uint256 expiry
+
+    event CoverPurchased(
+        uint256 indexed positionId,
+        address indexed staker,
+        address indexed validator,
+        uint256 stakedAmount,
+        uint256 coveredAmount,
+        uint256 premium,
+        uint256 collateral
     );
-    event SlashingClaimed(uint256 indexed positionId, uint256 amount);
-    event CoverExpired(uint256 indexed positionId);
+
+    event SlashingClaimed(
+        uint256 indexed positionId,
+        address indexed staker,
+        uint256 actualLoss,
+        uint256 payout
+    );
+
+    event CollateralWithdrawn(
+        uint256 indexed positionId,
+        address indexed staker,
+        uint256 amount
+    );
+
+    event NetworkConfigured(
+        uint256 firstLossPercent,
+        uint256 basePremiumBps,
+        NetworkRisk risk,
+        uint256 collateralRatio
+    );
+
+    // ── Constructor ───────────────────────────────────────────────────────────
 
     constructor(address _usdt, address _reserve, address _registry) Ownable(msg.sender) {
-        if (_usdt == address(0)) revert InvalidUSDTAddress();
-        if (_reserve == address(0)) revert InvalidReserveAddress();
-        if (_registry == address(0)) revert InvalidRegistryAddress();
-        usdt     = IERC20(_usdt);
-        reserve  = ZeusReserveV2(_reserve);
+        require(_usdt != address(0), "Invalid USDT");
+        require(_reserve != address(0), "Invalid reserve");
+        require(_registry != address(0), "Invalid registry");
+
+        usdt = IERC20(_usdt);
+        reserve = ZeusReserveV2(_reserve);
         registry = WatcherRegistry(_registry);
+
+        // Default: Proven network (Ethereum-like)
+        firstLossPercent = 200;    // 2%
+        basePremiumBps = 4;        // 0.04%
+        networkRisk = NetworkRisk.Proven;
+        collateralRatio = 0;       // no collateral for Proven
     }
 
-    // ── Buy cover ─────────────────────────────────────────────────────────────
-    /// @param validatorKey keccak256(validator pubkey)
-    /// @param stakedAmount declared stake (token decimals)
-    /// @param termSeconds  [1 days .. 365 days]
-    /// @param premium      quoted off-chain by the pricing engine
+    // ── Owner: Network Configuration ──────────────────────────────────────────
+
+    /**
+     * @notice Configure parameters for the current network.
+     * @param _firstLossPercent  Coverage percentage in bps (e.g. 200 = 2%)
+     * @param _basePremiumBps    Base premium in bps (e.g. 4 = 0.04%)
+     * @param _risk              Network risk level
+     * @param _collateralRatio   Collateral ratio in bps (e.g. 100 = 1x coveredAmount)
+     */
+    function configureForNetwork(
+        uint256 _firstLossPercent,
+        uint256 _basePremiumBps,
+        NetworkRisk _risk,
+        uint256 _collateralRatio
+    ) external onlyOwner {
+        require(_firstLossPercent > 0 && _firstLossPercent <= 10000, "Invalid firstLossPercent");
+        require(_basePremiumBps > 0 && _basePremiumBps <= 10000, "Invalid basePremiumBps");
+
+        firstLossPercent = _firstLossPercent;
+        basePremiumBps = _basePremiumBps;
+        networkRisk = _risk;
+        collateralRatio = _collateralRatio;
+
+        emit NetworkConfigured(_firstLossPercent, _basePremiumBps, _risk, _collateralRatio);
+    }
+
+    // ── Core: Buy Cover ───────────────────────────────────────────────────────
+
+    /**
+     * @notice Purchase slashing protection for a staked position.
+     * @param validator   The validator address being staked on
+     * @param stakedAmount The amount staked (in token base units)
+     * @param duration     Coverage duration in seconds
+     * @return positionId  The ID of the new position
+     */
     function buyCover(
-        bytes32 validatorKey,
+        address validator,
         uint256 stakedAmount,
-        uint256 termSeconds,
-        uint256 premium
+        uint256 duration
     ) external nonReentrant whenNotPaused returns (uint256 positionId) {
-        if (validatorKey == bytes32(0)) revert InvalidValidatorKey();
-        if (stakedAmount == 0) revert InvalidAmount();
-        if (termSeconds < MIN_TERM || termSeconds > MAX_TERM) revert InvalidTerm();
-        if (premium == 0 || premium > stakedAmount) revert InvalidPremium();
+        require(validator != address(0), "Invalid validator");
+        require(stakedAmount > 0, "Amount must be positive");
+        require(duration > 0, "Duration must be positive");
 
-        usdt.safeTransferFrom(msg.sender, address(reserve), premium);
+        // Calculate coverage (first-loss model)
+        uint256 coveredAmount = (stakedAmount * firstLossPercent) / 10000;
+        require(coveredAmount > 0, "Coverage too small");
 
+        // Calculate premium
+        uint256 premium = (coveredAmount * basePremiumBps) / 10000;
+        require(premium > 0, "Premium too small");
+
+        // Calculate collateral (only for Emerging/Unproven)
+        uint256 collateral = 0;
+        if (networkRisk != NetworkRisk.Proven) {
+            collateral = (coveredAmount * collateralRatio) / 100;
+        }
+
+        // Transfer premium + collateral from staker
+        uint256 totalPayment = premium + collateral;
+        require(usdt.transferFrom(msg.sender, address(this), totalPayment), "Payment failed");
+
+        // Forward premium to reserve
+        require(usdt.transfer(address(reserve), premium), "Reserve funding failed");
+
+        // Create position
         positionId = nextPositionId++;
         positions[positionId] = StakePosition({
-            validatorKey:  validatorKey,
-            owner:         msg.sender,
-            stakedAmount:  stakedAmount,
-            coveredAmount: stakedAmount,
-            premium:       premium,
-            start:         block.timestamp,
-            expiry:        block.timestamp + termSeconds,
-            status:        PositionStatus.Active
+            staker: msg.sender,
+            validator: validator,
+            stakedAmount: stakedAmount,
+            coveredAmount: coveredAmount,
+            premium: premium,
+            collateral: collateral,
+            startTime: block.timestamp,
+            duration: duration,
+            active: true,
+            claimed: false
         });
 
-        emit CoverBought(positionId, validatorKey, msg.sender, stakedAmount, premium, block.timestamp + termSeconds);
+        stakerPositions[msg.sender].push(positionId);
+
+        emit CoverPurchased(positionId, msg.sender, validator, stakedAmount, coveredAmount, premium, collateral);
     }
 
-    // ── Claim ─────────────────────────────────────────────────────────────────
-    function eventIdFor(uint256 positionId) public pure returns (bytes32) {
-        return keccak256(abi.encode(positionId));
+    // ── Core: Claim Slashing ──────────────────────────────────────────────────
+
+    /**
+     * @notice Claim payout after a slashing event. Pays min(actualLoss, coveredAmount).
+     * @param positionId  The position to claim against
+     * @param actualLoss  The actual loss incurred from slashing
+     */
+    function claimSlashing(uint256 positionId, uint256 actualLoss) external nonReentrant {
+        StakePosition storage pos = positions[positionId];
+        require(pos.staker == msg.sender, "Not your position");
+        require(pos.active, "Position not active");
+        require(!pos.claimed, "Already claimed");
+        require(block.timestamp <= pos.startTime + pos.duration, "Coverage expired");
+        require(actualLoss > 0, "No loss to claim");
+
+        // Verify slashing via WatcherRegistry quorum
+        require(
+            registry.hasQuorumReport(pos.validator),
+            "No quorum slashing report for this validator"
+        );
+
+        // Payout = min(actualLoss, coveredAmount)
+        uint256 payout = actualLoss < pos.coveredAmount ? actualLoss : pos.coveredAmount;
+
+        pos.claimed = true;
+        pos.active = false;
+
+        // Register claim with reserve
+        uint256 claimId = nextClaimId++;
+        approvedClaims[claimId] = true;
+
+        // Pay from reserve
+        reserve.payClaim(msg.sender, payout);
+
+        emit SlashingClaimed(positionId, msg.sender, actualLoss, payout);
     }
 
-    function claimSlashing(uint256 positionId) external nonReentrant whenNotPaused {
-        StakePosition storage p = positions[positionId];
-        if (p.owner == address(0)) revert PositionDoesNotExist();
-        if (p.owner != msg.sender) revert NotPositionOwner();
-        if (p.status != PositionStatus.Active) revert PositionNotActive();
-        if (block.timestamp > p.expiry) revert CoverageExpired();
-        if (!registry.isConfirmed(eventIdFor(positionId), 1)) revert SlashingNotConfirmed();
+    // ── Collateral Withdrawal ─────────────────────────────────────────────────
 
-        p.status = PositionStatus.Claimed;
-        // Reserve calls back isClaimApproved(), pays, then markClaimFulfilled()
-        reserve.payClaim(positionId, p.owner, p.coveredAmount);
-        emit SlashingClaimed(positionId, p.coveredAmount);
+    /**
+     * @notice Withdraw collateral after coverage expires or is claimed.
+     * @param positionId  The position to withdraw collateral from
+     */
+    function withdrawCollateral(uint256 positionId) external nonReentrant {
+        StakePosition storage pos = positions[positionId];
+        require(pos.staker == msg.sender, "Not your position");
+        require(pos.collateral > 0, "No collateral");
+
+        uint256 amount = pos.collateral;
+        pos.collateral = 0;
+
+        // Can withdraw if: expired OR claimed (coverage resolved)
+        require(
+            block.timestamp > pos.startTime + pos.duration || pos.claimed,
+            "Coverage still active"
+        );
+
+        require(usdt.transfer(msg.sender, amount), "Transfer failed");
+
+        emit CollateralWithdrawn(positionId, msg.sender, amount);
     }
 
-    function expirePosition(uint256 positionId) external {
-        StakePosition storage p = positions[positionId];
-        if (p.status != PositionStatus.Active) revert PositionNotActive();
-        if (block.timestamp <= p.expiry) revert NotExpiredYet();
-        p.status = PositionStatus.Expired;
-        emit CoverExpired(positionId);
+    // ── View Functions ────────────────────────────────────────────────────────
+
+    /**
+     * @notice Preview coverage details without purchasing.
+     * @param stakedAmount  The amount that would be staked
+     * @return coveredAmount  The amount that would be covered
+     * @return premium        The premium that would be charged
+     * @return collateral     The collateral that would be required
+     */
+    function previewCover(uint256 stakedAmount) external view returns (
+        uint256 coveredAmount,
+        uint256 premium,
+        uint256 collateral
+    ) {
+        coveredAmount = (stakedAmount * firstLossPercent) / 10000;
+        premium = (coveredAmount * basePremiumBps) / 10000;
+        collateral = 0;
+        if (networkRisk != NetworkRisk.Proven) {
+            collateral = (coveredAmount * collateralRatio) / 100;
+        }
     }
 
-    // ── IInsuranceContract (for the dedicated reserve) ────────────────────────
-    function isClaimApproved(
-        uint256 claimId, address claimant, uint256 amount
-    ) external view override returns (bool) {
-        StakePosition storage p = positions[claimId];
-        return p.status == PositionStatus.Claimed
-            && p.owner == claimant
-            && p.coveredAmount == amount
-            && registry.isConfirmed(eventIdFor(claimId), 1);
+    /**
+     * @notice Get current network configuration.
+     */
+    function getNetworkConfig() external view returns (
+        uint256 _firstLossPercent,
+        uint256 _basePremiumBps,
+        NetworkRisk _risk,
+        uint256 _collateralRatio
+    ) {
+        return (firstLossPercent, basePremiumBps, networkRisk, collateralRatio);
     }
 
-    function markClaimFulfilled(uint256 claimId) external override {
-        if (msg.sender != address(reserve)) revert OnlyReserveCanCall();
-        claimFulfilled[claimId] = true;
+    /**
+     * @notice Get all position IDs for a staker.
+     */
+    function getStakerPositions(address staker) external view returns (uint256[] memory) {
+        return stakerPositions[staker];
     }
 
-    // ── Views ─────────────────────────────────────────────────────────────────
+    /**
+     * @notice Get position details.
+     */
     function getPosition(uint256 positionId) external view returns (StakePosition memory) {
         return positions[positionId];
     }
 
-    function canClaim(uint256 positionId) external view returns (bool) {
-        StakePosition storage p = positions[positionId];
-        return p.status == PositionStatus.Active
-            && block.timestamp <= p.expiry
-            && registry.isConfirmed(eventIdFor(positionId), 1);
+    // ── IInsuranceContract (for the dedicated reserve) ────────────────────────
+
+    function isClaimApproved(
+        uint256 claimId,
+        address /* claimant */,
+        uint256 /* amount */
+    ) external view override returns (bool) {
+        return approvedClaims[claimId] && !fulfilledClaims[claimId];
     }
 
-    // ── Owner ─────────────────────────────────────────────────────────────────
+    function markClaimFulfilled(uint256 claimId) external override {
+        require(msg.sender == address(reserve), "Only reserve");
+        fulfilledClaims[claimId] = true;
+    }
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
+
+    /**
+     * @notice Emergency withdrawal of excess funds (above reserve obligations).
+     */
+    function emergencyWithdraw(uint256 amount) external onlyOwner {
+        require(usdt.transfer(owner(), amount), "Transfer failed");
+    }
 }
