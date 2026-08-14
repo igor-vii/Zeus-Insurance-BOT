@@ -162,13 +162,9 @@ export default function Policies() {
     data: directPoliciesData,
     isLoading: isLoadingPolicies,
     refetch: refetchDirect,
-  if (!isSdkReady && !isApiMode) {
-    return <div className="flex items-center justify-center min-h-[400px] text-white/50">Loading SDK...</div>;
-  }
-
   } = useQuery({
     queryKey: ["direct-policies", policyIds.map(String), directRefetchKey],
-    queryFn: () => Promise.all(policyIds.map((id) => sdk.insurance.getPolicy(Number(id)))),
+    queryFn: () => Promise.all(policyIds.map((id) => sdk!.insurance.getPolicy(Number(id)))),
     enabled: !isApiMode && policyIds.length > 0 && isSdkReady,
   });
 
@@ -230,7 +226,7 @@ export default function Policies() {
       }
       console.info("[claim] SDK direct mode — claimPayout(", policyId, ")");
       try {
-        await sdk.insurance.claimPayout(policyId);
+        await sdk!.insurance.claimPayout(policyId);
         console.info("[claim] Claim successful for policy", policyId);
         toast({ title: "Claim Successful", description: "Payout has been processed from the reserve." });
         setClaimError(null);

@@ -52,7 +52,7 @@ function createWrappedProvider(
   };
 
   return {
-    request: async (request) => {
+    request: async (request: { method: string; params?: unknown[] }) => {
       const { method } = request;
 
       // 🔒 Перехват eth_chainId — ethers v6 иногда шлёт это на старте
@@ -165,7 +165,7 @@ export function useZeusSDK(): SDKState & { reconnect: () => void } {
 
           // Создаём Eip1193Provider из wagmi walletClient
           const eip1193Provider: Eip1193Provider = {
-            request: async (request) => {
+            request: async (request: { method: string; params?: unknown[] }) => {
               return transport.request(request);
             },
           };
@@ -219,7 +219,8 @@ export function useZeusSDK(): SDKState & { reconnect: () => void } {
 
       // ============ ИНИЦИАЛИЗАЦИЯ SDK ============
       console.log("[ZeusSDK] Initializing SDK with signer...", { connectionMethod });
-      const sdk = new ZeusSDK({ signer, chainId });
+      const sdk = new ZeusSDK();
+      await sdk.connect(`eip155:${chainId}`, signer);
       
       // Проверочный вызов — убеждаемся, что signer работает
       const testAddress = await signer.getAddress();

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useAccount, useChainId, useWriteContract } from 'wagmi';
 import { parseUnits } from 'viem';
-import { getInsuranceAddress, getTokenAddress } from '@/lib/contracts';
+import { getContracts } from '@/lib/contracts';
 import { fetchSlashingPremium } from '@/lib/api-client';
 
 interface BuySlashingParams {
