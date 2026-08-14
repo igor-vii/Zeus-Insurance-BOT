@@ -18,8 +18,8 @@ export function useSlashing() {
   const buySlashingProtection = useCallback(async (params: BuySlashingParams) => {
     if (!address) throw new Error('Wallet not connected');
 
-    const insuranceAddress = getInsuranceAddress(chainId);
-    const tokenAddress = getTokenAddress(chainId);
+    const insuranceAddress = getContracts(chainId).insurance;
+    const tokenAddress = getContracts(chainId).token;
     const amountBigInt = parseUnits(params.amount.toString(), 6);
 
     // Fetch premium from API — single source of truth for rate calculation
