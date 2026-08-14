@@ -164,7 +164,6 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
             amount: amountBigInt.toString(),
             timeoutSeconds: values.timeoutSeconds,
             maxRetries: values.retries,
-            premium: premiumAmount.toString(),
             chainId,
           });
           console.log('[Buy] fetchPrepareBuy result:', result);
@@ -310,8 +309,7 @@ const waitForTransaction = async (hash: string, maxAttempts = 60): Promise<void>
             seller: values.sellerAddress,
             amount: amountBigInt,
             timeout: values.timeoutSeconds,
-            retries: values.retries,
-            premium: premiumAmount
+            retries: values.retries
           });
           
           let policyId: string | bigint | undefined;
