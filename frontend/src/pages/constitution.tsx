@@ -1,4 +1,4 @@
-/// <reference types="react" />
+import type { JSX } from "react";
 import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { ArrowLeft, Loader2 } from 'lucide-react';
