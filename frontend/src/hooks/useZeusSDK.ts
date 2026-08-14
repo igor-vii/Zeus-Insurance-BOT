@@ -84,7 +84,6 @@ function buildSigner(
 
   const provider = new BrowserProvider(wrapped, staticNetwork, {
     staticNetwork,
-    name: "zeus-static",
   });
 
   return new JsonRpcSigner(provider, address);
