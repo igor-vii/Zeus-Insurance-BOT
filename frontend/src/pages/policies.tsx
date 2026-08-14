@@ -76,7 +76,8 @@ export default function Policies() {
   const publicClient = usePublicClient();
   const { toast } = useToast();
   const { isApiMode } = useApiMode();
-  const { sdk, isReady: isSdkReady, sdkError } = useZeusSDK();
+  const { sdk, isSdkReady: isSdkReady, sdkError } = useZeusSDK();
+  if (!sdk) return <div>Loading SDK...</div>;
 
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
   const [claimError, setClaimError] = useState<string | null>(null);
