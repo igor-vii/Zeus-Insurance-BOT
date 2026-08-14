@@ -1,3 +1,11 @@
+declare global {
+  interface Window {
+    ethereum?: import('ethers').Eip1193Provider & {
+      isMetaMask?: boolean;
+    };
+  }
+}
+
 import { useEffect, useState, useCallback } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import { BrowserProvider, JsonRpcSigner, Network } from "ethers";
