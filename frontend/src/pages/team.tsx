@@ -33,7 +33,7 @@ export default function Team() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
       {/* Header */}
-      // @ts-expect-error framer-motion v11 types
+      {/* @ts-ignore */}
       <motion.div {...fadeUp(0)} className="text-center mb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 mb-6">
           <span className="text-xs font-mono text-primary uppercase tracking-wider">{t.team.badge}</span>
@@ -41,22 +41,20 @@ export default function Team() {
         <h1 className="text-4xl sm:text-5xl font-bold mb-4">
           {isRu ? 'Команда Zeus Insurance' : t.team.title}
         </h1>
-      // @ts-expect-error framer-motion v11 types
       </motion.div>
 
       {/* Intro paragraph */}
-      // @ts-expect-error framer-motion v11 types
+      {/* @ts-ignore */}
       <motion.p {...fadeUp(0.08)} className="text-xl text-muted-foreground text-center mb-14 max-w-2xl mx-auto leading-relaxed">
         {introText}
-      // @ts-expect-error framer-motion v11 types
       </motion.p>
 
       {/* Founder card */}
-      // @ts-expect-error framer-motion v11 types
+      {/* @ts-ignore */}
       <motion.div {...fadeUp(0.15)} className="mb-10">
         <div className="p-8 rounded-2xl border border-primary/20 bg-card relative overflow-hidden">
           {/* Animated glow — only behind card, not obstructing text */}
-          // @ts-expect-error framer-motion v11 types
+          {/* @ts-ignore */}
           <motion.div
             className="absolute -top-16 -right-16 w-48 h-48 bg-primary/8 rounded-full blur-[50px] pointer-events-none"
             animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.9, 0.5] }}
@@ -65,14 +63,13 @@ export default function Team() {
 
           <div className="relative flex flex-col sm:flex-row gap-6 items-start">
             {/* Avatar */}
-            // @ts-expect-error framer-motion v11 types
+            {/* @ts-ignore */}
             <motion.div
               className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0"
               whileHover={{ scale: 1.05 }}
               transition={{ duration: 0.2 }}
             >
               <ZeusLogoIcon size={40} />
-            // @ts-expect-error framer-motion v11 types
             </motion.div>
 
             {/* Info */}
@@ -104,11 +101,10 @@ export default function Team() {
             </div>
           </div>
         </div>
-      // @ts-expect-error framer-motion v11 types
       </motion.div>
 
       {/* Join / collaborate */}
-      // @ts-expect-error framer-motion v11 types
+      {/* @ts-ignore */}
       <motion.div {...fadeUp(0.22)} className="p-8 rounded-2xl border border-border bg-card/50 text-center mb-12">
         <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
           <Users className="w-6 h-6 text-primary" />
@@ -122,11 +118,10 @@ export default function Team() {
             <ExternalLink className="w-3.5 h-3.5 opacity-70" />
           </Button>
         </a>
-      // @ts-expect-error framer-motion v11 types
       </motion.div>
 
       {/* Tech stack */}
-      // @ts-expect-error framer-motion v11 types
+      {/* @ts-ignore */}
       <motion.div {...fadeUp(0.3)} className="p-6 rounded-xl border border-border bg-card/30">
         <h3 className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-4 text-center">Tech Stack</h3>
         <div className="flex flex-wrap gap-2 justify-center">
@@ -136,7 +131,6 @@ export default function Team() {
             </span>
           ))}
         </div>
-      // @ts-expect-error framer-motion v11 types
       </motion.div>
     </div>
   );
