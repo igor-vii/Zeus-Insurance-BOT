@@ -1,3 +1,4 @@
+/// <reference types="react" />
 import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { ArrowLeft, Loader2 } from 'lucide-react';
