@@ -165,6 +165,7 @@ export default function Policies() {
     refetch: refetchDirect,
   } = useQuery({
     queryKey: ["direct-policies", policyIds.map(String), directRefetchKey],
+    if (!sdk) return <div>Loading SDK...</div>;
     queryFn: () => Promise.all(policyIds.map((id) => sdk.insurance.getPolicy(Number(id)))),
     enabled: !isApiMode && policyIds.length > 0 && isSdkReady,
   });
