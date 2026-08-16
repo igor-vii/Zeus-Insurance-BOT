@@ -79,7 +79,7 @@ describe("ZeusStakingInsurance", function () {
     const ctx = await deploy();
     // Zero validator pubkey
     await expect(ctx.insurance.connect(ctx.staker).buyCover(ethers.ZeroHash, usdc(1), 86400))
-      .to.be.revertedWith("Invalid validator");
+      .to.be.revertedWith("Invalid validator pubkey");
     // Zero amount
     await expect(ctx.insurance.connect(ctx.staker).buyCover(VKEY, 0n, 86400))
       .to.be.revertedWith("Amount must be positive");
@@ -126,7 +126,7 @@ describe("ZeusStakingInsurance", function () {
     await ctx.registry.connect(ctx.w2).submitObservation(eventId, 1);
     await ctx.insurance.connect(ctx.staker).claimSlashing(0n);
     await expect(ctx.insurance.connect(ctx.staker).claimSlashing(0n))
-      .to.be.revertedWith("Already claimed");
+      .to.be.revertedWith("Position not active");
   });
 
   it("expires coverage after term; claim reverts", async () => {
