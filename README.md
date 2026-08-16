@@ -122,11 +122,11 @@ Send the returned to + data as a transaction on X Layer (chain 196). The agent m
 | Contract | Address | Verified |
 |----------|---------|----------|
 | ZeusReserveV2 (delivery) | 0xeB6A...591c | done |
-| ZeusInsuranceV2 | 0xa540...0eC8 | pending |
+| ZeusInsuranceV2 | 0xa540...0eC8 | done |
 | ZeusEscrowBOT | 0x882c...1546 | done |
-| WatcherRegistry | 0xC175...b3c1 | pending |
-| ZeusReserveV2 (staking) | 0x9d3D...19dE | pending |
-| ZeusStakingInsurance | 0x230f...B96b | pending |
+| WatcherRegistry | 0xC175...b3c1 | done |
+| ZeusReserveV2 (staking) | 0x9d3D...19dE | done |
+| ZeusStakingInsurance | 0xe734...590b | done |
 
 ### Trust Layer (HUMI/WAMI)
 
