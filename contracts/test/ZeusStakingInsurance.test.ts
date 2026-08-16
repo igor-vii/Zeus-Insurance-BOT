@@ -46,8 +46,8 @@ describe("ZeusStakingInsurance", function () {
     return { token, registry, reserve, insurance, owner, staker, w1, w2, other };
   }
 
-  async function buyCover(ctx: Awaited<ReturnType<typeof deploy>>, stake = 1000, term = 30 * 86400, premium = 1) {
-    const tx = await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(stake), term, usdc(premium));
+  async function buyCover(ctx: Awaited<ReturnType<typeof deploy>>, stake = 1000, term = 30 * 86400) {
+    const tx = await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(stake), term);
     const rc = await tx.wait();
     return 0n; // positionId 0 in tests (first position)
   }
@@ -55,7 +55,7 @@ describe("ZeusStakingInsurance", function () {
   it("buys cover, stores position, transfers premium to reserve", async () => {
     const ctx = await deploy();
     const before = await ctx.token.balanceOf(await ctx.reserve.getAddress());
-    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400, usdc(2));
+    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400);
     const after = await ctx.token.balanceOf(await ctx.reserve.getAddress());
     expect(after - before).to.equal(usdc(2));
 
@@ -67,24 +67,24 @@ describe("ZeusStakingInsurance", function () {
 
   it("reverts buyCover on bad inputs", async () => {
     const ctx = await deploy();
-    await expect(ctx.insurance.connect(ctx.staker).buyCover(ethers.ZeroHash, usdc(1), 86400, usdc(1)))
+    await expect(ctx.insurance.connect(ctx.staker).buyCover(ethers.ZeroHash, usdc(1), 86400))
       .to.be.revertedWithCustomError(ctx.insurance, "InvalidValidatorKey");
-    await expect(ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1), 60, usdc(1)))
+    await expect(ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1), 60))
       .to.be.revertedWithCustomError(ctx.insurance, "InvalidTerm");
-    await expect(ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1), 86400, 0n))
+    await expect(ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1), 86400))
       .to.be.revertedWithCustomError(ctx.insurance, "InvalidPremium");
   });
 
   it("reverts claim without watcher confirmation", async () => {
     const ctx = await deploy();
-    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400, usdc(2));
+    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400);
     await expect(ctx.insurance.connect(ctx.staker).claimSlashing(0n))
       .to.be.revertedWithCustomError(ctx.insurance, "SlashingNotConfirmed");
   });
 
   it("pays out after 2-watchers slashing confirmation", async () => {
     const ctx = await deploy();
-    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400, usdc(2));
+    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400);
     const eventId = await ctx.insurance.eventIdFor(0n);
 
     await ctx.registry.connect(ctx.w1).submitObservation(eventId, 1);
@@ -101,7 +101,7 @@ describe("ZeusStakingInsurance", function () {
 
   it("reverts double claim", async () => {
     const ctx = await deploy();
-    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400, usdc(2));
+    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 30 * 86400);
     const eventId = await ctx.insurance.eventIdFor(0n);
     await ctx.registry.connect(ctx.w1).submitObservation(eventId, 1);
     await ctx.registry.connect(ctx.w2).submitObservation(eventId, 1);
@@ -112,7 +112,7 @@ describe("ZeusStakingInsurance", function () {
 
   it("expires coverage after term; claim reverts", async () => {
     const ctx = await deploy();
-    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 86400, usdc(2));
+    await ctx.insurance.connect(ctx.staker).buyCover(VKEY, usdc(1000), 86400);
     await advanceTime(86401);
     await expect(ctx.insurance.connect(ctx.staker).claimSlashing(0n))
       .to.be.revertedWithCustomError(ctx.insurance, "CoverageExpired");
