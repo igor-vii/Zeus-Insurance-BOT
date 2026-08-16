@@ -27,7 +27,7 @@
 Install: pnpm add @zeus/sdk ethers
 
 ## Documentation
-- Frontend docs: https://zeus-insurance-bot.onrender.com/docs
+- Frontend docs: https://zeus-insurance-bot-frontend.vercel.app/docs
 - GitHub: https://github.com/igor-vii/Zeus-Insurance-BOT
 - Deploy guide: DEPLOY.md
 - Security audit: August 2026
