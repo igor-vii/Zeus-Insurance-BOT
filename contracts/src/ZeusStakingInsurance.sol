@@ -233,7 +233,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         approvedClaims[claimId] = true;
 
         // Pay from reserve
-        reserve.payClaim(msg.sender, payout);
+        reserve.payClaim(claimId, msg.sender, payout);
 
         emit SlashingClaimed(positionId, msg.sender, actualLoss, payout);
     }
