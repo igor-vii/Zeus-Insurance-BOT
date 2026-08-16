@@ -217,8 +217,9 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         require(actualLoss > 0, "No loss to claim");
 
         // Verify slashing via WatcherRegistry quorum
+        bytes32 eventId = keccak256(abi.encode(positionId));
         require(
-            registry.hasQuorumReport(address(uint160(uint256(pos.validatorPubkey)))),
+            registry.isConfirmed(eventId, 1),
             "No quorum slashing report for this validator"
         );
 
@@ -250,8 +251,9 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         require(block.timestamp <= pos.startTime + pos.duration, "Coverage expired");
 
         // Verify slashing via WatcherRegistry quorum
+        bytes32 eventId = keccak256(abi.encode(positionId));
         require(
-            registry.hasQuorumReport(address(uint160(uint256(pos.validatorPubkey)))),
+            registry.isConfirmed(eventId, 1),
             "No quorum slashing report for this validator"
         );
 
