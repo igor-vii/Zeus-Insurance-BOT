@@ -91,7 +91,7 @@ Send the returned to + data as a transaction on X Layer (chain 196). The agent m
 
 | Network | Chain ID | Token | Insurance Contract |
 |---------|----------|-------|--------------------|
-| X Layer Mainnet | 196 | USDC (0x74b7...6d22) | 0xa540...0eC8 |
+| X Layer Mainnet | 196 | USDC (0x74b7...6d22) | 0xed65...D908 |
 | BOT Chain Mainnet | 677 | USDT (0xaBab...7a3C) | 0x2E59...69ef |
 
 ### Rate Limiting
@@ -122,7 +122,7 @@ Send the returned to + data as a transaction on X Layer (chain 196). The agent m
 | Contract | Address | Verified |
 |----------|---------|----------|
 | ZeusReserveV2 (delivery) | 0xeB6A...591c | done |
-| ZeusInsuranceV2 | 0xa540...0eC8 | done |
+| ZeusInsuranceV2 | 0xed65...D908 | done |
 | ZeusEscrowBOT | 0x882c...1546 | done |
 | WatcherRegistry | 0xC175...b3c1 | done |
 | ZeusReserveV2 (staking) | 0x9d3D...19dE | done |
