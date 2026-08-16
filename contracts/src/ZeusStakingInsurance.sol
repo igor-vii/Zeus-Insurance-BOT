@@ -71,7 +71,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
     event CoverPurchased(
         uint256 indexed positionId,
         address indexed staker,
-        address indexed validator,
+        address indexed validatorPubkey,
         uint256 stakedAmount,
         uint256 coveredAmount,
         uint256 premium,
@@ -146,7 +146,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
 
     /**
      * @notice Purchase slashing protection for a staked position.
-     * @param validator   The validator address being staked on
+     * @param validatorPubkey   The validatorPubkey address being staked on
      * @param stakedAmount The amount staked (in token base units)
      * @param duration     Coverage duration in seconds
      * @return positionId  The ID of the new position
@@ -156,7 +156,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         uint256 stakedAmount,
         uint256 duration
     ) external nonReentrant whenNotPaused returns (uint256 positionId) {
-        require(validatorPubkey != bytes32(0), "Invalid validator");
+        require(validatorPubkey != bytes32(0), "Invalid validatorPubkey");
         require(stakedAmount > 0, "Amount must be positive");
         require(duration > 0, "Duration must be positive");
 
@@ -198,7 +198,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
 
         stakerPositions[msg.sender].push(positionId);
 
-        emit CoverPurchased(positionId, msg.sender, validator, stakedAmount, coveredAmount, premium, collateral);
+        emit CoverPurchased(positionId, msg.sender, validatorPubkey, stakedAmount, coveredAmount, premium, collateral);
     }
 
     // ── Core: Claim Slashing ──────────────────────────────────────────────────
@@ -219,7 +219,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         // Verify slashing via WatcherRegistry quorum
         require(
             registry.hasQuorumReport(address(uint160(uint256(pos.validatorPubkey)))),
-            "No quorum slashing report for this validator"
+            "No quorum slashing report for this validatorPubkey"
         );
 
         // Payout = min(actualLoss, coveredAmount)
@@ -252,7 +252,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         // Verify slashing via WatcherRegistry quorum
         require(
             registry.hasQuorumReport(address(uint160(uint256(pos.validatorPubkey)))),
-            "No quorum slashing report for this validator"
+            "No quorum slashing report for this validatorPubkey"
         );
 
         // Full coveredAmount as payout
