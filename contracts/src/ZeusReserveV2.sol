@@ -80,11 +80,11 @@ contract ZeusReserveV2 is ReentrancyGuard, Ownable {
         if (fulfilledClaims[claimId]) revert ClaimAlreadyFulfilled(claimId);
         if (!_isClaimApproved(claimId, claimant, amount)) revert ClaimNotApproved(claimId);
 
-        uint256 balance = usdt.balanceOf(address(this));
-        if (balance < amount) revert InsufficientReserveBalance(amount, balance);
-
         uint256 remaining = remainingDailyPayout();
         if (amount > remaining) revert DailyPayoutLimitExceeded(amount, remaining);
+
+        uint256 balance = usdt.balanceOf(address(this));
+        if (balance < amount) revert InsufficientReserveBalance(amount, balance);
 
         fulfilledClaims[claimId] = true;
         dailyPayouts += amount;
