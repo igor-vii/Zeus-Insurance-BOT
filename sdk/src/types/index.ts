@@ -90,7 +90,7 @@ export const NETWORKS: Record<Network, NetworkConfig> = {
   "bot-chain-mainnet": {
     name: "bot-chain-mainnet",
     chainId: 677,
-    escrowAddress:    "0xa5404EaE15938Dc2cA1aad914CD868b86d8A0eC8",
+    escrowAddress:    "0xed65F223d7919B24263F4d6fe74e3DA42e7fD908",
     insuranceAddress: "0x2E592BEBbcC38FC3976125CB2E11312068670C45",
     reserveAddress:   "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56",
     usdcAddress:      "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C", // USDT on BOT Chain
