@@ -275,6 +275,8 @@ describe("ZeusReserveV2", function () {
     });
 
     it("reverts with InsufficientReserveBalance when reserve has insufficient funds", async function () {
+      // Set high daily limit so DailyPayoutLimitExceeded doesn't trigger first
+      await reserve.connect(owner).setMaxDailyPayout(usdc(10_000_000));
       await expect(
         payClaimAs(mockAddr, 1n, claimant.address, usdc(999_999))
       ).to.be.revertedWithCustomError(reserve, "InsufficientReserveBalance")
