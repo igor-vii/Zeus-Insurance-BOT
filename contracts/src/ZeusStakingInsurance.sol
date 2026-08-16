@@ -238,6 +238,40 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         emit SlashingClaimed(positionId, msg.sender, actualLoss, payout);
     }
 
+    /**
+     * @notice Claim slashing with full coveredAmount as loss (backward compatible).
+     * @param positionId  The position to claim against
+     */
+    function claimSlashing(uint256 positionId) external nonReentrant {
+        StakePosition storage pos = positions[positionId];
+        require(pos.staker == msg.sender, "Not your position");
+        require(pos.active, "Position not active");
+        require(!pos.claimed, "Already claimed");
+        require(block.timestamp <= pos.startTime + pos.duration, "Coverage expired");
+
+        // Verify slashing via WatcherRegistry quorum
+        require(
+            registry.hasQuorumReport(pos.validator),
+            "No quorum slashing report for this validator"
+        );
+
+        // Full coveredAmount as payout
+        uint256 payout = pos.coveredAmount;
+
+        pos.claimed = true;
+        pos.active = false;
+
+        // Register claim with reserve
+        uint256 claimId = nextClaimId++;
+        approvedClaims[claimId] = true;
+
+        // Pay from reserve
+        reserve.payClaim(claimId, msg.sender, payout);
+
+        emit SlashingClaimed(positionId, msg.sender, payout, payout);
+    }
+
+
     // ── Collateral Withdrawal ─────────────────────────────────────────────────
 
     /**
