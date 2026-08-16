@@ -177,6 +177,8 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         if (msg.value > 0) revert NativePaymentNotAccepted();
         if (premium == 0 || premium > amount) revert InvalidPremium();
 
+        // Check allowance before transfer to give proper error
+        if (usdt.allowance(buyer, address(this)) < premium) revert PremiumTransferFailed();
         usdt.safeTransferFrom(buyer, address(reserve), premium);
 
         uint256 retryDeadline = block.timestamp + timeoutSeconds * maxRetries;
@@ -207,7 +209,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         uint256 timeoutSeconds,
         uint256 maxRetries,
         uint256 premium
-    ) external nonReentrant whenNotPaused returns (uint256) {
+    ) external payable nonReentrant whenNotPaused returns (uint256) {
         return _buyInternal(msg.sender, seller, amount, timeoutSeconds, maxRetries, premium, CoverageType.Standard);
     }
 
