@@ -10,7 +10,7 @@
 - Tools: insurance_quote, insurance_prepare_buy, insurance_claim, insurance_get_policies, insurance_reserve_stats, escrow_prepare_deposit, escrow_prepare_confirm
 
 ### REST API
-- Base URL: https://zeus-insurance-bot-api-production.up.railway.app/api
+- Base UR\: https://zeus-insurance-bot-api-production.up.railway.app/api
 - Health: GET /health
 - Rate limit: 100 req / 15 min
 
@@ -18,9 +18,9 @@
 
 | Contract | X Layer (196) | BOT Chain (677) |
 |----------|--------------|-----------------|
-| ZeusInsuranceV2 | 0xe43e55d96925a3FBFdB5DE0a4AeC1a4bab4dDdB0 | 0x2E592BEBbcC38FC3976125CB2E11312068670C45 |
-| ZeusReserveV2 | 0x6D84aa31073D4C51b579e468bdb02cc11343296E | 0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56 |
-| ZeusEscrowBOT | pending redeploy | 0xa5404EaE15938Dc2cA1aad914CD868b86d8A0eC8 |
+| ZeusInsuranceV2 | 0xed65F223d7919B24263F4d6fe74e3DA42e7fD908 | 0x2E592BEBbcC38FC3976125CB2E11312068670C45 |
+| ZeusReserveV2 | 0xeB6A9d8b1aD63898EfC2031A5572a84a567c591c | 0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56 |
+| ZeusEscrowBOT | 0x882c34d59E2d46a91534244e8B042e4A1fe01546 | 0x882c34d59E2d46a91534244e8B042e4A1fe01546 |
 
 ## SDK
 
