@@ -273,6 +273,7 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
         slashingVotes[policyId][msg.sender] = true;
         slashingVoteCount[policyId]++;
         emit SlashingVoteCast(policyId, msg.sender);
+        emit SlashingReported(policyId, p.seller, evidenceHash);
 
         if (slashingVoteCount[policyId] >= SLASHING_QUORUM) {
             slashingResolved[policyId] = true;
@@ -283,7 +284,6 @@ contract ZeusInsuranceV2 is IInsuranceContract, ReentrancyGuard, Ownable, Pausab
 
             p.status = PolicyStatus.Claimed;
             activePolicyCount--;
-            emit SlashingReported(policyId, validator, evidenceHash);
             emit SlashingResolved(policyId, true);
 
             reserve.payClaim(policyId, buyer, amount);
