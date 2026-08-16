@@ -28,7 +28,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
 
     struct StakePosition {
         address staker;
-        address validator;
+        bytes32 validatorPubkey;
         uint256 stakedAmount;
         uint256 coveredAmount;      // stakedAmount * firstLossPercent / 10000
         uint256 premium;
@@ -152,11 +152,11 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
      * @return positionId  The ID of the new position
      */
     function buyCover(
-        address validator,
+        bytes32 validatorPubkey,
         uint256 stakedAmount,
         uint256 duration
     ) external nonReentrant whenNotPaused returns (uint256 positionId) {
-        require(validator != address(0), "Invalid validator");
+        require(validatorPubkey != bytes32(0), "Invalid validator");
         require(stakedAmount > 0, "Amount must be positive");
         require(duration > 0, "Duration must be positive");
 
@@ -185,7 +185,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
         positionId = nextPositionId++;
         positions[positionId] = StakePosition({
             staker: msg.sender,
-            validator: validator,
+            validatorPubkey: validatorPubkey,
             stakedAmount: stakedAmount,
             coveredAmount: coveredAmount,
             premium: premium,
@@ -218,7 +218,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
 
         // Verify slashing via WatcherRegistry quorum
         require(
-            registry.hasQuorumReport(pos.validator),
+            registry.hasQuorumReport(address(uint160(uint256(pos.validatorPubkey)))),
             "No quorum slashing report for this validator"
         );
 
@@ -251,7 +251,7 @@ contract ZeusStakingInsurance is IInsuranceContract, ReentrancyGuard, Ownable, P
 
         // Verify slashing via WatcherRegistry quorum
         require(
-            registry.hasQuorumReport(pos.validator),
+            registry.hasQuorumReport(address(uint160(uint256(pos.validatorPubkey)))),
             "No quorum slashing report for this validator"
         );
 
