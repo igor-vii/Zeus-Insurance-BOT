@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 RUN corepack enable && corepack prepare pnpm@10 --activate
 
 FROM base AS build
