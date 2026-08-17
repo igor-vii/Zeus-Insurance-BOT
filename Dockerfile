@@ -4,7 +4,9 @@ RUN corepack enable && corepack prepare pnpm@10 --activate
 FROM base AS build
 WORKDIR /app
 COPY . .
-RUN pnpm install --no-frozen-lockfile && pnpm -r build
+RUN pnpm install --no-frozen-lockfile
+RUN pnpm --filter @workspace/api-server build
+RUN pnpm --filter @zeus/sdk build
 
 FROM base AS production
 WORKDIR /app
