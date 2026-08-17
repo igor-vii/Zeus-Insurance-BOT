@@ -7,7 +7,7 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY api-server/package.json api-server/package.json
 COPY sdk/package.json sdk/package.json
 COPY frontend/package.json frontend/package.json
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 FROM base AS build
 WORKDIR /app
