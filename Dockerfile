@@ -11,9 +11,7 @@ COPY lib/api-zod/package.json lib/api-zod/package.json
 COPY lib/db/package.json lib/db/package.json
 COPY lib/api-spec/package.json lib/api-spec/package.json
 COPY lib/api-client-react/package.json lib/api-client-react/package.json
-COPY sdk/tsconfig.json sdk/tsconfig.json
-COPY tsconfig.base.json tsconfig.base.json
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
 
 FROM base AS build
 WORKDIR /app
