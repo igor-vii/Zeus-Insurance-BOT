@@ -7,6 +7,10 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY api-server/package.json api-server/package.json
 COPY sdk/package.json sdk/package.json
 COPY frontend/package.json frontend/package.json
+COPY lib/api-zod/package.json lib/api-zod/package.json
+COPY lib/db/package.json lib/db/package.json
+COPY lib/api-spec/package.json lib/api-spec/package.json
+COPY lib/api-client-react/package.json lib/api-client-react/package.json
 RUN pnpm install --no-frozen-lockfile
 
 FROM base AS build
