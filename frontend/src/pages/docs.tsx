@@ -79,8 +79,9 @@ export default function Docs() {
         <p className="text-muted-foreground mb-5">{t.docs.contracts_desc}</p>
         <div className="space-y-3">
           {[
-            { name: 'ZeusInsuranceV2', addr: '0xE0b89E0DEa7Fc7AEa7CEcC62a0A14d52de42Ce3b', label: 'Main insurance contract' },
-            { name: 'ZeusReserveV2', addr: '0xF5010Afe1856be1F447f962Dfa8AA30c2Ed19a47', label: 'Reserve fund contract' },
+            { name: 'ZeusInsuranceV2', addr: '0xed65F223d7919B24263F4d6fe74e3DA42e7fD908', label: 'Main insurance contract' },
+            { name: 'ZeusReserveV2', addr: '0xeB6A9d8b1aD63898EfC2031A5572a84a567c591c', label: 'Reserve fund contract' },
+            { name: 'ZeusEscrowBOT', addr: '0x882c34d59E2d46a91534244e8B042e4A1fe01546', label: 'Escrow contract' },
             { name: 'USDC (X Layer Mainnet)', addr: '0x74b7F16337b8972027F6196A17a631aC6dE26d22', label: 'USDC token on X Layer' },
           ].map(({ name, addr, label }) => (
             <div key={name} className="flex flex-col sm:flex-row sm:items-center gap-2 p-4 rounded-lg border border-border bg-card/50">
@@ -102,19 +103,19 @@ export default function Docs() {
         <div className="space-y-4">
           <CodeBlock
             label="GET /api/quote"
-            code={`curl "http://localhost:8080/api/quote?amount=100000000&maxRetries=3"
+            code={`curl "https://zeus-insurance-bot-api-production.up.railway.app/api/quote?amount=100000000&maxRetries=3"
 # → {"premiumBps":1100,"premiumAmount":"11000000","totalCost":"11000000"}`}
           />
           <CodeBlock
             label="POST /api/prepare-buy"
-            code={`curl -X POST http://localhost:8080/api/prepare-buy \\
+            code={`curl -X POST https://zeus-insurance-bot-api-production.up.railway.app/api/prepare-buy \\
   -H "Content-Type: application/json" \\
   -d '{"seller":"0xSELLER","amount":"100000000","timeoutSeconds":86400,"maxRetries":1}'
-# → {"to":"0xE0b89E...","data":"0x...","premiumAmount":"7000000"}`}
+# → {"to":"0xed65F2...","data":"0x...","premiumAmount":"7000000"}`}
           />
           <CodeBlock
             label="GET /api/policies"
-            code={`curl "http://localhost:8080/api/policies?buyer=0xYOUR_ADDRESS"
+            code={`curl "https://zeus-insurance-bot-api-production.up.railway.app/api/policies?buyer=0xYOUR_ADDRESS"
 # → [{"id":"1","amount":"100000000","status":"active",...}]`}
           />
         </div>
