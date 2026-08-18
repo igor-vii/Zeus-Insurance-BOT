@@ -1,19 +1,11 @@
-FROM node:20-slim AS base
+FROM node:20-slim
 RUN corepack enable && corepack prepare pnpm@10 --activate
-
-FROM base AS build
 WORKDIR /app
 COPY . .
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm --filter @zeus/sdk build
 RUN pnpm --filter @workspace/api-server build
-RUN ls -la /app/api-server/dist/ || (echo "ERROR: dist not found" && exit 1)
-
-FROM base AS production
-WORKDIR /app
+RUN ls -la /app/api-server/dist/ && echo "BUILD OK"
 ENV NODE_ENV=production
-COPY --from=build /app/api-server/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/api-server/package.json ./package.json
 EXPOSE 8080
-CMD ["node", "--enable-source-maps", "dist/index.mjs"]
+CMD ["node", "--enable-source-maps", "api-server/dist/index.mjs"]
