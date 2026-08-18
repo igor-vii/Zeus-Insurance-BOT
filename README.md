@@ -83,7 +83,7 @@ Send the returned to + data as a transaction on X Layer (chain 196). The agent m
 ### Discovery
 
 - llms.txt (API): https://zeus-insurance-bot-api-production.up.railway.app/llms.txt
-- llms.txt (Frontend): https://zeus-insurance-bot.onrender.com/llms.txt
+- llms.txt (Frontend): https://zeus-insurance-bot-frontend.vercel.app/llms.txt
 - MCP Endpoint: POST /mcp (JSON-RPC 2.0, stateless)
 - Health Check: GET /health
 
