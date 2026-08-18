@@ -599,7 +599,7 @@ importers:
         specifier: 'catalog:'
         version: 4.22.4
       typescript:
-        specifier: ^5.5.4
+        specifier: '5.5.4'
         version: 5.9.3
 
 packages:
