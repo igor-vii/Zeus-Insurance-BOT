@@ -1,0 +1,1 @@
+{"version":3,"file":"audit-logs.d.ts","sourceRoot":"","sources":["../../src/schema/audit-logs.ts"],"names":[],"mappings":"AAEA,eAAO,MAAM,cAAc;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;EAc1B,CAAC;AAEF,MAAM,MAAM,QAAQ,GAAG,OAAO,cAAc,CAAC,YAAY,CAAC;AAC1D,MAAM,MAAM,cAAc,GAAG,OAAO,cAAc,CAAC,YAAY,CAAC"}

@@ -1,0 +1,31 @@
+## Render Blueprint — Zeus Insurance BOT (Frontend ONLY)
+## Render:  Frontend (Static Site)
+## Railway: API Server + PostgreSQL + Watcher Stack
+
+services:
+  - type: static
+    name: Zeus-Insurance-BOT
+    region: oregon
+    # Всё выполняется из корня репозитория — без cd!
+    buildCommand: >
+      npm install -g pnpm@10.28.0 &&
+      pnpm install --no-frozen-lockfile --prefer-offline --filter @workspace/frontend... &&
+      pnpm --filter @zeus/sdk build &&
+      pnpm --filter @workspace/frontend build
+    # Путь относительно корня репозитория
+    staticPublishPath: frontend/dist
+    # SPA routing
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    buildFilter:
+      paths:
+        - frontend/**
+        - sdk/**
+        - pnpm-lock.yaml
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: VITE_API_BASE_URL
+        value: ""  # ← fill with https://<your-railway-api>.up.railway.app/api

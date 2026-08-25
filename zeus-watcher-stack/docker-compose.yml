@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: zeus
+      POSTGRES_PASSWORD: zeus
+      POSTGRES_DB: zeus
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ./apps/api
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://zeus:zeus@postgres:5432/zeus
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+    depends_on:
+      - postgres
+      - redis
+
+  executor:
+    build: ./apps/executor
+    environment:
+      DATABASE_URL: postgresql://zeus:zeus@postgres:5432/zeus
+      REDIS_URL: redis://redis:6379
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      KMS_KEY_ID: ${KMS_KEY_ID}
+    depends_on:
+      - postgres
+      - redis
+
+  watcher:
+    build: ./apps/watcher
+    environment:
+      API_URL: http://api:3000
+      DATABASE_URL: postgresql://zeus:zeus@postgres:5432/zeus
+      PRIVATE_KEY: ${WATCHER_PRIVATE_KEY}
+      GRAPH_URL_BOT: ${GRAPH_URL_BOT}
+      GRAPH_URL_XLAYER: ${GRAPH_URL_XLAYER}
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
