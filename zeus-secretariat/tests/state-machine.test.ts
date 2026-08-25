@@ -155,14 +155,26 @@ describe('Zeus Secretariat V0 - State Machine Tests', () => {
   // Test C — Policy rejection: price > maxPrice
   // ==========================================================================
   it('C - should reject when price exceeds maxPrice', async () => {
+    // Create x402 challenge with high price
+    const challenge = {
+      accepts: [{
+        scheme: 'mock',
+        network: 'mock-network',
+        asset: 'MOCK',
+        amount: '5.0',
+        payTo: 'seller123',
+      }],
+    };
+    const paymentHeader = btoa(JSON.stringify(challenge));
+
     // 402 with price higher than policy allows
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       status: 402,
       ok: false,
       headers: {
         get: (name: string) => {
-          if (name === 'X-Payment-Required') {
-            return "amount='5.0'; asset='MOCK'; network='mock-network'; payee='seller123'";
+          if (name === 'PAYMENT-REQUIRED') {
+            return paymentHeader;
           }
           return null;
         },

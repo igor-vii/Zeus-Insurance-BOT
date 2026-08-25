@@ -27,6 +27,8 @@ import {
   PaymentIntent,
   PaymentIntentStatus,
 } from './types';
+import { X402Parser, X402Accept } from './x402-parser';
+import { SellerCapabilityResolver, CapabilitySource } from './capability-resolver';
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -81,13 +83,16 @@ export interface SecretariatConfig {
   evidenceStore: EvidenceStore;
   signer: PaymentSigner;
   adapters: Map<string, PaymentAdapter>;
+  capabilitySources?: CapabilitySource[];
 }
 
 export class Secretariat {
   private readonly config: SecretariatConfig;
+  private readonly capabilityResolver: SellerCapabilityResolver;
 
   constructor(config: SecretariatConfig) {
     this.config = config;
+    this.capabilityResolver = new SellerCapabilityResolver(config.capabilitySources ?? []);
   }
 
   // ==========================================================================
@@ -219,15 +224,20 @@ export class Secretariat {
     this.transitionState(operation, 'PAYMENT_REQUIRED');
     operation.timestamps.paymentRequiredAt = now();
 
-    // Parse payment requirement from response
-    const paymentRequirement = await this.parsePaymentRequirement(response);
+    // Parse payment requirement using x402 v2 parser (Priority: header > body)
+    const accepts: X402Accept[] = await X402Parser.parseResponse(response);
+    if (accepts.length === 0) {
+      throw new Error('No valid x402 accepts found');
+    }
+    
+    const paymentRequirement = this.acceptToRequirement(accepts[0]);
     
     this.recordEvidence(operation, 'DISCOVERY', 'PAYMENT_REQUIREMENT_RECEIVED', {
       requirement: paymentRequirement,
     });
 
-    // Discover seller capabilities
-    operation.sellerCapability = await this.discoverSellerCapabilities(response, paymentRequirement);
+    // Snapshot seller capability immediately after discovery
+    await this.capabilityResolver.resolveAndSnapshot(operation, response.headers);
     
     this.recordEvidence(operation, 'DISCOVERY', 'SELLER_CAPABILITIES_DISCOVERED', {
       capabilities: operation.sellerCapability,
@@ -532,9 +542,27 @@ export class Secretariat {
   // ==========================================================================
   // PHASE 7: RECOVERY
   // Based on seller capabilities - NO blind retry
+  // CRITICAL GUARD: Block retry if payment is settled but delivery is unknown
+  // and seller capability is NONE
   // ==========================================================================
 
   private async handleRecovery(operation: Operation): Promise<void> {
+    // CRITICAL: Only block if payment is actually settled but delivery is unknown
+    if (
+      operation.paymentState === 'SETTLED' &&
+      operation.deliveryState === 'UNKNOWN' &&
+      operation.sellerCapability?.recoveryCapability === 'NONE'
+    ) {
+      this.recordEvidence(operation, 'RECOVERY', 'GUARD_BLOCKED_RETRY', {
+        reason: 'Seller capability is NONE. Blind retry forbidden after settlement.',
+        paymentState: operation.paymentState,
+        deliveryState: operation.deliveryState,
+      });
+      this.transitionState(operation, 'UNRESOLVABLE');
+      operation.error = 'Settlement confirmed but execution unknown with no recovery path';
+      return; // STOP execution flow
+    }
+
     if (!operation.sellerCapability) {
       this.recordEvidence(operation, 'RECOVERY', 'NO_CAPABILITIES_KNOWN', {});
       this.transitionState(operation, 'UNRESOLVABLE');
@@ -814,50 +842,16 @@ export class Secretariat {
     return adapter;
   }
 
-  private async parsePaymentRequirement(response: Response): Promise<PaymentRequirement> {
-    // Parse x402 payment requirement from response headers/body
-    // This is where Syra patterns can be reused as reference
-    const paymentHeader = response.headers.get('X-Payment-Required');
-    
-    if (!paymentHeader) {
-      throw new Error('402 response missing payment requirement');
-    }
-
-    // Simple parsing - in real implementation use Syra's proven parsing logic
-    const parts = paymentHeader.split(';').map(p => p.trim());
-    const requirement: Record<string, string> = {};
-    
-    for (const part of parts) {
-      const [key, value] = part.split('=').map(s => s.replace(/['"]/g, ''));
-      if (key && value) {
-        requirement[key] = value;
-      }
-    }
-
+  private acceptToRequirement(accept: X402Accept): PaymentRequirement {
     return {
-      amount: requirement.amount ?? '0',
-      asset: requirement.asset ?? 'unknown',
-      network: requirement.network ?? 'unknown',
-      payee: requirement.payee ?? 'unknown',
-      ...requirement,
+      amount: accept.amount,
+      asset: accept.asset,
+      network: accept.network,
+      payee: accept.payTo,
+      deadline: accept.maxTimeoutSeconds ? Date.now() + accept.maxTimeoutSeconds * 1000 : undefined,
     };
   }
 
-  private async discoverSellerCapabilities(
-    response: Response,
-    requirement: PaymentRequirement
-  ): Promise<SellerCapabilities> {
-    // Discover capabilities from response headers
-    const recoveryCapability = response.headers.get('X-Recovery-Capability') as RecoveryCapability ?? 'NONE';
-    const resultRetrievalEndpoint = response.headers.get('X-Result-Retrieval-Endpoint') ?? undefined;
-    const idempotencyHeader = response.headers.get('X-Idempotency-Header') ?? undefined;
-
-    return {
-      recoveryCapability,
-      resultRetrievalEndpoint,
-      idempotencyHeader,
-    };
-  }
 
   private async getPaymentRequirementFromEvidence(operation: Operation): Promise<PaymentRequirement | null> {
     const evidence = operation.evidence.find(

@@ -94,7 +94,7 @@ export interface Operation {
    */
   paymentState: PaymentStatus;
   executionState: ExecutionStatus;
-  deliveryState: 'NOT_STARTED' | 'PENDING' | 'DELIVERED' | 'FAILED';
+  deliveryState: 'NOT_STARTED' | 'PENDING' | 'DELIVERED' | 'FAILED' | 'UNKNOWN';
   
   /**
    * Current overall state
