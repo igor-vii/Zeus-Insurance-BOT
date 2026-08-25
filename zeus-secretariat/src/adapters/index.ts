@@ -94,3 +94,30 @@ export class MockPaymentAdapter {
     };
   }
 }
+
+// Export signers
+export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer';
+export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer';
+
+// Export core signer interfaces and types
+export { PaymentSigner } from '../core/payment-signer';
+export {
+  PaymentAuthorizationRequest,
+  PaymentSignatureResult,
+  SignedPaymentAuthorization,
+  PaymentAuthorizationState,
+  NonceGenerator,
+  NonceRegistry,
+} from '../core/payment-types';
+export {
+  PaymentSigningError,
+  NonceAlreadyUsedError,
+  SignerBindingError,
+  InvalidAuthorizationError,
+  SignatureUnknownError,
+  PolicyNotValidatedError,
+} from '../core/payment-errors';
+export {
+  CryptoNonceGenerator,
+  InMemoryNonceRegistry,
+} from '../core/nonce-generator';

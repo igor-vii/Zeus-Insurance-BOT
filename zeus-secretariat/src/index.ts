@@ -9,6 +9,29 @@
 // Core types
 export * from './core/types';
 
+// Payment signer boundary (Phase 2.1)
+export { PaymentSigner } from './core/payment-signer';
+export {
+  PaymentAuthorizationRequest,
+  PaymentSignatureResult,
+  SignedPaymentAuthorization,
+  PaymentAuthorizationState,
+  NonceGenerator,
+  NonceRegistry,
+} from './core/payment-types';
+export {
+  PaymentSigningError,
+  NonceAlreadyUsedError,
+  SignerBindingError,
+  InvalidAuthorizationError,
+  SignatureUnknownError,
+  PolicyNotValidatedError,
+} from './core/payment-errors';
+export {
+  CryptoNonceGenerator,
+  InMemoryNonceRegistry,
+} from './core/nonce-generator';
+
 // State machine
 export * from './core/state-machine';
 
