@@ -1,0 +1,33 @@
+{
+  "name": "zeus-secretariat",
+  "version": "0.1.0",
+  "description": "Zeus Secretariat V0 - Independent execution layer with state machine, payment intent lifecycle, settlement observation, execution observation, recovery policy, and durable evidence",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "echo 'No linter configured'",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "zeus",
+    "secretariat",
+    "x402",
+    "payment",
+    "state-machine"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.21",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.1",
+    "typescript": "^5.8.3"
+  }
+}
