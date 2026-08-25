@@ -27,6 +27,28 @@ import {
   type Chain,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
+
+// EIP-3009 / USDC Contract Configuration for Base Mainnet
+const USDC_CONTRACT_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;
+
+const USDC_DOMAIN = {
+  name: 'USD Coin',
+  version: '2',
+  chainId: base.id,
+  verifyingContract: USDC_CONTRACT_ADDRESS,
+} as const;
+
+const TRANSFER_WITH_AUTHORIZATION_TYPES = {
+  TransferWithAuthorization: [
+    { name: 'from', type: 'address' },
+    { name: 'to', type: 'address' },
+    { name: 'value', type: 'uint256' },
+    { name: 'validAfter', type: 'uint256' },
+    { name: 'validBefore', type: 'uint256' },
+    { name: 'nonce', type: 'bytes32' },
+  ],
+} as const;
 
 export interface LocalEoaSignerConfig {
   /**
@@ -38,7 +60,7 @@ export interface LocalEoaSignerConfig {
 
   /**
    * Optional chain configuration.
-   * Defaults to a generic EVM chain.
+   * Defaults to Base Mainnet.
    */
   chain?: Chain;
 }
@@ -51,7 +73,7 @@ export class LocalEoaPaymentSigner implements PaymentSigner {
 
   constructor(config: LocalEoaSignerConfig) {
     // Create account from private key
-    const account = privateKeyToAccount(config.privateKey as Address);
+    const account = privateKeyToAccount(config.privateKey as `0x${string}`);
     
     this.address = account.address;
 
@@ -59,7 +81,7 @@ export class LocalEoaPaymentSigner implements PaymentSigner {
     this.walletClient = createWalletClient({
       account,
       transport: http(),
-      chain: config.chain,
+      chain: config.chain || base,
     });
   }
 
@@ -71,10 +93,10 @@ export class LocalEoaPaymentSigner implements PaymentSigner {
   }
 
   /**
-   * Sign a payment authorization request.
+   * Sign a payment authorization request using EIP-712 (signTypedData).
    * 
-   * For Phase 2.1, we create a simple signature over the authorization data.
-   * Future phases will implement proper EIP-3009 TransferWithAuthorization.
+   * Implements EIP-3009 TransferWithAuthorization structure for USDC compatibility.
+   * This signature can be used directly with USDC contract's transferWithAuthorization.
    * 
    * @param request - Validated payment authorization request
    * @returns PaymentSignatureResult with verified binding
@@ -82,22 +104,28 @@ export class LocalEoaPaymentSigner implements PaymentSigner {
   async signPayment(
     request: PaymentAuthorizationRequest
   ): Promise<PaymentSignatureResult> {
-    // Prepare data to sign
-    // This is a simplified approach for Phase 2.1
-    // Phase 2.2 will implement proper EIP-712 domain-separated signing
-    
-    const messageToSign = this.prepareMessageToSign(request);
-    
-    // Get the account from wallet client
-    const account = this.walletClient.account;
-    if (!account) {
-      throw new Error('No account configured in wallet client');
+    // Validate binding before signing
+    if (!request.operationId || !request.payer || !request.nonce) {
+      throw new Error('Invalid PaymentAuthorizationRequest: missing critical fields');
     }
-    
-    // Sign the message using viem
-    const signature = await this.walletClient.signMessage({
-      account,
-      message: messageToSign,
+
+    // Prepare EIP-3009 message structure
+    const message = {
+      from: request.payer as Address,
+      to: request.payTo as Address,
+      value: BigInt(request.amount), // Amount must be in smallest unit (e.g., 6 decimals for USDC)
+      validAfter: BigInt(request.validAfter),
+      validBefore: BigInt(request.validBefore),
+      nonce: request.nonce as `0x${string}`,
+    };
+
+    // Sign using EIP-712 (signTypedData)
+    const signature = await this.walletClient.signTypedData({
+      account: this.walletClient.account!,
+      domain: USDC_DOMAIN,
+      types: TRANSFER_WITH_AUTHORIZATION_TYPES,
+      primaryType: 'TransferWithAuthorization',
+      message,
     });
 
     return {
@@ -108,27 +136,6 @@ export class LocalEoaPaymentSigner implements PaymentSigner {
       signature: signature,
       signedAt: new Date().toISOString(),
     };
-  }
-
-  /**
-   * Prepare the message to sign.
-   * 
-   * This creates a human-readable message containing all critical fields.
-   * Future implementation will use EIP-712 domain-separated typed data.
-   */
-  private prepareMessageToSign(request: PaymentAuthorizationRequest): string {
-    return (
-      `Zeus Secretariat Payment Authorization\n\n` +
-      `Operation ID: ${request.operationId}\n` +
-      `Network: ${request.network}\n` +
-      `Asset: ${request.asset}\n` +
-      `Amount: ${request.amount}\n` +
-      `From: ${request.payer}\n` +
-      `To: ${request.payTo}\n` +
-      `Nonce: ${request.nonce}\n` +
-      `Valid After: ${new Date(request.validAfter * 1000).toISOString()}\n` +
-      `Valid Before: ${new Date(request.validBefore * 1000).toISOString()}`
-    );
   }
 }
 
