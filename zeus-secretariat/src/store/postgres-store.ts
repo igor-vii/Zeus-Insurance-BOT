@@ -95,13 +95,34 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
 
   // P0-3: Durable evidence in PostgreSQL
+  /**
+   * P1-9: Atomic evidence append.
+   * Uses PostgreSQL JSONB concatenation to avoid read-modify-write race condition.
+   * Two concurrent appends will both survive (no lost updates).
+   */
   async append(record: EvidenceRecord): Promise<void> {
+    // Use dedicated reconciliation_observations table for durable, concurrent-safe storage
+    await this.appendReconciliationObservation({
+      attemptId: record.operationId + "-" + record.timestamp,
+      paymentIntentId: "", // Will be resolved by caller context
+      timestamp: record.timestamp,
+      rpcProviderId: "evidence-log",
+      headBlock: 0,
+      authorizationState: null,
+      validBefore: 0,
+      result: record.event as any,
+      error: undefined,
+    });
+
+    // Also append to intent's JSONB field using atomic concatenation
     const intent = await this.getPaymentIntentByOperationId(record.operationId);
     if (intent) {
-      const existing = (intent.reconciliationObservations as unknown[]) ?? [];
-      existing.push(record);
-      await db.update(paymentIntentsTable).set({ reconciliationObservations: existing, updatedAt: new Date() })
-        .where(eq(paymentIntentsTable.paymentIntentId, intent.paymentIntentId));
+      await db.execute(sql`
+        UPDATE payment_intents
+        SET reconciliation_observations = COALESCE(reconciliation_observations, '[]'::jsonb) || ${JSON.stringify(record)}::jsonb,
+            updated_at = NOW()
+        WHERE payment_intent_id = ${intent.paymentIntentId}
+      `);
     }
   }
 
