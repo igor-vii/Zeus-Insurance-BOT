@@ -170,7 +170,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
         (responseBody as any)?.message ??
         `HTTP ${response.status}`;
 
-      await this.store.updatePaymentIntentStatus(intent.intentId, "FAILED", {
+      await this.store.updatePaymentIntentStatus(intent.intentId, "RECONCILING", {
         facilitatorResponse: responseBody,
       });
 
@@ -277,7 +277,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
 
     // Simulate HTTP error
     if (this.behavior.forceStatus && this.behavior.forceStatus >= 400) {
-      await this.store.updatePaymentIntentStatus(intent.intentId, "FAILED");
+      await this.store.updatePaymentIntentStatus(intent.intentId, "RECONCILING");
       return {
         status: "REJECTED",
         reason: `FACILITATOR_ERROR: HTTP ${this.behavior.forceStatus}`,
