@@ -152,7 +152,7 @@ function makeIntent(overrides: Partial<DurablePaymentIntent> = {}): DurablePayme
     settlementState: "RECONCILING",
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    probeCount: 0,
+    ...(overrides as any).probeCount !== undefined ? { probeCount: (overrides as any).probeCount } : {},
     ...overrides,
   };
 }
