@@ -5,3 +5,4 @@ export * from "./api-keys";
 export * from "./audit-logs";
 export * from "./watcher-observations";
 export * from "./seller-risk-scores";
+export * from "./payment-intents";
