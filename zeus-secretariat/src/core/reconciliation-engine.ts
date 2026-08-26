@@ -373,16 +373,25 @@ export class ReconciliationEngine {
    */
   async recoverAfterCrash(): Promise<Map<string, ReconciliationOutcome>> {
     const results = new Map<string, ReconciliationOutcome>();
-    const nonTerminalStates: SettlementState[] = ["SUBMITTING", "SUBMITTED", "SETTLEMENT_PENDING", "RECONCILING"];
 
-    for (const state of nonTerminalStates) {
-      const ops = await this.store.getOperationsByStatus(state as any);
-      for (const op of ops) {
-        // §18: Move to RECONCILING first
-        await this.store.compareAndSetState(op.operationId, state, "RECONCILING");
-        const outcome = await this.reconcile(op.operationId);
-        results.set(op.operationId, outcome);
+    // P0-6: Use getNonTerminalIntents() which queries settlement_state directly
+    // No OperationStatus confusion — uses the canonical column
+    const nonTerminalIntents = await this.store.getNonTerminalIntents();
+
+    for (const intent of nonTerminalIntents) {
+      const currentState = intent.settlementState;
+
+      // SUBMITTING without txHash -> move to RECONCILING first
+      if (currentState === "SUBMITTING" && !intent.txHash) {
+        const moved = await this.store.compareAndSetState(
+          intent.paymentIntentId, "SUBMITTING", "RECONCILING"
+        );
+        if (!moved) continue; // Another worker handled it
       }
+
+      // Reconcile using paymentIntentId (not operationId)
+      const outcome = await this.reconcile(intent.paymentIntentId);
+      results.set(intent.paymentIntentId, outcome);
     }
 
     return results;
