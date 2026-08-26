@@ -108,6 +108,12 @@ export interface PostSettlementConfig {
 // In-Memory Execution Store (for testing + fallback)
 // ---------------------------------------------------------------------------
 
+/**
+ * @experimental NOT PRODUCTION. Phase 2.4 test/experimental only.
+ * V0 production uses execution_attempts and reconciliation_jobs tables in PostgreSQL.
+ * This class MUST NOT be used in canonical V0 execution path.
+ * See docs/CANONICAL_V0_EXECUTION_PATH.md for the authoritative execution architecture.
+ */
 export class InMemoryExecutionStore {
   readonly attempts: Map<string, ExecutionAttempt> = new Map();
   readonly jobs: Map<string, RecoveryJob> = new Map();
