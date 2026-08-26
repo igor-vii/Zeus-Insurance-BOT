@@ -116,7 +116,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
     }
 
     // Optimization cache only (P1-3: NOT a safety boundary)
-    this.submittedIntents.add(intent.intentId);
+    this.submittedIntents.add(intent.paymentIntentId);
 
     try {
       const controller = new AbortController();
@@ -152,7 +152,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
             intent.paymentIntentId, txHash, response.status, responseBody,
           );
         } else {
-          await this.store.updateSettlementState(intent.paymentIntentId, "SETTLEMENT_PENDING", {
+          await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "SETTLEMENT_PENDING", {
             txHash: txHash || undefined,
             facilitatorHttpStatus: response.status,
             facilitatorResponseBody: responseBody,
@@ -172,7 +172,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
       if (typeof storeWithSubmitting.markReconcilingAfterSubmitError === "function") {
         await storeWithSubmitting.markReconcilingAfterSubmitError(intent.paymentIntentId, response.status, reason);
       } else {
-        await this.store.updateSettlementState(intent.paymentIntentId, "RECONCILING", {
+        await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
           facilitatorHttpStatus: response.status,
           errorReason: reason,
         });
@@ -187,7 +187,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
       if (typeof storeWithRecon.markReconcilingAfterSubmitError === "function") {
         await storeWithRecon.markReconcilingAfterSubmitError(intent.paymentIntentId, null, `NETWORK_ERROR: ${errorMsg}`).catch(() => {});
       } else {
-        await this.store.updateSettlementState(intent.paymentIntentId, "RECONCILING", {
+        await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
           errorReason: `NETWORK_ERROR: ${errorMsg}`,
         }).catch(() => {});
       }
@@ -243,7 +243,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
     intent: DurablePaymentIntent,
     _payload: PaymentPayload,
   ): Promise<SubmitResult> {
-    if (this.submittedIntents.has(intent.intentId)) {
+    if (this.submittedIntents.has(intent.paymentIntentId)) {
       return {
         status: "REJECTED",
         reason: "ALREADY_SUBMITTED",
@@ -251,7 +251,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
       };
     }
 
-    this.submittedIntents.add(intent.intentId);
+    this.submittedIntents.add(intent.paymentIntentId);
 
     // Simulate network delay
     if (this.behavior.delayMs) {
@@ -263,7 +263,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
     // Simulate timeout
     if (this.behavior.forceTimeout) {
       await this.store
-        .updateSettlementState(intent.intentId, "UNKNOWN")
+        .updatePaymentIntentStatus(intent.paymentIntentId, "UNKNOWN")
         .catch(() => {});
       return {
         status: "UNKNOWN",
@@ -273,7 +273,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
 
     // Simulate HTTP error
     if (this.behavior.forceStatus && this.behavior.forceStatus >= 400) {
-      await this.store.updateSettlementState(intent.intentId, "RECONCILING");
+      await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING");
       return {
         status: "REJECTED",
         reason: `FACILITATOR_ERROR: HTTP ${this.behavior.forceStatus}`,
@@ -285,8 +285,8 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
     const txHash =
       this.behavior.txHash ?? `0x${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
 
-    await this.store.updateSettlementState(
-      intent.intentId,
+    await this.store.updatePaymentIntentStatus(
+      intent.paymentIntentId,
       "SETTLEMENT_PENDING",
       { txHash },
     );
