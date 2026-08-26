@@ -114,6 +114,7 @@ export interface PostSettlementConfig {
  * This class MUST NOT be used in canonical V0 execution path.
  * See docs/CANONICAL_V0_EXECUTION_PATH.md for the authoritative execution architecture.
  */
+/** @experimental NOT FOR PRODUCTION - Phase 2.4 prototype only. Production uses PostgreSQL execution_attempts table. */
 export class InMemoryExecutionStore {
   readonly attempts: Map<string, ExecutionAttempt> = new Map();
   readonly jobs: Map<string, RecoveryJob> = new Map();
