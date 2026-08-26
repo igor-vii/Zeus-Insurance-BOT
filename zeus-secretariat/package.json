@@ -12,7 +12,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "echo 'No linter configured'",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "zeus",
