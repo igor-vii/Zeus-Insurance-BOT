@@ -89,7 +89,7 @@ function isValidTransition(from: OperationStatus, to: OperationStatus): boolean 
  * The SINGLE authoritative execution/recovery path is:
  *   SETTLED → PostSettlementEngine.initiateExecution() → ExecutionAttempt → seller → evidence
  *
- * StateMachine.observeExecution() is DEPRECATED — it must NOT be used as an
+ * StateMachine.observeExecution_DEPRECATED_USE_POST_SETTLEMENT_ENGINE() is DEPRECATED — it must NOT be used as an
  * alternative execution path. All post-settlement execution goes through
  * PostSettlementEngine exclusively.
  *
@@ -161,7 +161,7 @@ export class Secretariat {
 
       // Step 7: Execution observation
       if (operation.currentState === 'SETTLED' || operation.currentState === 'EXECUTION_PENDING') {
-        await this.observeExecution(operation);
+        await this.observeExecution_DEPRECATED_USE_POST_SETTLEMENT_ENGINE(operation);
       }
 
       // Step 8: Delivery
@@ -508,7 +508,7 @@ export class Secretariat {
   // Payment can be SETTLED while execution is UNKNOWN
   // ==========================================================================
 
-  private async observeExecution(operation: Operation): Promise<void> {
+  private async observeExecution_DEPRECATED_USE_POST_SETTLEMENT_ENGINE(operation: Operation): Promise<void> {
     this.transitionState(operation, 'EXECUTION_PENDING');
 
     try {
