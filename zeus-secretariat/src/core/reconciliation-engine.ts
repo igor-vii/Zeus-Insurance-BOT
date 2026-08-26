@@ -395,10 +395,12 @@ export class ReconciliationEngine {
     return this.store.canCreateNewPayment(operationId);
   }
 
+  /**
+   * P0-6: Real durable lookup by paymentIntentId.
+   * Delegates to store.getPaymentIntentById() which queries PostgreSQL directly.
+   */
   private async getIntentById(paymentIntentId: string): Promise<DurablePaymentIntent | null> {
-    // Search by paymentIntentId — need to iterate or use a direct lookup
-    // For now, use operationId-based lookup as proxy
-    return null; // Will be implemented with proper DB lookup
+    return this.store.getPaymentIntentById(paymentIntentId);
   }
 
   private async persistObservation(obs: ReconciliationObservation): Promise<void> {
