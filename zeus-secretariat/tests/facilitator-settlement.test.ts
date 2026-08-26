@@ -65,7 +65,7 @@ class InMemoryDurableStore implements DurableEvidenceStore {
     );
   }
 
-  async createPaymentIntent(intent: PaymentIntent): Promise<void> {
+  async createPaymentIntent(intent: any): Promise<void> {
     if (this.intents.has(intent.paymentIntentId)) {
       throw new Error("DUPLICATE_INTENT");
     }
@@ -78,7 +78,7 @@ class InMemoryDurableStore implements DurableEvidenceStore {
     this.intents.set(intent.paymentIntentId, { ...intent });
   }
 
-  async getPaymentIntentByOperationId(operationId: string): Promise<PaymentIntent | null> {
+  async getPaymentIntentByOperationId(operationId: string): Promise<any> {
     for (const intent of this.intents.values()) {
       if (intent.operationId === operationId) return { ...intent };
     }
@@ -198,7 +198,7 @@ class InMemoryDurableStore implements DurableEvidenceStore {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeIntent(overrides: Partial<PaymentIntent> = {}): PaymentIntent {
+function makeIntent(overrides: Partial<any> = {}): PaymentIntent {
   return {
     paymentIntentId: `intent-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     operationId: `op-${Date.now()}-${Math.random().toString(36).slice(2)}`,
