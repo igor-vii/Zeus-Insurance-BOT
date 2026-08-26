@@ -80,6 +80,33 @@ function isValidTransition(from: OperationStatus, to: OperationStatus): boolean 
 // SECRETARIAT CORE
 // ============================================================================
 
+/**
+ * P0-7: ARCHITECTURAL BOUNDARY — SINGLE AUTHORITATIVE EXECUTION PATH
+ *
+ * This state machine handles PAYMENT lifecycle transitions ONLY.
+ * It does NOT execute seller HTTP calls directly.
+ *
+ * The SINGLE authoritative execution/recovery path is:
+ *   SETTLED → PostSettlementEngine.initiateExecution() → ExecutionAttempt → seller → evidence
+ *
+ * StateMachine.observeExecution() is DEPRECATED — it must NOT be used as an
+ * alternative execution path. All post-settlement execution goes through
+ * PostSettlementEngine exclusively.
+ *
+ * Architecture:
+ *   SETTLED
+ *      ↓
+ *   PostSettlementEngine (ONLY path)
+ *      ↓
+ *   ExecutionAttempt (durable in DB)
+ *      ↓
+ *   SellerExecutionAdapter
+ *      ↓
+ *   Evidence (durable in DB)
+ *      ↓
+ *   SUCCESS / DELIVERY_UNKNOWN / recovery
+ */
+
 export interface SecretariatConfig {
   evidenceStore: EvidenceStore;
   signer: PaymentSigner;
