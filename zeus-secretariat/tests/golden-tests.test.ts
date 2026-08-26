@@ -226,7 +226,6 @@ function makeGoldenIntent(overrides: Partial<DurablePaymentIntent> = {}): Durabl
     settlementState: "AUTHORIZED",
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    probeCount: 0,
     ...overrides,
   };
 }
