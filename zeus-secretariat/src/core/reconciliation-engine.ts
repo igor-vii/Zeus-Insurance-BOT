@@ -155,11 +155,11 @@ export class ReconciliationEngine {
     }
 
     if (txResult.agreement === "ALL_FAILED" || txResult.agreement === "INSUFFICIENT") {
-      return { status: "RECONCILING", reason: `RPC ${txResult.agreement}`, nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
+      return { status: "RECONCILING", reason: `RPC ${txResult.agreement}`, nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0) };
     }
 
     if (txResult.agreement === "DISAGREEMENT") {
-      return { status: "RECONCILING", reason: "§14: RPC disagreement on txHash", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
+      return { status: "RECONCILING", reason: "§14: RPC disagreement on txHash", nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0) };
     }
 
     const tx = txResult.unanimousValue!;
@@ -179,7 +179,7 @@ export class ReconciliationEngine {
     }
 
     if (tx.status === "pending") {
-      return { status: "RECONCILING", reason: "Transaction still pending", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
+      return { status: "RECONCILING", reason: "Transaction still pending", nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0) };
     }
 
     // §24: Check confirmations
@@ -187,13 +187,13 @@ export class ReconciliationEngine {
       return {
         status: "RECONCILING",
         reason: `§24: Insufficient confirmations (${tx.confirmations ?? 0}/${this.finalityPolicy.requiredConfirmations})`,
-        nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+        nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0),
       };
     }
 
     // §7: Verify SETTLED proof bundle
     if (!tx.logs) {
-      return { status: "RECONCILING", reason: "§7: No logs available for Transfer verification", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
+      return { status: "RECONCILING", reason: "§7: No logs available for Transfer verification", nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0) };
     }
 
     // §8: Transfer matching
@@ -279,18 +279,18 @@ export class ReconciliationEngine {
 
     // All RPCs failed
     if (authResult.agreement === "ALL_FAILED") {
-      return { status: "RECONCILING", reason: "All RPCs failed", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
+      return { status: "RECONCILING", reason: "All RPCs failed", nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0) };
     }
 
     // §14: Disagreement → cannot decide
     if (authResult.agreement === "DISAGREEMENT") {
       // §11: Even if expired, disagreement means UNKNOWN
-      return { status: "RECONCILING", reason: "§14: RPC disagreement on authorizationState", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
+      return { status: "RECONCILING", reason: "§14: RPC disagreement on authorizationState", nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0) };
     }
 
     // Insufficient observations
     if (authResult.agreement === "INSUFFICIENT") {
-      return { status: "RECONCILING", reason: "§14: Insufficient RPC observations", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
+      return { status: "RECONCILING", reason: "§14: Insufficient RPC observations", nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0) };
     }
 
     const authState = authResult.unanimousValue!;
@@ -302,7 +302,7 @@ export class ReconciliationEngine {
       return {
         status: "RECONCILING",
         reason: "§10: authorizationState=true — attempting txHash recovery via AuthorizationUsed",
-        nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+        nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0),
       };
     }
 
@@ -314,7 +314,7 @@ export class ReconciliationEngine {
       return {
         status: "RECONCILING",
         reason: notSettledCheck.reason,
-        nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+        nextProbeMs: this.getNextProbeDelay((intent as any).probeCount ?? 0),
       };
     }
 
