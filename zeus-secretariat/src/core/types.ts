@@ -864,3 +864,33 @@ export interface DurableEvidenceStore {
   saveSettledEvidenceBundle(intentId: string, bundle: SettledEvidenceBundle): Promise<void>;
   saveNotSettledEvidenceBundle(intentId: string, bundle: NotSettledEvidenceBundle): Promise<void>;
 }
+
+// ============================================================================
+// PAYMENT SUBMISSION STORE INTERFACE (P0 - no as any, no optional methods)
+// ============================================================================
+
+/**
+ * Explicit contract for payment submission safety transitions.
+ * All methods are REQUIRED. No optional chaining. No as any.
+ * Implementations MUST provide atomic DB-level guarantees.
+ */
+export interface PaymentSubmissionStore extends DurableEvidenceStore {
+  /** P0-1: Atomically transition AUTHORIZED -> SUBMITTING before network I/O */
+  transitionToSubmitting(paymentIntentId: string): Promise<boolean>;
+
+  /** P0-1: Record facilitator response result after network I/O */
+  recordSubmissionResult(
+    paymentIntentId: string,
+    newState: SettlementState,
+    txHash?: string,
+    facilitatorHttpStatus?: number,
+    facilitatorResponseBody?: unknown,
+  ): Promise<boolean>;
+
+  /** P0-6: Find all non-terminal intents for batch reconciliation */
+  getNonTerminalIntents(): Promise<DurablePaymentIntent[]>;
+
+  /** Lookup by paymentIntentId (not operationId) */
+  getPaymentIntentById(paymentIntentId: string): Promise<DurablePaymentIntent | null>;
+}
+
