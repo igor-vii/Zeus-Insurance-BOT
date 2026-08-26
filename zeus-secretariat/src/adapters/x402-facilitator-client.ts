@@ -10,7 +10,7 @@
 
 import type {
   PaymentIntent,
-  PaymentIntentStatus,
+  SettlementState,
   DurableEvidenceStore,
 } from "../core/types";
 
@@ -44,7 +44,7 @@ export type SubmitResult =
   | { status: "UNKNOWN"; error: string };
 
 export interface SettlementAdapter {
-  submit(intent: PaymentIntent, payload: PaymentPayload): Promise<SubmitResult>;
+  submit(intent: DurablePaymentIntent, payload: PaymentPayload): Promise<SubmitResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,37 +78,44 @@ export class X402FacilitatorClient implements SettlementAdapter {
    *   - 200 → SUBMITTED with txHash
    */
   async submit(
-    intent: PaymentIntent,
+    intent: DurablePaymentIntent,
     payload: PaymentPayload,
   ): Promise<SubmitResult> {
-    // INV: No blind resubmit — check both in-memory and DB
-    if (this.submittedIntents.has(intent.intentId)) {
-      return {
-        status: "REJECTED",
-        reason: "ALREADY_SUBMITTED: intent already submitted to facilitator",
-        rawResponse: null,
-      };
+    // P0-1 + P1-3: DB-level guard — NOT in-memory Set.
+    // The in-memory Set is ONLY an optimization cache, never a safety boundary.
+    const dbIntent = await this.store.getPaymentIntentByOperationId(intent.operationId);
+
+    if (!dbIntent) {
+      return { status: "REJECTED", reason: "INTENT_NOT_FOUND in DB", rawResponse: null };
     }
 
-    // Check DB for existing submission (survives restart)
-    const existing = await this.store.getPaymentIntentByOperationId(
-      intent.operationId,
-    );
-    if (
-      existing &&
-      (existing.status === "SUBMITTED" ||
-        existing.status === "SETTLEMENT_PENDING" ||
-        existing.status === "SETTLED")
-    ) {
-      this.submittedIntents.add(intent.intentId);
-      return {
-        status: "REJECTED",
-        reason: `ALREADY_SUBMITTED: intent status is ${existing.status}`,
-        rawResponse: null,
-      };
+    // §3: Economic safety — check persisted state
+    if (!allowNewPayment(dbIntent.settlementState) && dbIntent.settlementState !== "AUTHORIZED") {
+      // Already past AUTHORIZED — cannot re-submit
+      if (["SUBMITTING", "SUBMITTED", "SETTLEMENT_PENDING", "RECONCILING", "SETTLED", "UNRESOLVED_MANUAL"].includes(dbIntent.settlementState)) {
+        return {
+          status: "REJECTED",
+          reason: `DB_STATE_GUARD: persisted state is ${dbIntent.settlementState}, cannot re-submit`,
+          rawResponse: null,
+        };
+      }
     }
 
-    // Mark as submitted BEFORE the network call (optimistic lock)
+    // P0-1: Atomically mark SUBMITTING BEFORE network call
+    const storeWithSubmitting = this.store as any;
+    if (typeof storeWithSubmitting.atomicallyMarkSubmitting === "function") {
+      const marked = await storeWithSubmitting.atomicallyMarkSubmitting(intent.paymentIntentId);
+      if (!marked) {
+        // State was not AUTHORIZED — another worker already moved it
+        return {
+          status: "REJECTED",
+          reason: "CAS_FAILED: could not transition to SUBMITTING — state already changed",
+          rawResponse: null,
+        };
+      }
+    }
+
+    // Optimization cache only (P1-3: NOT a safety boundary)
     this.submittedIntents.add(intent.intentId);
 
     try {
@@ -119,9 +126,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(this.config.apiKey
-            ? { Authorization: `Bearer ${this.config.apiKey}` }
-            : {}),
+          ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
         },
         body: JSON.stringify({
           paymentHeader: payload.paymentHeader,
@@ -132,7 +137,6 @@ export class X402FacilitatorClient implements SettlementAdapter {
       });
 
       clearTimeout(timeoutId);
-
       const responseBody = await response.json().catch(() => ({}));
 
       if (response.ok) {
@@ -142,63 +146,55 @@ export class X402FacilitatorClient implements SettlementAdapter {
           (responseBody as any)?.transaction_hash ??
           "";
 
-        // Update DB: mark as SETTLEMENT_PENDING
-        await this.store.updatePaymentIntentStatus(
-          intent.intentId,
-          "SETTLEMENT_PENDING",
-          {
+        // P0-1: Transition SUBMITTING → SETTLEMENT_PENDING atomically
+        if (typeof storeWithSubmitting.markSubmittedWithTxHash === "function") {
+          await storeWithSubmitting.markSubmittedWithTxHash(
+            intent.paymentIntentId, txHash, response.status, responseBody,
+          );
+        } else {
+          await this.store.updateSettlementState(intent.paymentIntentId, "SETTLEMENT_PENDING", {
             txHash: txHash || undefined,
-            facilitatorResponse: responseBody,
-          },
-        );
+            facilitatorHttpStatus: response.status,
+            facilitatorResponseBody: responseBody,
+          });
+        }
 
-        // Mark nonce as submitted
         if (intent.nonce) {
           await this.store.markNonceSubmitted(intent.nonce);
         }
 
-        return {
-          status: "SUBMITTED",
-          txHash,
-          rawResponse: responseBody,
-        };
+        return { status: "SUBMITTED", txHash, rawResponse: responseBody };
       }
 
-      // 4xx/5xx — rejected by facilitator
-      const reason =
-        (responseBody as any)?.error ??
-        (responseBody as any)?.message ??
-        `HTTP ${response.status}`;
+      // §5 + P1-1: Facilitator error → RECONCILING (not FAILED)
+      const reason = (responseBody as any)?.error ?? (responseBody as any)?.message ?? `HTTP ${response.status}`;
 
-      await this.store.updatePaymentIntentStatus(intent.intentId, "RECONCILING", {
-        facilitatorResponse: responseBody,
-      });
-
-      return {
-        status: "REJECTED",
-        reason: `FACILITATOR_ERROR: ${reason}`,
-        rawResponse: responseBody,
-      };
-    } catch (err: unknown) {
-      // Timeout or network error → UNKNOWN (critical: do NOT throw)
-      const errorMsg =
-        err instanceof Error ? err.message : "Unknown network error";
-
-      // Update DB: mark as UNKNOWN for reconciliation
-      await this.store
-        .updatePaymentIntentStatus(intent.intentId, "UNKNOWN")
-        .catch(() => {
-          // If DB update also fails, we still return UNKNOWN
-          // The reconciliation engine will find it by nonce later
+      if (typeof storeWithSubmitting.markReconcilingAfterSubmitError === "function") {
+        await storeWithSubmitting.markReconcilingAfterSubmitError(intent.paymentIntentId, response.status, reason);
+      } else {
+        await this.store.updateSettlementState(intent.paymentIntentId, "RECONCILING", {
+          facilitatorHttpStatus: response.status,
+          errorReason: reason,
         });
+      }
 
-      return {
-        status: "UNKNOWN",
-        error: `NETWORK_ERROR: ${errorMsg}`,
-      };
+      return { status: "UNKNOWN", error: `FACILITATOR_AMBIGUOUS: HTTP ${response.status} — ${reason}` };
+    } catch (err: unknown) {
+      // P0-1: Timeout/network error → RECONCILING via DB
+      const errorMsg = err instanceof Error ? err.message : "Unknown network error";
+
+      const storeWithRecon = this.store as any;
+      if (typeof storeWithRecon.markReconcilingAfterSubmitError === "function") {
+        await storeWithRecon.markReconcilingAfterSubmitError(intent.paymentIntentId, null, `NETWORK_ERROR: ${errorMsg}`).catch(() => {});
+      } else {
+        await this.store.updateSettlementState(intent.paymentIntentId, "RECONCILING", {
+          errorReason: `NETWORK_ERROR: ${errorMsg}`,
+        }).catch(() => {});
+      }
+
+      return { status: "UNKNOWN", error: `NETWORK_ERROR: ${errorMsg}` };
     }
   }
-
   /**
    * Check if an intent has already been submitted (for external callers).
    */
@@ -244,7 +240,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
   }
 
   async submit(
-    intent: PaymentIntent,
+    intent: DurablePaymentIntent,
     _payload: PaymentPayload,
   ): Promise<SubmitResult> {
     if (this.submittedIntents.has(intent.intentId)) {
@@ -267,7 +263,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
     // Simulate timeout
     if (this.behavior.forceTimeout) {
       await this.store
-        .updatePaymentIntentStatus(intent.intentId, "UNKNOWN")
+        .updateSettlementState(intent.intentId, "UNKNOWN")
         .catch(() => {});
       return {
         status: "UNKNOWN",
@@ -277,7 +273,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
 
     // Simulate HTTP error
     if (this.behavior.forceStatus && this.behavior.forceStatus >= 400) {
-      await this.store.updatePaymentIntentStatus(intent.intentId, "RECONCILING");
+      await this.store.updateSettlementState(intent.intentId, "RECONCILING");
       return {
         status: "REJECTED",
         reason: `FACILITATOR_ERROR: HTTP ${this.behavior.forceStatus}`,
@@ -289,7 +285,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
     const txHash =
       this.behavior.txHash ?? `0x${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
 
-    await this.store.updatePaymentIntentStatus(
+    await this.store.updateSettlementState(
       intent.intentId,
       "SETTLEMENT_PENDING",
       { txHash },
