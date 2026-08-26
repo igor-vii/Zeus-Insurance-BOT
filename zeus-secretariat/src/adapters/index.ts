@@ -132,3 +132,13 @@ export {
   type SettlementAdapter,
   type MockFacilitatorBehavior,
 } from "./x402-facilitator-client";
+
+// Phase 2.4: Post-Settlement Execution
+export {
+  HttpSellerExecutionAdapter,
+  MockSellerExecutionAdapter,
+  type SellerExecutionAdapter,
+  type SellerExecutionRequest,
+  type SellerExecutionResult,
+  type MockSellerBehavior,
+} from "./seller-execution-adapter";
