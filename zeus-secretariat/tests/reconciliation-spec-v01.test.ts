@@ -125,6 +125,26 @@ class TestStore implements DurableEvidenceStore {
     if (intent) (intent as any).notSettledEvidenceBundle = bundle;
   }
 
+  async transitionToSubmitting(id: string): Promise<boolean> {
+    return this.compareAndSetState(id, "AUTHORIZED", "SUBMITTING");
+  }
+
+  async recordSubmissionResult(id: string, newState: any, txHash?: string, httpStatus?: number, body?: unknown): Promise<boolean> {
+    return this.compareAndSetState(id, "SUBMITTING", newState, { txHash: txHash ?? undefined } as any);
+  }
+
+  async getPaymentIntentById(id: string): Promise<any> {
+    const i = this.intents.get(id);
+    return i ? JSON.parse(JSON.stringify(i)) : null;
+  }
+
+  async getNonTerminalIntents(): Promise<any[]> {
+    const nonTerminal = ["SUBMITTING", "SUBMITTED", "SETTLEMENT_PENDING", "RECONCILING"];
+    return Array.from(this.intents.values())
+      .filter((i: any) => nonTerminal.includes(i.settlementState))
+      .map((i: any) => JSON.parse(JSON.stringify(i)));
+  }
+
   // Test helpers
   getIntent(id: string): DurablePaymentIntent | undefined { return this.intents.get(id); }
   setIntent(id: string, intent: DurablePaymentIntent): void { this.intents.set(id, { ...intent }); }
