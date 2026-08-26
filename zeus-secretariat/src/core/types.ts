@@ -853,6 +853,25 @@ export interface DurableEvidenceStore {
     extra?: Partial<DurablePaymentIntent>,
   ): Promise<boolean>;
 
+  // P0-1: REQUIRED — atomic transition AUTHORIZED -> SUBMITTING before network I/O
+  // No optional chaining allowed. This is a hard contract requirement.
+  transitionToSubmitting(paymentIntentId: string): Promise<boolean>;
+
+  // P0-1: REQUIRED — record facilitator response atomically (SUBMITTING -> next state)
+  recordSubmissionResult(
+    paymentIntentId: string,
+    newState: SettlementState,
+    txHash?: string,
+    facilitatorHttpStatus?: number,
+    facilitatorResponseBody?: unknown,
+  ): Promise<boolean>;
+
+  // P0-6: REQUIRED — lookup by paymentIntentId (not just operationId)
+  getPaymentIntentById(paymentIntentId: string): Promise<DurablePaymentIntent | null>;
+
+  // P0-6: REQUIRED — find all non-terminal intents for batch reconciliation
+  getNonTerminalIntents(): Promise<DurablePaymentIntent[]>;
+
   // P0: Economic safety guard
   canCreateNewPayment(operationId: string): Promise<boolean>;
 
