@@ -7,7 +7,7 @@
  */
 
 import { createPublicClient, http, parseAbiItem, type PublicClient } from "viem";
-import { baseSepolia } from "viem/chains";
+// Chain is provided via OnChainNetworkConfig (no hardcoded network)
 import type { RpcProviderConfig, FinalityPolicy } from "./types";
 import { DEFAULT_FINALITY_POLICY } from "./types";
 
@@ -47,13 +47,38 @@ export interface TransferMatchResult {
   tokenContract: string;
 }
 
+/**
+ * Network configuration for on-chain verification.
+ * P1-12: No hardcoded network-specific values inside generic components.
+ */
+export interface OnChainNetworkConfig {
+  /** Chain object from viem/chains or custom chain definition */
+  chain: any; // viem Chain type
+  /** Token contract address for EIP-3009 authorization checks */
+  tokenContractAddress: `0x${string}`;
+  /** RPC URL */
+  rpcUrl: string;
+}
+
 export class ViemOnChainChecker {
   private readonly client: PublicClient;
   private readonly finalityPolicy: FinalityPolicy;
+  private readonly networkConfig: OnChainNetworkConfig;
 
-  constructor(rpcUrl: string, finalityPolicy: FinalityPolicy = DEFAULT_FINALITY_POLICY) {
-    this.client = createPublicClient({ chain: baseSepolia, transport: http(rpcUrl) });
+  constructor(
+    networkConfig: OnChainNetworkConfig,
+    finalityPolicy: FinalityPolicy = DEFAULT_FINALITY_POLICY,
+  ) {
+    this.networkConfig = networkConfig;
+    this.client = createPublicClient({
+      chain: networkConfig.chain,
+      transport: http(networkConfig.rpcUrl),
+    });
     this.finalityPolicy = finalityPolicy;
+  }
+
+  getTokenContractAddress(): `0x${string}` {
+    return this.networkConfig.tokenContractAddress;
   }
 
   async getBlockNumber(): Promise<number> {
