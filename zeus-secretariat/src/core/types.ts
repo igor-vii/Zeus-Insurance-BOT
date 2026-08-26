@@ -210,31 +210,7 @@ export type RecoveryCapability =
 // PAYMENT INTENT
 // ============================================================================
 
-export interface PaymentIntent {
-  readonly operationId: string;
-  readonly requirement: PaymentRequirement;
-  readonly amount: string;
-  readonly asset: string;
-  readonly network: string;
-  
-  authorization?: PaymentAuthorization;
-  readonly createdAt: number;
-  
-  status: PaymentIntentStatus;
-  
-  transactionHash?: string;
-  submittedAt?: number;
-  settledAt?: number;
-  failedAt?: number;
-}
 
-export type PaymentIntentStatus =
-  | 'CREATED'
-  | 'AUTHORIZED'
-  | 'SUBMITTED'
-  | 'SETTLED'
-  | 'FAILED'
-  | 'UNKNOWN';
 
 // ============================================================================
 // PAYMENT REQUIREMENT & AUTHORIZATION
@@ -690,6 +666,8 @@ export interface DurablePaymentIntent {
   settledEvidenceBundle?: SettledEvidenceBundle;
   notSettledEvidenceBundle?: NotSettledEvidenceBundle;
 
+  probeCount?: number;
+  nextProbeAt?: number;
   readonly createdAt: number;
   updatedAt: number;
 }
@@ -805,10 +783,8 @@ export const DEFAULT_FINALITY_POLICY: FinalityPolicy = {
 // ---------------------------------------------------------------------------
 
 /** @deprecated Use SettlementState instead */
-export type PaymentIntentStatus = SettlementState;
 
 /** @deprecated Use DurablePaymentIntent instead */
-export type PaymentIntent = DurablePaymentIntent;
 
 export type NonceStatus =
   | "RESERVED"
