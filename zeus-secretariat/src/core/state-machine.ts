@@ -24,9 +24,28 @@ import {
   PaymentAdapter,
   PaymentRequirement,
   SigningContext,
-  PaymentIntent,
-  PaymentIntentStatus,
 } from './types';
+
+// Legacy types used internally by StateMachine (Phase 2.1 payment flow)
+// These are NOT the canonical V0 DurablePaymentIntent — they exist only for
+// the StateMachine's internal observeExecution_DEPRECATED path.
+interface PaymentIntent {
+  operationId: string;
+  requirement: PaymentRequirement;
+  amount: string;
+  asset: string;
+  network: string;
+  authorization: PaymentAuthorization;
+  createdAt: number;
+  status: PaymentIntentStatus;
+}
+
+type PaymentIntentStatus =
+  | 'AUTHORIZED'
+  | 'SUBMITTED'
+  | 'SETTLED'
+  | 'FAILED'
+  | 'UNKNOWN';
 import { X402Parser, X402Accept } from './x402-parser';
 import { SellerCapabilityResolver, CapabilitySource } from './capability-resolver';
 
