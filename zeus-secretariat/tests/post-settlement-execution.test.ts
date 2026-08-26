@@ -43,10 +43,10 @@ class TestPaymentStore implements DurableEvidenceStore {
   async getEvidence(id: string): Promise<EvidenceRecord[]> { return this.evidence.get(id) ?? []; }
   async getOperationsByStatus(_s: OperationStatus): Promise<Operation[]> { return []; }
 
-  async createPaymentIntent(intent: PaymentIntent): Promise<void> {
-    this.intents.set(intent.intentId, { ...intent });
+  async createPaymentIntent(intent: any): Promise<void> {
+    this.intents.set(intent.paymentIntentId, { ...intent });
   }
-  async getPaymentIntentByOperationId(opId: string): Promise<PaymentIntent | null> {
+  async getPaymentIntentByOperationId(opId: string): Promise<any> {
     for (const i of this.intents.values()) if (i.operationId === opId) return { ...i };
     return null;
   }
@@ -68,7 +68,7 @@ class TestPaymentStore implements DurableEvidenceStore {
 
 function makeSettledIntent(operationId: string): PaymentIntent {
   return {
-    intentId: `intent-${operationId}`,
+    paymentIntentId: `intent-${operationId}`,
     operationId,
     status: "SETTLED",
     payer: "0xPayer",
@@ -82,7 +82,7 @@ function makeSettledIntent(operationId: string): PaymentIntent {
 }
 
 function makeEngine(
-  sellerBehavior: Parameters<typeof MockSellerExecutionAdapter>[0] = {},
+  sellerBehavior: any = {},
   capability: ExecutionCapability = "EXECUTION_IDEMPOTENT",
 ) {
   const paymentStore = new TestPaymentStore();
@@ -220,7 +220,7 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
     expect(retrievalJob).toBeDefined();
 
     // Process retrieval job
-    const result = await engine.processJob(retrievalJob!.jobId);
+    const result = await engine.processJob((retrievalJob as any)?.jobId);
 
     expect(result.success).toBe(true);
     expect(result.finalStatus).toBe("SUCCESS");
@@ -355,4 +355,34 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
       engine.initiateExecution(opId, "EXECUTION_IDEMPOTENT"),
     ).rejects.toThrow("INV-8_VIOLATION");
   });
-});
+
+  async transitionToSubmitting(id: string): Promise<boolean> {
+    return this.compareAndSetState(id, "AUTHORIZED", "SUBMITTING");
+  }
+  async recordSubmissionResult(id: string, ns: any, txHash?: string, hs?: number, body?: unknown): Promise<boolean> {
+    return this.compareAndSetState(id, "SUBMITTING", ns, { txHash: txHash ?? undefined } as any);
+  }
+  async getPaymentIntentById(id: string): Promise<any> {
+    for (const i of this.intents.values()) { if ((i as any).paymentIntentId === id) return JSON.parse(JSON.stringify(i)); }
+    return null;
+  }
+  async getNonTerminalIntents(): Promise<any[]> {
+    const nt = ["SUBMITTING","SUBMITTED","SETTLEMENT_PENDING","RECONCILING"];
+    return Array.from(this.intents.values()).filter((i:any)=>nt.includes(i.settlementState??i.status)).map((i:any)=>JSON.parse(JSON.stringify(i)));
+  }
+  async compareAndSetState(id: string, exp: any, nxt: any, extra?: any): Promise<boolean> {
+    const i = this.intents.get(id); if (!i) return false;
+    if ((i as any).settlementState !== exp && (i as any).status !== exp) return false;
+    if ((i as any).settlementState !== undefined) (i as any).settlementState = nxt; else (i as any).status = nxt;
+    if (extra?.txHash) (i as any).txHash = extra.txHash; return true;
+  }
+  async canCreateNewPayment(opId: string): Promise<boolean> {
+    for (const i of this.intents.values()) { if ((i as any).operationId === opId) { const s = (i as any).settlementState ?? (i as any).status; return s === "NOT_SETTLED"; } }
+    return true;
+  }
+  async appendReconciliationObservation(_o: any): Promise<void> {}
+  async getReconciliationObservations(_id: string): Promise<any[]> { return []; }
+  async saveSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).settledEvidenceBundle = b; }
+  async saveNotSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).notSettledEvidenceBundle = b; }
+
+}
