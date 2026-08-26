@@ -9,10 +9,11 @@
  */
 
 import type {
-  PaymentIntent,
+  DurablePaymentIntent,
   SettlementState,
   DurableEvidenceStore,
 } from "../core/types";
+import { allowNewPayment } from "../core/types";
 
 // ---------------------------------------------------------------------------
 // Types
