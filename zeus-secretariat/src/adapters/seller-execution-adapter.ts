@@ -127,7 +127,7 @@ export class HttpSellerExecutionAdapter implements SellerExecutionAdapter {
       const errorMsg = err instanceof Error ? err.message : "Unknown error";
 
       // Classify the error — this is DELIVERY_UNKNOWN, not HTTP_FAILURE
-      let reason: SellerExecutionResult & { kind: "DELIVERY_UNKNOWN" }["reason"];
+      let reason: "TIMEOUT" | "CONNECTION_RESET" | "RESPONSE_STREAM_FAILED" | "CLIENT_ABORTED" | "DNS_RESOLUTION_FAILED";
 
       if (errorMsg.includes("abort") || errorMsg.includes("timeout")) {
         reason = "TIMEOUT";
