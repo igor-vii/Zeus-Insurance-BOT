@@ -1,94 +1,75 @@
 # CANONICAL V0 EXECUTION PATH
 
-**Date:** 26.08.2026 | **Status:** FROZEN - AUTHORITATIVE
+**Date:** 27.08.2026 | **Status:** FROZEN
 
----
+## Payment Path
 
-## THE ONE PAYMENT PATH
+CLIENT -> SECRETARIAT API -> REQUEST -> PAYMENT REQUIRED (x402 402)
+-> CLIENT-SIGNED PAYLOAD (EIP-3009) -> PAYMENT INTENT (AUTHORIZED, persisted)
+-> SUBMITTING (atomic CAS before network I/O) -> FACILITATOR /settle
+-> SETTLEMENT_PENDING / RECONCILING -> ReconciliationEngine
+-> SETTLED / NOT_SETTLED / UNRESOLVED_MANUAL
 
-CLIENT -> SECRETARIAT -> REQUEST -> PAYMENT REQUIRED -> CLIENT-SIGNED PAYLOAD
--> PAYMENT INTENT CREATED (state=AUTHORIZED, persisted to PostgreSQL)
-   UNIQUE(operation_id) enforced at DB level
-   All spec section 4 fields persisted BEFORE any network I/O
--> SUBMITTING (atomic CAS: AUTHORIZED -> SUBMITTING, persisted)
-   compareAndSetState with version check
-   This transition MUST succeed before network call begins
--> FACILITATOR /settle (network I/O)
-   2xx + txHash -> recordSubmissionResult(SUBMITTED or SETTLEMENT_PENDING)
-   4xx rejection -> recordSubmissionResult(RECONCILING)
-   5xx / timeout -> state stays SUBMITTING (crash-safe, recovery handles it)
-   crash -> state stays SUBMITTING (recovery handles it)
--> RECONCILING (explicitly set, or recovered from SUBMITTING after crash)
--> ReconciliationEngine.reconcile()
-   txHash known -> checkTransaction -> receipt + Transfer match
-     success + confirmed -> SETTLED
-     reverted -> NOT_SETTLED
-     pending/unconfirmed -> RECONCILING (retry)
-   txHash unknown -> authorizationState(authorizer, nonce)
-     true -> find AuthorizationUsed event -> recover txHash -> SETTLED path
-     false + expired + 2 RPC agree -> NOT_SETTLED
-     false + not expired -> RECONCILING (wait)
-     RPC disagreement -> RECONCILING (wait)
-     RPC error -> RECONCILING (retry)
--> TERMINAL STATE: SETTLED or NOT_SETTLED or UNRESOLVED_MANUAL
+Facilitator response handling:
+- 2xx + txHash -> SETTLEMENT_PENDING (CAS SUBMITTING->SETTLEMENT_PENDING)
+- 4xx rejection -> RECONCILING (blockchain has priority)
+- 5xx / timeout / no response -> state stays SUBMITTING (crash-safe)
 
-## THE ONE SELLER EXECUTION PATH
+Reconciliation probes: [2s, 10s, 30s, 2m, periodic]
+- txHash known -> receipt + Transfer matching -> SETTLED
+- txHash unknown -> authorizationState -> AuthorizationUsed -> SETTLED
+- expired + 2 RPC agree false -> NOT_SETTLED
+- ambiguous -> RECONCILING (retry)
 
-SETTLED (persisted with SettledEvidenceBundle)
--> PostSettlementEngine.initiateExecution() <-- ONLY ENTRY POINT
-   Verifies settlement state == SETTLED
-   Creates ExecutionAttempt with stable idempotency key = operationId
-   Creates RecoveryJob in reconciliation_jobs table
--> RecoveryWorker claims job (atomic SQL UPDATE...RETURNING)
--> SellerExecutionAdapter.execute(request)
-   SUCCESS -> execution complete, evidence persisted
-   HTTP_FAILURE -> definitive failure, evidence persisted
-   DELIVERY_UNKNOWN -> capability-based recovery:
-     EXECUTION_IDEMPOTENT -> retry with SAME idempotency key
-     RESULT_RETRIEVAL -> GET observation (NOT re-execution)
-     NONE -> UNRESOLVABLE (no blind retry)
+## Seller Execution Path (after SETTLED)
 
-## REMOVED / ISOLATED PATHS
+SETTLED -> PostSettlementEngine.initiateExecution() [ONLY entry point]
+-> ExecutionAttempt (PENDING, persisted) -> RecoveryJob (atomic claim)
+-> SellerExecutionAdapter.execute()
+- SUCCESS (2xx) -> complete
+- HTTP_FAILURE (4xx/5xx) -> definitive failure
+- DELIVERY_UNKNOWN -> recovery via capability (IDEMPOTENT/RETRIEVAL/NONE)
 
-### StateMachine.observeExecution()
-**Status:** REMOVED from production execution path.
-Phase 2.1 initial implementation. NO LONGER authoritative.
-Must be deleted, or delegate to PostSettlementEngine, or marked @experimental.
-MUST NOT contain own HTTP execution logic or economic decision-making.
+## Economic Safety Invariant
 
-### InMemoryExecutionStore (Phase 2.4)
-**Status:** EXPERIMENTAL - NOT PRODUCTION
-V0 uses execution_attempts and reconciliation_jobs tables in PostgreSQL.
-InMemoryExecutionStore remains for unit tests only.
+allow_new_payment(state) = (state == NOT_SETTLED)
 
-### InMemoryEvidenceStore
-**Status:** TEST ONLY. Production uses PostgresEvidenceStore exclusively.
+Enforced at: type level, store level (PostgreSQL read), DB level (UNIQUE operation_id), CAS level.
 
-### Mock implementations
-**Status:** TEST ONLY. Never imported in production code paths.
+## Removed / Isolated Paths
 
-## ECONOMIC SAFETY INVARIANT
+| Path | Status | Reason |
+|------|--------|--------|
+| StateMachine.observeExecution() | REMOVED from production | Alternative execution path bypassing PostSettlementEngine |
+| InMemoryExecutionStore | EXPERIMENTAL only | Phase 2.4 prototype, not production |
+| InMemoryEvidenceStore | REMOVED | Replaced by PostgresEvidenceStore |
+| submittedIntents Set | OPTIMIZATION CACHE only | NOT safety boundary. DB is authoritative. |
+| MockX402FacilitatorClient | TEST only | Same semantics as production |
+| MockSellerExecutionAdapter | TEST only | Same 3-way taxonomy |
+| MockMultiRpcChecker | TEST only | Same agreement logic |
 
-NEW_PAYMENT_ALLOWED(state) <=> state == NOT_SETTLED
+## On-Chain Verification
 
-Enforcement layers:
-1. Type level: allowNewPayment() function
-2. Store level: canCreateNewPayment(operationId) reads PostgreSQL
-3. DB level: UNIQUE(operation_id) prevents duplicate intent creation
-4. CAS level: compareAndSetState() prevents conflicting terminal transitions
-5. Facade level: X402FacilitatorClient.submit() calls canCreateNewPayment() before network I/O
+ReconciliationEngine -> MultiRpcChecker -> SingleRpcProvider x N -> ViemOnChainChecker
+- MultiRpcChecker = aggregation + agreement detection + NOT_SETTLED gate
+- SingleRpcProvider = single RPC endpoint wrapper
+- ViemOnChainChecker = viem calls (authorizationState, getLogs, getTransactionReceipt)
+- Network config = explicit configuration, not hardcoded
 
-No code path may bypass these checks. No as any. No optional method calls. No in-memory-only guards.
+## Recovery After Crash
 
-## COMPONENT RESPONSIBILITY MAP
+Process restarts -> getNonTerminalIntents() finds SUBMITTING/SUBMITTED/SETTLEMENT_PENDING/RECONCILING
+- SUBMITTING without txHash -> CAS to RECONCILING
+- Others -> ReconciliationEngine.reconcile()
+- NEVER re-submit to facilitator after crash. Always reconcile first.
 
-ReconciliationEngine -> MultiRpcChecker -> SingleRpcProvider x N -> Chain RPC
-PostSettlementEngine -> SellerExecutionAdapter -> Seller HTTP endpoint
-PostgresEvidenceStore -> PostgreSQL (payment_intents, nonce_registry, reconciliation_observations, reconciliation_jobs)
+## Database Tables
 
-## NETWORK CONFIGURATION
-
-V0 targets Base Sepolia. All network-specific values MUST come from configuration:
-- Chain ID, Token contract address, RPC URLs (min 2 independent providers)
-- Confirmation count (FinalityPolicy), Facilitator endpoint, Seller endpoint
-Hardcoded baseSepolia or 0xUSDC inside generic components is a defect.
+| Table | Purpose | Key Constraints |
+|-------|---------|-----------------|
+| payment_intents | Payment lifecycle | PK, UNIQUE(operation_id), version for CAS |
+| nonce_registry | Nonce reservation | PK(nonce) |
+| reconciliation_observations | Per-probe RPC data | FK(payment_intent_id) |
+| reconciliation_jobs | Probe schedule | Atomic claim via UPDATE...RETURNING |
+| execution_attempts | Seller execution | UNIQUE(execution_id, attempt_number) |
+| recovery_jobs | Post-settlement queue | Atomic claim via locked_by/locked_until |
