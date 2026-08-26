@@ -582,3 +582,66 @@ export interface ExecuteRequest {
    */
   requestId?: string;
 }
+
+// ============================================================================
+// PAYMENT INTENT & NONCE REGISTRY (Phase 2.2.1 — Durable Storage)
+// ============================================================================
+
+export type PaymentIntentStatus =
+  | 'NOT_STARTED'
+  | 'AUTHORIZED'
+  | 'SUBMITTED'
+  | 'SETTLEMENT_PENDING'
+  | 'SETTLED'
+  | 'FAILED'
+  | 'UNKNOWN';
+
+export type NonceStatus =
+  | 'RESERVED'
+  | 'SIGNED'
+  | 'SUBMITTED'
+  | 'SETTLED';
+
+export interface PaymentIntent {
+  readonly intentId: string;
+  readonly operationId: string;
+  status: PaymentIntentStatus;
+  payer: string;
+  payTo: string;
+  value: string;           // USDC amount as decimal string
+  nonce?: string;
+  signature?: string;      // hex-encoded EIP-712 signature
+  txHash?: string;         // settlement transaction hash
+  facilitatorResponse?: unknown;
+  metadata?: unknown;
+  createdAt: number;       // epoch ms
+  updatedAt: number;       // epoch ms
+}
+
+export interface NonceRecord {
+  readonly nonce: string;
+  readonly operationId: string;
+  status: NonceStatus;
+  payer: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Extended EvidenceStore interface with durable payment intent and nonce operations.
+ */
+export interface DurableEvidenceStore extends EvidenceStore {
+  createPaymentIntent(intent: PaymentIntent): Promise<void>;
+  getPaymentIntentByOperationId(operationId: string): Promise<PaymentIntent | null>;
+  updatePaymentIntentStatus(
+    intentId: string,
+    status: PaymentIntentStatus,
+    extra?: Partial<Pick<PaymentIntent, 'txHash' | 'signature' | 'facilitatorResponse'>>,
+  ): Promise<void>;
+  reserveNonce(nonce: string, operationId: string, payer: string): Promise<void>;
+  getNonce(nonce: string): Promise<NonceRecord | null>;
+  markNonceSigned(nonce: string): Promise<void>;
+  markNonceSubmitted(nonce: string): Promise<void>;
+  markNonceSettled(nonce: string): Promise<void>;
+  createIntentWithNonce(intent: PaymentIntent, payer: string): Promise<void>;
+}
