@@ -47,7 +47,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
         paymentPayload: intent.paymentPayload, paymentPayloadHash: intent.paymentPayloadHash,
         settlementState: intent.settlementState, txHash: intent.txHash ?? null,
         submitAttemptAt: intent.submitAttemptAt ? new Date(intent.submitAttemptAt) : null,
-        probeCount: (intent as any).probeCount ?? 0, version: 0,
+        probeCount: intent.probeCount ?? 0, version: 0,
       });
     } catch (err: unknown) {
       if ((err as { code?: string }).code === "23505") throw new Error("DUPLICATE_OPERATION_ID: " + intent.operationId);
@@ -133,7 +133,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
 
   async getEvidence(operationId: string): Promise<EvidenceRecord[]> {
     const intent = await this.getPaymentIntentByOperationId(operationId);
-    return (intent?.reconciliationObservations as unknown as EvidenceRecord[]) ?? [];
+    return ((intent?.reconciliationObservations ?? []) as unknown as EvidenceRecord[]);
   }
 
   async appendReconciliationObservation(obs: ReconciliationObservation): Promise<void> {
@@ -284,7 +284,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       settledEvidenceBundle: row.settledEvidenceBundle as any,
       notSettledEvidenceBundle: row.notSettledEvidenceBundle as any,
       reconciliationObservations: row.reconciliationObservations as any,
-      probeCount: (row as any).probeCount ?? 0, createdAt: row.createdAt.getTime(), updatedAt: row.updatedAt.getTime(),
+      probeCount: row.probeCount ?? 0, createdAt: row.createdAt.getTime(), updatedAt: row.updatedAt.getTime(),
     };
   }
 }
