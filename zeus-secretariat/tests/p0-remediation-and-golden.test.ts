@@ -210,7 +210,6 @@ function makeIntent(overrides: Partial<DurablePaymentIntent> = {}): DurablePayme
     settlementState: "AUTHORIZED",
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    probeCount: 0,
     ...overrides,
   };
 }
