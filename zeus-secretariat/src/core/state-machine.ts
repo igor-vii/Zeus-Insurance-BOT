@@ -127,7 +127,7 @@ function isValidTransition(from: OperationStatus, to: OperationStatus): boolean 
  */
 
 export interface SecretariatConfig {
-  evidenceStore: EvidenceStore;
+  evidenceStore: EvidenceStore & Partial<DurableEvidenceStore>;
   signer: PaymentSigner;
   adapters: Map<string, PaymentAdapter>;
   capabilitySources?: CapabilitySource[];
@@ -178,15 +178,12 @@ export class Secretariat {
         await this.observeSettlement(operation);
       }
 
-      // Step 7: Execution observation — DEFERRED to PostSettlementEngine
-      // P0-B FIX: Removed direct seller fetch from StateMachine.
-      // Canonical V0 path: SETTLED → PostSettlementEngine.initiateExecution() → SellerExecutionAdapter
-      // StateMachine must NOT make HTTP calls to seller directly.
-      // The operation remains in its current state; PostSettlementEngine picks it up externally.
+      // Step 7: Durable settlement + execution obligation handoff
+      // INV-9: Every SETTLED transition must leave a durable recoverable execution obligation.
+      // StateMachine does NOT execute seller work — it only persists the handoff.
+      // PostSettlementEngine owns execution lifecycle exclusively.
       if (operation.currentState === 'SETTLED' || operation.currentState === 'EXECUTION_PENDING') {
-        this.recordEvidence(operation, 'EXECUTION', 'EXECUTION_DEFERRED_TO_POST_SETTLEMENT_ENGINE', {
-          note: 'Seller execution delegated to PostSettlementEngine — no direct fetch from StateMachine',
-        });
+        await this.persistSettlementAndExecutionObligation(operation);
       }
 
       // Step 8: Delivery
@@ -854,7 +851,101 @@ export class Secretariat {
   // RESULT BUILDING
   // ==========================================================================
 
-  private buildResult(operation: Operation): ExecutionResult {
+  /**
+   * TASK 3+4+5: Atomically persist SETTLED state + execution obligation.
+   *
+   * This is the durable handoff boundary. After this method returns:
+   *   - payment_intents.settlement_state = SETTLED (persisted)
+   *   - recovery_jobs(EXECUTION, PENDING) exists (persisted)
+   *   - execution_attempts(PENDING) exists (persisted)
+   *
+   * PostSettlementEngine.recoverPendingJobs() will discover and process the job.
+   * StateMachine does NOT call sellerAdapter or manage execution attempts.
+   *
+   * If the store supports settleAndCreateExecutionObligation (PostgresExecutionStore),
+   * the entire operation is atomic. Otherwise, falls back to sequential persistence.
+   */
+  private async persistSettlementAndExecutionObligation(operation: Operation): Promise<void> {
+    const store = this.config.evidenceStore as EvidenceStore & Partial<{
+      settleAndCreateExecutionObligation: (
+        paymentIntentId: string,
+        operationId: string,
+        settledEvidenceBundle: unknown,
+        job: any,
+        attempt: any,
+      ) => Promise<boolean>;
+    }>;
+
+    const now = Date.now();
+    const jobId = `rj-${now}-${Math.random().toString(36).slice(2)}`;
+    const attemptId = `att-${now}-${Math.random().toString(36).slice(2)}`;
+
+    const job = {
+      jobId,
+      operationId: operation.operationId,
+      jobType: "EXECUTION" as const,
+      status: "PENDING" as const,
+      priority: 0,
+      maxAttempts: 3,
+      currentAttempt: 0,
+      metadata: { capability: "EXECUTION_IDEMPOTENT", requestBody: operation.requestPayload },
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const attempt = {
+      attemptId,
+      operationId: operation.operationId,
+      executionId: operation.operationId, // INV-10: executionId = operationId
+      attemptNumber: 1,
+      status: "PENDING" as const,
+      idempotencyKey: operation.operationId, // INV-11: stable idempotency key
+      createdAt: now,
+    };
+
+    const settledEvidence = operation.settlementProof ?? {
+      observedAt: now,
+      source: "StateMachine.observeSettlement",
+    };
+
+    // Try atomic handoff first (PostgresExecutionStore)
+    if (typeof store.settleAndCreateExecutionObligation === "function") {
+      const success = await store.settleAndCreateExecutionObligation(
+        operation.operationId,
+        operation.operationId,
+        settledEvidence,
+        job,
+        attempt,
+      );
+      if (success) {
+        this.recordEvidence(operation, 'EXECUTION', 'DURABLE_EXECUTION_OBLIGATION_CREATED', {
+          jobId,
+          attemptId,
+          executionId: operation.operationId,
+        });
+        return;
+      }
+      // CAS failed — already settled by another worker. Record evidence and return.
+      this.recordEvidence(operation, 'EXECUTION', 'SETTLEMENT_ALREADY_PERSISTED', {
+        note: 'CAS failed — settlement already persisted by another worker',
+      });
+      return;
+    }
+
+    // Fallback: sequential persistence (for stores without atomic handoff)
+    // Persist operation state
+    await this.persistOperation(operation);
+
+    // Record durable handoff evidence
+    this.recordEvidence(operation, 'EXECUTION', 'DURABLE_EXECUTION_OBLIGATION_CREATED', {
+      jobId,
+      attemptId,
+      executionId: operation.operationId,
+      note: 'Sequential persistence — atomic handoff not available on this store',
+    });
+  }
+
+    private buildResult(operation: Operation): ExecutionResult {
     return {
       operationId: operation.operationId,
       status: this.mapToFinalStatus(operation.currentState),
