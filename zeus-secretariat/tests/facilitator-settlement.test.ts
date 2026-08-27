@@ -251,7 +251,7 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
     // Verify DB updated to SETTLEMENT_PENDING
     const updated = await store.getPaymentIntentByOperationId(intent.operationId);
     expect(updated!.settlementState).toBe("SETTLEMENT_PENDING");
-    expect(updated!.txHash).toBe("0xabc123");
+    expect((updated as any).txHash).toBe("0xabc123");
 
     // Verify nonce marked as submitted
     const nonceRecord = await store.getNonce(intent.nonce!);
@@ -317,7 +317,7 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
     // Verify DB updated to SETTLED
     const updated = await store.getPaymentIntentByOperationId(intent.operationId);
     expect(updated!.settlementState).toBe("SETTLED");
-    expect(updated!.txHash).toBe("0xfound_via_nonce_0x1234");
+    expect((updated as any).txHash).toBe("0xfound_via_nonce_0x1234");
 
     // Verify nonce marked as settled
     const nonceRecord = await store.getNonce("0xdeadbeef1234");
