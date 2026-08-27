@@ -178,9 +178,15 @@ export class Secretariat {
         await this.observeSettlement(operation);
       }
 
-      // Step 7: Execution observation
+      // Step 7: Execution observation — DEFERRED to PostSettlementEngine
+      // P0-B FIX: Removed direct seller fetch from StateMachine.
+      // Canonical V0 path: SETTLED → PostSettlementEngine.initiateExecution() → SellerExecutionAdapter
+      // StateMachine must NOT make HTTP calls to seller directly.
+      // The operation remains in its current state; PostSettlementEngine picks it up externally.
       if (operation.currentState === 'SETTLED' || operation.currentState === 'EXECUTION_PENDING') {
-        await this.observeExecution_DEPRECATED_USE_POST_SETTLEMENT_ENGINE(operation);
+        this.recordEvidence(operation, 'EXECUTION', 'EXECUTION_DEFERRED_TO_POST_SETTLEMENT_ENGINE', {
+          note: 'Seller execution delegated to PostSettlementEngine — no direct fetch from StateMachine',
+        });
       }
 
       // Step 8: Delivery
