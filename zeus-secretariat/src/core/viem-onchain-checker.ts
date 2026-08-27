@@ -73,7 +73,7 @@ export class ViemOnChainChecker {
     this.client = createPublicClient({
       chain: networkConfig.chain,
       transport: http(networkConfig.rpcUrl),
-    }) as PublicClient;
+    }) as unknown as PublicClient;
     this.finalityPolicy = finalityPolicy;
   }
 
