@@ -5,7 +5,8 @@
  */
 
 import { PostSettlementEngine, InMemoryExecutionStore } from "../src/core/post-settlement-engine";
-import type { ExecutionAttempt, RecoveryJob, DurablePaymentIntent, DurableEvidenceStore, EvidenceRecord, Operation, OperationStatus, SettlementState, SettledEvidenceBundle, NotSettledEvidenceBundle, ReconciliationObservation, NonceRecord } from "../src/core/types";
+import type { DurablePaymentIntent, DurableEvidenceStore, EvidenceRecord, Operation, OperationStatus, SettlementState, SettledEvidenceBundle, NotSettledEvidenceBundle, ReconciliationObservation, NonceRecord } from "../src/core/types";
+import type { ExecutionAttempt, RecoveryJob } from "../src/core/post-settlement-engine";
 import { MockSellerExecutionAdapter } from "../src/adapters/seller-execution-adapter";
 import type { SellerExecutionResult } from "../src/adapters/seller-execution-adapter";
 
