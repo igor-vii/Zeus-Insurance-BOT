@@ -52,7 +52,7 @@ class TestPaymentStore implements DurableEvidenceStore {
   }
   async updatePaymentIntentStatus(id: string, status: any, extra?: any): Promise<void> {
     const i = this.intents.get(id);
-    if (i) { i.status = status; if (extra?.txHash) i.txHash = extra.txHash; }
+    if (i) { (i as any).settlementState = status; (i as any).status = status; if (extra?.txHash) (i as any).txHash = extra.txHash; }
   }
   async reserveNonce(): Promise<void> {}
   async getNonce(): Promise<null> { return null; }
