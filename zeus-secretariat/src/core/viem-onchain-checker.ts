@@ -162,6 +162,7 @@ export class ViemOnChainChecker {
               logIndex: log.logIndex ?? 0,
             };
           }
+        } catch { /* not AuthorizationUsed */ }
       }
     }
 
