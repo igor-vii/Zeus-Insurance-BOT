@@ -16,7 +16,7 @@
  */
 
 import { PostgresEvidenceStore } from "../src/store/postgres-store";
-import type { PaymentIntent } from "../src/core/types";
+import type { DurablePaymentIntent } from "../src/core/types";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 
@@ -34,14 +34,21 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
     const operationId = `op-restart-${Date.now()}`;
     const payer = "0xTestPayer";
 
-    const intent: PaymentIntent = {
+    const now = Math.floor(Date.now() / 1000);
+    const intent: DurablePaymentIntent = {
       paymentIntentId: `intent-${Date.now()}`,
       operationId,
-      status: "AUTHORIZED",
-      payer,
+      settlementState: "AUTHORIZED",
+      authorizer: payer,
       payTo: "0xTestPayee",
       value: "1000000",
+      asset: "0xUSDC",
+      network: "base-sepolia",
       nonce,
+      validAfter: now - 3600,
+      validBefore: now + 3600,
+      paymentPayload: "base64payload",
+      paymentPayloadHash: "0xhash",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -77,24 +84,39 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
   test("AB: duplicate operationId is rejected by unique constraint", async () => {
     const operationId = `op-idempotent-${Date.now()}`;
 
-    const intent1: PaymentIntent = {
+    const now2 = Math.floor(Date.now() / 1000);
+    const intent1: DurablePaymentIntent = {
       paymentIntentId: `intent-first-${Date.now()}`,
       operationId,
-      status: "AUTHORIZED",
-      payer: "0xPayer1",
+      settlementState: "AUTHORIZED",
+      authorizer: "0xPayer1",
       payTo: "0xPayee1",
       value: "500000",
+      asset: "0xUSDC",
+      network: "base-sepolia",
+      nonce: `0x${Date.now().toString(16)}a`,
+      validAfter: now2 - 3600,
+      validBefore: now2 + 3600,
+      paymentPayload: "base64payload1",
+      paymentPayloadHash: "0xhash1",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
 
-    const intent2: PaymentIntent = {
+    const intent2: DurablePaymentIntent = {
       paymentIntentId: `intent-second-${Date.now()}`,
       operationId, // SAME operationId!
-      status: "SUBMITTED",
-      payer: "0xPayer2",
+      settlementState: "SUBMITTED",
+      authorizer: "0xPayer2",
       payTo: "0xPayee2",
       value: "999999",
+      asset: "0xUSDC",
+      network: "base-sepolia",
+      nonce: `0x${Date.now().toString(16)}b`,
+      validAfter: now2 - 3600,
+      validBefore: now2 + 3600,
+      paymentPayload: "base64payload2",
+      paymentPayloadHash: "0xhash2",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -140,13 +162,21 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
   // ---- Test AD: Payment intent status update ----
 
   test("AD: payment intent status updates correctly with txHash", async () => {
-    const intent: PaymentIntent = {
+    const now3 = Math.floor(Date.now() / 1000);
+    const intent: DurablePaymentIntent = {
       paymentIntentId: `intent-update-${Date.now()}`,
       operationId: `op-update-${Date.now()}`,
-      status: "AUTHORIZED",
-      payer: "0xUpdatePayer",
+      settlementState: "AUTHORIZED",
+      authorizer: "0xUpdatePayer",
       payTo: "0xUpdatePayee",
       value: "2000000",
+      asset: "0xUSDC",
+      network: "base-sepolia",
+      nonce: `0x${Date.now().toString(16)}c`,
+      validAfter: now3 - 3600,
+      validBefore: now3 + 3600,
+      paymentPayload: "base64payload3",
+      paymentPayloadHash: "0xhash3",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
