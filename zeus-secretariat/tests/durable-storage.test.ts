@@ -57,7 +57,7 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
     expect(recovered).not.toBeNull();
     expect(recovered!.operationId).toBe(operationId);
     expect(recovered!.settlementState).toBe("AUTHORIZED");
-    expect(recovered!.payer).toBe(payer);
+    expect((recovered as any).payer).toBe(payer);
     expect(recovered!.nonce).toBe(nonce);
 
     // Verify nonce survived
@@ -108,7 +108,7 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
     // Verify only first intent exists
     const recovered = await store.getPaymentIntentByOperationId(operationId);
     expect(recovered).not.toBeNull();
-    expect(recovered!.payer).toBe("0xPayer1");
+    expect((recovered as any).payer).toBe("0xPayer1");
     expect(recovered!.value).toBe("500000");
   });
 
@@ -159,7 +159,7 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
 
     let recovered = await store.getPaymentIntentByOperationId(intent.operationId);
     expect(recovered!.settlementState).toBe("SUBMITTED");
-    expect(recovered!.signature).toBe("0xdeadbeef");
+    expect((recovered as any).signature).toBe("0xdeadbeef");
 
     await store.updatePaymentIntentStatus(intent.paymentIntentId, "SETTLED", {
       txHash: "0xabcdef1234567890",
