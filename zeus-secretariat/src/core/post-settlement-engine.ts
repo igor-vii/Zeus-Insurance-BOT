@@ -15,7 +15,7 @@
 
 import type {
   DurableEvidenceStore,
-  PaymentIntent,
+  DurablePaymentIntent,
   EvidenceRecord,
 } from "./types";
 import type {
@@ -227,9 +227,9 @@ export class PostSettlementEngine {
   ): Promise<{ attemptId: string; jobId: string }> {
     // INV-8: Verify settlement
     const intent = await this.paymentStore.getPaymentIntentByOperationId(operationId);
-    if (!intent || intent.status !== "SETTLED") {
+    if (!intent || intent.settlementState !== "SETTLED") {
       throw new Error(
-        `INV-8_VIOLATION: Cannot execute — intent status is ${intent?.status ?? "NOT_FOUND"}, expected SETTLED`,
+        `INV-8_VIOLATION: Cannot execute — intent status is ${intent?.settlementState ?? "NOT_FOUND"}, expected SETTLED`,
       );
     }
 
