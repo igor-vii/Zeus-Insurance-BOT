@@ -19,7 +19,7 @@ import {
 import { MockSellerExecutionAdapter } from "../src/adapters/seller-execution-adapter";
 import type {
   DurableEvidenceStore,
-  PaymentIntent,
+  DurablePaymentIntent,
   EvidenceRecord,
   Operation,
   OperationStatus,
@@ -30,7 +30,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 class TestPaymentStore implements DurableEvidenceStore {
-  private intents: Map<string, PaymentIntent> = new Map();
+  private intents: Map<string, DurablePaymentIntent> = new Map();
   private evidence: Map<string, EvidenceRecord[]> = new Map();
 
   async append(record: EvidenceRecord): Promise<void> {
@@ -66,15 +66,22 @@ class TestPaymentStore implements DurableEvidenceStore {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeSettledIntent(operationId: string): PaymentIntent {
+function makeSettledIntent(operationId: string): DurablePaymentIntent {
+  const now = Math.floor(Date.now() / 1000);
   return {
     paymentIntentId: `intent-${operationId}`,
     operationId,
-    status: "SETTLED",
-    payer: "0xPayer",
+    settlementState: "SETTLED",
+    authorizer: "0xPayer",
     payTo: "0xPayee",
     value: "1000000",
+    asset: "0xUSDC",
+    network: "base-sepolia",
     nonce: "0xnonce",
+    validAfter: now - 3600,
+    validBefore: now + 3600,
+    paymentPayload: "base64payload",
+    paymentPayloadHash: "0xhash",
     txHash: "0xtxhash",
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -348,7 +355,7 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
     // Create intent with AUTHORIZED status (not SETTLED)
     await paymentStore.createPaymentIntent({
       ...makeSettledIntent(opId),
-      status: "AUTHORIZED",
+      settlementState: "AUTHORIZED",
     });
 
     await expect(
