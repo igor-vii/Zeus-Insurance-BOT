@@ -24,7 +24,7 @@ class MockOnChainChecker {
   async checkNonceUsage(_payer: string, nonce: string) { return this.nonceResults.get(nonce.toLowerCase()) ?? null; }
 }
 import type {
-  PaymentIntent,
+  DurablePaymentIntent,
   DurableEvidenceStore,
   EvidenceRecord,
   Operation,
@@ -36,7 +36,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 class InMemoryDurableStore implements DurableEvidenceStore {
-  private intents: Map<string, PaymentIntent> = new Map();
+  private intents: Map<string, DurablePaymentIntent> = new Map();
   private nonces: Map<string, { nonce: string; operationId: string; status: string; payer: string; createdAt: number; updatedAt: number }> = new Map();
   private evidence: Map<string, EvidenceRecord[]> = new Map();
   private operations: Map<string, Operation> = new Map();
@@ -198,15 +198,22 @@ class InMemoryDurableStore implements DurableEvidenceStore {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeIntent(overrides: Partial<any> = {}): PaymentIntent {
+function makeIntent(overrides: Partial<DurablePaymentIntent> = {}): DurablePaymentIntent {
+  const now = Math.floor(Date.now() / 1000);
   return {
     paymentIntentId: `intent-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     operationId: `op-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    status: "AUTHORIZED",
-    payer: "0xPayer",
+    settlementState: "AUTHORIZED",
+    authorizer: "0xPayer",
     payTo: "0xPayee",
     value: "1000000",
+    asset: "0xUSDC",
+    network: "base-sepolia",
     nonce: `0x${Date.now().toString(16)}`,
+    validAfter: now - 3600,
+    validBefore: now + 3600,
+    paymentPayload: "base64payload",
+    paymentPayloadHash: "0xhash",
     createdAt: Date.now(),
     updatedAt: Date.now(),
     ...overrides,
@@ -351,7 +358,7 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
 
   test("AG: reconciliation confirms settled tx by txHash", async () => {
     const intent = makeIntent({
-      status: "UNKNOWN",
+      settlementState: "RECONCILING",
       txHash: "0xknown_tx_hash",
     });
     await store.createPaymentIntent(intent);
@@ -376,7 +383,7 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
 
   test("AH: reconciliation detects reverted transaction", async () => {
     const intent = makeIntent({
-      status: "UNKNOWN",
+      settlementState: "RECONCILING",
       txHash: "0xreverted_tx",
     });
     await store.createPaymentIntent(intent);
