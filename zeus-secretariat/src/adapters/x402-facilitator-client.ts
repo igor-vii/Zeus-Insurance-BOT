@@ -103,7 +103,6 @@ export class X402FacilitatorClient implements SettlementAdapter {
     }
 
     // P0-1: Atomically mark SUBMITTING BEFORE network call
-    const storeWithSubmitting = this.store as any;
     if (typeof storeWithSubmitting.atomicallyMarkSubmitting === "function") {
       const marked = await storeWithSubmitting.atomicallyMarkSubmitting(intent.paymentIntentId);
       if (!marked) {
@@ -184,8 +183,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
       // P0-1: Timeout/network error → RECONCILING via DB
       const errorMsg = err instanceof Error ? err.message : "Unknown network error";
 
-      const storeWithRecon = this.store as any;
-      if (typeof storeWithRecon.markReconcilingAfterSubmitError === "function") {
+        if (typeof storeWithRecon.markReconcilingAfterSubmitError === "function") {
         await storeWithRecon.markReconcilingAfterSubmitError(intent.paymentIntentId, null, `NETWORK_ERROR: ${errorMsg}`).catch(() => {});
       } else {
         await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
