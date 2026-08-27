@@ -103,16 +103,13 @@ export class X402FacilitatorClient implements SettlementAdapter {
     }
 
     // P0-1: Atomically mark SUBMITTING BEFORE network call
-    if (typeof storeWithSubmitting.atomicallyMarkSubmitting === "function") {
-      const marked = await storeWithSubmitting.atomicallyMarkSubmitting(intent.paymentIntentId);
-      if (!marked) {
-        // State was not AUTHORIZED — another worker already moved it
-        return {
-          status: "REJECTED",
-          reason: "CAS_FAILED: could not transition to SUBMITTING — state already changed",
-          rawResponse: null,
-        };
-      }
+    const marked = await this.store.transitionToSubmitting(intent.paymentIntentId);
+    if (!marked) {
+      return {
+        status: "REJECTED",
+        reason: "CAS_FAILED: could not transition to SUBMITTING — state already changed",
+        rawResponse: null,
+      };
     }
 
     // Optimization cache only (P1-3: NOT a safety boundary)
@@ -147,17 +144,10 @@ export class X402FacilitatorClient implements SettlementAdapter {
           "";
 
         // P0-1: Transition SUBMITTING → SETTLEMENT_PENDING atomically
-        if (typeof storeWithSubmitting.markSubmittedWithTxHash === "function") {
-          await storeWithSubmitting.markSubmittedWithTxHash(
-            intent.paymentIntentId, txHash, response.status, responseBody,
-          );
-        } else {
-          await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "SETTLEMENT_PENDING", {
-            txHash: txHash || undefined,
-            facilitatorHttpStatus: response.status,
-            facilitatorResponseBody: responseBody,
-          });
-        }
+        await this.store.recordSubmissionResult(
+          intent.paymentIntentId, "SETTLEMENT_PENDING",
+          txHash || undefined, response.status, responseBody,
+        );
 
         if (intent.nonce) {
           await this.store.markNonceSubmitted(intent.nonce);
@@ -169,27 +159,24 @@ export class X402FacilitatorClient implements SettlementAdapter {
       // §5 + P1-1: Facilitator error → RECONCILING (not FAILED)
       const reason = (responseBody as any)?.error ?? (responseBody as any)?.message ?? `HTTP ${response.status}`;
 
-      if (typeof storeWithSubmitting.markReconcilingAfterSubmitError === "function") {
-        await storeWithSubmitting.markReconcilingAfterSubmitError(intent.paymentIntentId, response.status, reason);
-      } else {
-        await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
-          facilitatorHttpStatus: response.status,
-          errorReason: reason,
-        });
-      }
+      await this.store.compareAndSetState(
+        intent.paymentIntentId, "SUBMITTING", "RECONCILING",
+        { facilitatorHttpStatus: response.status, errorReason: reason } as Partial<DurablePaymentIntent>,
+      ).catch(() => this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
+        facilitatorHttpStatus: response.status, errorReason: reason,
+      }));
 
       return { status: "UNKNOWN", error: `FACILITATOR_AMBIGUOUS: HTTP ${response.status} — ${reason}` };
     } catch (err: unknown) {
       // P0-1: Timeout/network error → RECONCILING via DB
       const errorMsg = err instanceof Error ? err.message : "Unknown network error";
 
-        if (typeof storeWithRecon.markReconcilingAfterSubmitError === "function") {
-        await storeWithRecon.markReconcilingAfterSubmitError(intent.paymentIntentId, null, `NETWORK_ERROR: ${errorMsg}`).catch(() => {});
-      } else {
-        await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
-          errorReason: `NETWORK_ERROR: ${errorMsg}`,
-        }).catch(() => {});
-      }
+      await this.store.compareAndSetState(
+        intent.paymentIntentId, "SUBMITTING", "RECONCILING",
+        { errorReason: `NETWORK_ERROR: ${errorMsg}` } as Partial<DurablePaymentIntent>,
+      ).catch(() => this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
+        errorReason: `NETWORK_ERROR: ${errorMsg}`,
+      })).catch(() => {});
 
       return { status: "UNKNOWN", error: `NETWORK_ERROR: ${errorMsg}` };
     }
