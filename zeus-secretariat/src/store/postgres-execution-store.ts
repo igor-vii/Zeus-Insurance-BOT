@@ -206,9 +206,7 @@ export class PostgresExecutionStore {
     const setObj: Record<string, unknown> = {
       status,
       updatedAt: new Date(),
-      ...(extra?.nextProbeAt !== undefined ? { nextProbeAt: extra.nextProbeAt } : {}),
       ...(extra?.lastError !== undefined ? { lastError: extra.lastError } : {}),
-      ...(extra?.probeCount !== undefined ? { probeCount: extra.probeCount } : {}),
       ...(extra?.lockedBy !== undefined ? { lockedBy: extra.lockedBy } : {}),
       ...(extra?.lockedUntil !== undefined ? { lockedUntil: new Date(extra.lockedUntil) } : {}),
     };
