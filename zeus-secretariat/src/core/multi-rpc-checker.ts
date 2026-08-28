@@ -18,6 +18,14 @@ import { DEFAULT_FINALITY_POLICY } from "./types";
 // Types
 // ---------------------------------------------------------------------------
 
+/** JSON-RPC 2.0 response envelope. All EVM RPC endpoints conform to this. */
+interface JsonRpcResponse {
+  jsonrpc: string;
+  id: number;
+  result?: unknown;
+  error?: { code: number; message: string; data?: unknown };
+}
+
 export interface TransactionCheckResult {
   confirmed: boolean;
   blockNumber?: number;
@@ -62,25 +70,25 @@ export class SingleRpcProvider {
     this.config = config;
   }
 
-  private async rpcCall(method: string, params: unknown[]): Promise<any> {
+  private async rpcCall<T = unknown>(method: string, params: unknown[]): Promise<T> {
     const response = await fetch(this.config.rpcUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
     });
-    const data = await response.json();
+    const data = (await response.json()) as JsonRpcResponse;
     if (data.error) throw new Error(`RPC error: ${data.error.message}`);
-    return data.result;
+    return data.result as T;
   }
 
   async getBlockNumber(): Promise<number> {
-    const hex = await this.rpcCall("eth_blockNumber", []);
+    const hex = await this.rpcCall<string>("eth_blockNumber", []);
     return parseInt(hex, 16);
   }
 
   async getTransactionReceipt(txHash: string): Promise<TransactionCheckResult | null> {
     try {
-      const receipt = await this.rpcCall("eth_getTransactionReceipt", [txHash]);
+      const receipt = await this.rpcCall<{ blockNumber: string; status: string; logs?: Array<{ address: string; topics: string[]; data: string; logIndex: string }> } | null>("eth_getTransactionReceipt", [txHash]);
       if (!receipt) return null;
       const blockNum = parseInt(receipt.blockNumber, 16);
       const chainHead = await this.getBlockNumber();
@@ -124,7 +132,7 @@ export class SingleRpcProvider {
       const paddedNonce = nonce.replace("0x", "").padStart(64, "0");
       const callData = selector + paddedAuthorizer + paddedNonce;
 
-      const result = await this.rpcCall("eth_call", [
+      const result = await this.rpcCall<string>("eth_call", [
         { to: tokenContract, data: callData },
         "latest",
       ]);
@@ -182,7 +190,7 @@ export class SingleRpcProvider {
       const paddedAuthorizer = "0x" + authorizer.toLowerCase().replace("0x", "").padStart(64, "0");
       const paddedNonce = "0x" + nonce.replace("0x", "").padStart(64, "0");
 
-      const logs = await this.rpcCall("eth_getLogs", [{
+      const logs = await this.rpcCall<Array<{ transactionHash: string; blockNumber: string; logIndex: string }>>("eth_getLogs", [{
         address: tokenContract,
         topics: [topic0, paddedAuthorizer, paddedNonce],
         fromBlock: "0x" + fromBlock.toString(16),
