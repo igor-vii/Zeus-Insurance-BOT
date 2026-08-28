@@ -10,8 +10,8 @@
 export * from './core/types';
 
 // Payment signer boundary (Phase 2.1)
-export { PaymentSigner } from './core/payment-signer';
-export {
+export type { PaymentSigner } from './core/payment-signer';
+export type {
   PaymentAuthorizationRequest,
   PaymentSignatureResult,
   SignedPaymentAuthorization,
