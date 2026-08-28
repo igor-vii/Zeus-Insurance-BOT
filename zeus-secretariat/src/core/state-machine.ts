@@ -20,9 +20,11 @@ import {
   SettlementProof,
   ExecutionEvidence,
   EvidenceStore,
+  DurableEvidenceStore,
   PaymentSigner,
   PaymentAdapter,
   PaymentRequirement,
+  PaymentAuthorization,
   SigningContext,
 } from './types';
 
@@ -871,8 +873,8 @@ export class Secretariat {
         paymentIntentId: string,
         operationId: string,
         settledEvidenceBundle: unknown,
-        job: any,
-        attempt: any,
+        job: { jobId: string; operationId: string; jobType: string; status: string; priority: number; maxAttempts: number; currentAttempt: number; metadata: unknown; createdAt: number; updatedAt: number },
+        attempt: { attemptId: string; operationId: string; executionId: string; attemptNumber: number; status: string; idempotencyKey: string; createdAt: number },
       ) => Promise<boolean>;
     }>;
 
