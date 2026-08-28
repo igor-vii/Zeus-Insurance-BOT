@@ -1,40 +1,21 @@
 {
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "commonjs",
-    "lib": [
-      "ES2022"
-    ],
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
     "outDir": "./dist",
     "rootDir": "./src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
-    "paths": {
-      "@workspace/db": [
-        "../lib/db/src/index.ts"
-      ],
-      "@workspace/db/schema": [
-        "../lib/db/src/schema/index.ts"
-      ],
-      "drizzle-orm": [
-        "../node_modules/drizzle-orm"
-      ]
-    },
-    "baseUrl": "."
+    "types": ["node"]
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "tests"
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "tests"],
+  "references": [
+    {
+      "path": "../lib/db"
+    }
   ]
 }
