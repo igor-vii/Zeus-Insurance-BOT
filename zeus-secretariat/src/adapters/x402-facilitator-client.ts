@@ -249,7 +249,7 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
     // Simulate timeout
     if (this.behavior.forceTimeout) {
       await this.store
-        .updatePaymentIntentStatus(intent.paymentIntentId, "UNKNOWN")
+        .updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING")
         .catch(() => {});
       return {
         status: "UNKNOWN",
