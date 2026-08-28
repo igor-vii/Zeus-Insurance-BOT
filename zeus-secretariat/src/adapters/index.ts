@@ -100,8 +100,8 @@ export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer';
 export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer';
 
 // Export core signer interfaces and types
-export { PaymentSigner } from '../core/payment-signer';
-export {
+export type { PaymentSigner } from '../core/payment-signer';
+export type {
   PaymentAuthorizationRequest,
   PaymentSignatureResult,
   SignedPaymentAuthorization,
