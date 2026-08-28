@@ -174,8 +174,8 @@ export class ViemOnChainChecker {
         // Manual Transfer event parsing
         const TRANSFER_TOPIC_HASH = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
         if (log.topics.length >= 3 && log.topics[0] === TRANSFER_TOPIC_HASH) {
-          const from = ("0x" + log.topics[1].slice(26)) as `0x${string}`;
-          const to = ("0x" + log.topics[2].slice(26)) as `0x${string}`;
+          const from = ("0x" + log.topics[1]!.slice(26)) as `0x${string}`;
+          const to = ("0x" + log.topics[2]!.slice(26)) as `0x${string}`;
           const value = BigInt(log.data);
           const args = { from, to, value };
           if (
