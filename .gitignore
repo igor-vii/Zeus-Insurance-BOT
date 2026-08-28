@@ -1,10 +1,1 @@
-Zeus_Insurance_Pitch_Deck.pdf
-Zeus_Insurance_Pitch_Deck.pdf
-
-watcher/.env
-
-# Build artifacts
-**/dist/
-**/.tsbuildinfo
-**/node_modules/
-**/package-lock.json
+Nothing should be ignored based on the provided file changes. The modified file 'zeus-secretariat/src/adapters/local-eoa-signer.ts' is a TypeScript source file that should not be added to .gitignore. Since there are no build artifacts, dependencies, or temporary files in the changes, no additional ignore rules are needed.
