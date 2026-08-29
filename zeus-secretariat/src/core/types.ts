@@ -61,9 +61,16 @@ export interface Operation {
   readonly operationId: string;
   
   /**
-   * Original request identifier from the agent/client
+   * Original request identifier from the agent/client.
+   * Serves as the canonical idempotency key when combined with clientId.
    */
   readonly requestId: string;
+
+  /**
+   * Client identity for durable idempotency.
+   * Propagated from ExecuteRequest.clientId. Nullable for backward compatibility.
+   */
+  readonly clientId?: string;
   
   /**
    * Target endpoint to execute
@@ -555,9 +562,17 @@ export interface ExecuteRequest {
   policy: PaymentPolicy;
   
   /**
-   * Optional request ID (generated if not provided)
+   * Optional request ID (generated if not provided).
+   * Serves as the canonical idempotency key when combined with clientId.
    */
   requestId?: string;
+
+  /**
+   * Optional client identity for durable idempotency.
+   * When provided with requestId, enables (clientId, requestId) deduplication.
+   * Must represent the actual authenticated caller — never generated internally.
+   */
+  clientId?: string;
 }
 
 // ============================================================================
@@ -858,6 +873,9 @@ export interface DurableEvidenceStore {
   // P0: Evidence bundles
   saveSettledEvidenceBundle(intentId: string, bundle: SettledEvidenceBundle): Promise<void>;
   saveNotSettledEvidenceBundle(intentId: string, bundle: NotSettledEvidenceBundle): Promise<void>;
+
+  // B8-001: Durable idempotency lookup
+  getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
 }
 
 // ============================================================================
