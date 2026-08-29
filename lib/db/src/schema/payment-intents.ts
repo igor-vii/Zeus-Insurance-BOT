@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   index,
   check,
+  sql,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -70,6 +71,12 @@ export const paymentIntentsTable = pgTable(
   (table) => ({
     // §3 + §19: One intent per operation — economic safety at DB level
     operationIdUnique: uniqueIndex("pi_operation_id_unique").on(table.operationId),
+    // B8-001: Durable idempotency — one intent per (clientId, requestId) when both present.
+    // Partial index: only enforced when client_id IS NOT NULL AND request_id IS NOT NULL.
+    // Calls without clientId remain backward-compatible (no deduplication).
+    clientRequestUnique: uniqueIndex("pi_client_request_unique")
+      .on(table.clientId, table.requestId)
+      .where(sql`client_id IS NOT NULL AND request_id IS NOT NULL`),
     // §4: Nonce uniqueness within scope
     nonceIdx: index("pi_nonce_idx").on(table.nonce),
     // State queries for reconciliation worker
