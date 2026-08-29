@@ -149,14 +149,52 @@ export class Secretariat {
   // ==========================================================================
 
   async execute(request: ExecuteRequest): Promise<ExecutionResult> {
-    const operationId = generateOperationId();
     const requestId = request.requestId ?? generateRequestId();
+
+    // B8-001: Durable idempotency — lookup existing operation before creating new one.
+    // The DB unique constraint on (client_id, request_id) is the final arbiter for races.
+    if (request.clientId) {
+      const store = this.config.evidenceStore as EvidenceStore & Partial<{
+        getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
+      }>;
+      if (typeof store.getOperationByClientAndRequestId === "function") {
+        const existing = await store.getOperationByClientAndRequestId(request.clientId, requestId);
+        if (existing) {
+          // Return existing operation result — do not create duplicate
+          return this.buildResult(existing);
+        }
+      }
+    }
+
+    const operationId = generateOperationId();
 
     // Create initial operation
     const operation: Operation = this.createOperation(operationId, requestId, request);
 
-    // Persist initial state
-    await this.persistOperation(operation);
+    // Persist initial state.
+    // If a concurrent request created the same (clientId, requestId) between our lookup
+    // and this insert, the DB unique constraint will reject this insert.
+    // We catch that and resolve to the already-created operation.
+    try {
+      await this.persistOperation(operation);
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr.code === "23505" && request.clientId) {
+        // Unique constraint violation — another worker won the race.
+        // Resolve to the existing canonical operation.
+        const store = this.config.evidenceStore as EvidenceStore & Partial<{
+          getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
+        }>;
+        if (typeof store.getOperationByClientAndRequestId === "function") {
+          const resolved = await store.getOperationByClientAndRequestId(request.clientId, requestId);
+          if (resolved) {
+            return this.buildResult(resolved);
+          }
+        }
+      }
+      // Re-throw if not a uniqueness race or resolution failed
+      throw err;
+    }
 
     try {
       // Step 1: Discovery
@@ -209,6 +247,7 @@ export class Secretariat {
     const operation: Operation = {
       operationId,
       requestId,
+      clientId: request.clientId,
       target: request.target,
       method: request.method,
       requestPayload: request.payload,
