@@ -234,6 +234,18 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return i ? { operationId: opId, currentState: i.settlementState as any, paymentState: i.settlementState as any } as any : null;
   }
   async saveOperation(_op: Operation): Promise<void> {}
+  // B8-001: Durable idempotency lookup
+  async getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null> {
+    const rows = await db.execute(sql`
+      SELECT * FROM operations
+      WHERE client_id = ${clientId} AND request_id = ${requestId}
+      LIMIT 1
+    `);
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return null;
+    return this.rowToOperation(row as any);
+  }
+
   async getOperationsByStatus(status: OperationStatus): Promise<Operation[]> {
     const rows = await db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.settlementState, status as string));
     return rows.map((r: any) => ({ operationId: r.operationId, currentState: r.settlementState, paymentState: r.settlementState } as any));
