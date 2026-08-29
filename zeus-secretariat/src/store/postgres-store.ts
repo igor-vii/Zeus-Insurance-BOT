@@ -234,16 +234,39 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return i ? { operationId: opId, currentState: i.settlementState as any, paymentState: i.settlementState as any } as any : null;
   }
   async saveOperation(_op: Operation): Promise<void> {}
-  // B8-001: Durable idempotency lookup
+  // B8-001: Durable idempotency lookup.
+  // Queries payment_intents (not a separate operations table) because that is where
+  // client_id and request_id are persisted. Reconstructs a minimal Operation from the intent.
   async getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null> {
-    const rows = await db.execute(sql`
-      SELECT * FROM operations
-      WHERE client_id = ${clientId} AND request_id = ${requestId}
-      LIMIT 1
-    `);
-    const row = Array.isArray(rows) ? rows[0] : null;
-    if (!row) return null;
-    return this.rowToOperation(row as any);
+    const rows = await db
+      .select()
+      .from(paymentIntentsTable)
+      .where(and(
+        eq(paymentIntentsTable.clientId, clientId),
+        eq(paymentIntentsTable.requestId, requestId),
+      ))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    // Reconstruct minimal Operation from the persisted intent.
+    // This mirrors the existing getOperation() pattern at L232-234.
+    return {
+      operationId: row.operationId,
+      requestId: row.requestId ?? "",
+      clientId: row.clientId ?? undefined,
+      target: "",
+      method: "",
+      paymentPolicy: {} as any,
+      paymentState: row.settlementState as any,
+      executionState: "NOT_STARTED" as any,
+      deliveryState: "NOT_STARTED",
+      currentState: row.settlementState as any,
+      timestamps: {
+        createdAt: row.createdAt.getTime(),
+        updatedAt: row.updatedAt.getTime(),
+      },
+      evidence: [],
+    } as Operation;
   }
 
   async getOperationsByStatus(status: OperationStatus): Promise<Operation[]> {
