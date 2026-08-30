@@ -30,13 +30,92 @@ export interface FacilitatorConfig {
   readonly maxRetries?: number;
 }
 
+/**
+ * Canonical x402 V2 PaymentPayload.
+ *
+ * This is the single internal representation of a signed payment payload
+ * within Zeus Secretariat. All payment flows use this structure.
+ *
+ * Facilitator-specific wire formats are constructed at the adapter boundary,
+ * not stored as alternative internal models.
+ */
 export interface PaymentPayload {
-  /** x402 payment header value (base64-encoded authorization) */
+  readonly x402Version: 2;
+
+  readonly resource?: {
+    url: string;
+    description?: string;
+    mimeType?: string;
+  };
+
+  readonly accepted: {
+    scheme: string;
+    network: string;
+    amount: string;
+    asset: string;
+    payTo: string;
+    maxTimeoutSeconds: number;
+    extra?: {
+      assetTransferMethod?: string;
+      name?: string;
+      version?: string;
+      [key: string]: unknown;
+    };
+  };
+
+  readonly payload: {
+    signature: string;
+    authorization: {
+      from: string;
+      to: string;
+      value: string;
+      validAfter: string;
+      validBefore: string;
+      nonce: string;
+    };
+  };
+
+  readonly extensions?: Record<string, unknown>;
+}
+
+/**
+ * Facilitator-specific request envelope.
+ * This is a boundary DTO — NOT an internal payment model.
+ * Constructed from canonical PaymentPayload at the adapter edge only.
+ */
+interface FacilitatorSettleRequest {
   readonly paymentHeader: string;
-  /** Target resource URL */
   readonly resource: string;
-  /** Network identifier (e.g., "base-sepolia", "base") */
   readonly network: string;
+}
+
+/**
+ * Encode canonical PaymentPayload as base64 PAYMENT-SIGNATURE for HTTP transport.
+ *
+ * Flow: PaymentPayload → deterministic JSON → UTF-8 bytes → Base64
+ */
+export function encodePaymentSignature(payload: PaymentPayload): string {
+  const json = JSON.stringify(payload);
+  const utf8Bytes = new TextEncoder().encode(json);
+  // Convert Uint8Array to binary string for btoa
+  let binary = "";
+  for (let i = 0; i < utf8Bytes.length; i++) {
+    binary += String.fromCharCode(utf8Bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Build facilitator-specific request DTO from canonical PaymentPayload.
+ * This is the ONLY place where V1-shaped wire format is constructed.
+ */
+function buildFacilitatorRequest(payload: PaymentPayload): FacilitatorSettleRequest {
+  const paymentHeader = encodePaymentSignature(payload);
+  return {
+    paymentHeader,
+    resource: payload.resource?.url ?? "",
+    network: payload.accepted.network,
+  };
 }
 
 export type SubmitResult =
@@ -125,11 +204,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
           "Content-Type": "application/json",
           ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
         },
-        body: JSON.stringify({
-          paymentHeader: payload.paymentHeader,
-          resource: payload.resource,
-          network: payload.network,
-        }),
+        body: JSON.stringify(buildFacilitatorRequest(payload)),
         signal: controller.signal,
       });
 
