@@ -221,9 +221,26 @@ function makeIntent(overrides: Partial<DurablePaymentIntent> = {}): DurablePayme
 }
 
 const mockPayload: PaymentPayload = {
-  paymentHeader: "base64-encoded-auth",
-  resource: "https://api.example.com/service",
-  network: "base-sepolia",
+  x402Version: 2,
+  accepted: {
+    scheme: "exact",
+    network: "base-sepolia",
+    amount: "1000000",
+    asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    payTo: "0xSellerAddress",
+    maxTimeoutSeconds: 300,
+  },
+  payload: {
+    signature: "0xmock-signature",
+    authorization: {
+      from: "0xPayerAddress",
+      to: "0xSellerAddress",
+      value: "1000000",
+      validAfter: "0",
+      validBefore: "1700000000",
+      nonce: "0x0000000000000000000000000000000000000000000000000000000000000001",
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
