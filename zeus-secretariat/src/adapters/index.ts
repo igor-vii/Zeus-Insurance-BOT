@@ -128,6 +128,7 @@ export {
   MockX402FacilitatorClient,
   type FacilitatorConfig,
   type PaymentPayload,
+  encodePaymentSignature,
   type SubmitResult,
   type SettlementAdapter,
   type MockFacilitatorBehavior,
