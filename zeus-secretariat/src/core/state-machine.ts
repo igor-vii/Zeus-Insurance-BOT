@@ -454,7 +454,44 @@ export class Secretariat {
     // Sign payment using external signer
     const authorization = await adapter.createAuthorization(requirement, this.config.signer, context);
 
-    // Create payment intent record
+    // B8.2-B.1: Create canonical DurablePaymentIntent and persist BEFORE any settlement.
+    // Local PaymentIntent is retained as transient orchestration data only — NOT authoritative.
+    const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+
+    if (typeof durableStore.createPaymentIntent === "function") {
+      // Check for existing DPI (idempotency — do not create duplicate economic operation)
+      const existingIntent = typeof durableStore.getPaymentIntentByOperationId === "function"
+        ? await durableStore.getPaymentIntentByOperationId(operation.operationId)
+        : null;
+
+      if (!existingIntent) {
+        const ts = now();
+        const durableIntent: DurablePaymentIntent = {
+          paymentIntentId: generatePaymentIntentId(),
+          operationId: operation.operationId,
+          requestId: operation.requestId,
+          clientId: operation.clientId,
+          authorizer: "",  // Not available from legacy PaymentAuthorization; populated by V2 signer path
+          payTo: requirement.payee,
+          value: requirement.amount,
+          asset: requirement.asset,
+          network: requirement.network,
+          nonce: context.nonce ?? "",
+          validAfter: 0,
+          validBefore: requirement.deadline ?? 0,
+          paymentPayload: authorization.signature,
+          paymentPayloadHash: "",  // Computed in Block 8.2-B.2 when V2 payload is constructed
+          settlementState: "AUTHORIZED",
+          createdAt: ts,
+          updatedAt: ts,
+        };
+
+        await durableStore.createPaymentIntent(durableIntent);
+      }
+    }
+
+    // Retain local PaymentIntent as transient orchestration data for legacy flow continuity.
+    // Source of truth is DurablePaymentIntent above.
     const paymentIntent: PaymentIntent = {
       operationId: operation.operationId,
       requirement,
