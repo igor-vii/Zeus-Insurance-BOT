@@ -27,26 +27,38 @@ import type {
 import { Secretariat } from '../src/core/state-machine';
 
 // ---------------------------------------------------------------------------
-// Mock 402 Response for discovery phase
+// Mock fetch — returns valid 402 with x402 challenge body
 // ---------------------------------------------------------------------------
 
+const MOCK_X402_CHALLENGE = {
+  accepts: [{
+    scheme: "exact",
+    network: "base-sepolia",
+    asset: "0xUSDC",
+    amount: "1000000",
+    payTo: "0xSellerAddress",
+    maxTimeoutSeconds: 300,
+  }],
+};
+
 function createMock402Response(): Response {
-  const x402Challenge = {
-    accepts: [{
-      scheme: "exact",
-      network: "base-sepolia",
-      amount: "1000000",
-      asset: "0xUSDC",
-      payTo: "0xSellerAddress",
-      maxTimeoutSeconds: 300,
-    }],
-  };
-  const encoded = btoa(JSON.stringify(x402Challenge));
-  return new Response(null, {
+  return new Response(JSON.stringify(MOCK_X402_CHALLENGE), {
     status: 402,
-    headers: { "PAYMENT-REQUIRED": encoded },
+    statusText: "Payment Required",
+    headers: { "Content-Type": "application/json" },
   });
 }
+
+let originalFetch: typeof globalThis.fetch;
+
+beforeAll(() => {
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = jest.fn().mockResolvedValue(createMock402Response());
+});
+
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 
 // ---------------------------------------------------------------------------
 // In-Memory Durable Store for testing
@@ -57,12 +69,12 @@ class TestDurableStore implements DurableEvidenceStore {
   private operations: Map<string, Operation> = new Map();
   private evidence: Map<string, EvidenceRecord[]> = new Map();
   public createPaymentIntentCallCount = 0;
+  public createPaymentIntentCallLog: DurablePaymentIntent[] = [];
 
   async createPaymentIntent(intent: DurablePaymentIntent): Promise<void> {
     this.createPaymentIntentCallCount++;
-    if (this.intents.has(intent.paymentIntentId)) {
-      throw new Error("DUPLICATE_INTENT");
-    }
+    this.createPaymentIntentCallLog.push({ ...intent });
+    // Check duplicates by operationId
     for (const existing of this.intents.values()) {
       if (existing.operationId === intent.operationId) {
         throw new Error("DUPLICATE_OPERATION_ID");
@@ -76,6 +88,15 @@ class TestDurableStore implements DurableEvidenceStore {
       if (intent.operationId === opId) return { ...intent };
     }
     return null;
+  }
+
+  /** Simulate restart: return a NEW store instance with same persisted data */
+  cloneForRestart(): TestDurableStore {
+    const cloned = new TestDurableStore();
+    for (const [k, v] of this.intents) cloned.intents.set(k, { ...v });
+    for (const [k, v] of this.operations) cloned.operations.set(k, { ...v });
+    for (const [k, v] of this.evidence) cloned.evidence.set(k, [...v]);
+    return cloned;
   }
 
   async updatePaymentIntentStatus(): Promise<void> {}
@@ -107,16 +128,6 @@ class TestDurableStore implements DurableEvidenceStore {
     }
     return null;
   }
-
-  /** Expose internal intents for restart simulation */
-  getStoredIntents(): Map<string, DurablePaymentIntent> {
-    return new Map(this.intents);
-  }
-
-  /** Restore intents from serialized data (simulates DB reconnect) */
-  restoreIntents(intents: Map<string, DurablePaymentIntent>): void {
-    this.intents = new Map(intents);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +137,7 @@ class TestDurableStore implements DurableEvidenceStore {
 class TestPaymentAdapter implements PaymentAdapter {
   readonly network = "base-sepolia";
   public submitCalled = false;
+  public submitCallOrder: string[] = [];
 
   async createAuthorization(
     requirement: PaymentRequirement,
@@ -163,27 +175,19 @@ const mockSigner: PaymentSigner = {
 };
 
 // ---------------------------------------------------------------------------
-// Global fetch mock setup
+// Helper
 // ---------------------------------------------------------------------------
 
-let originalFetch: typeof globalThis.fetch;
-
-beforeAll(() => {
-  originalFetch = globalThis.fetch;
-});
-
-afterAll(() => {
-  globalThis.fetch = originalFetch;
-});
-
-beforeEach(() => {
-  // Mock fetch to return 402 with valid x402 challenge
-  globalThis.fetch = jest.fn().mockResolvedValue(createMock402Response());
-});
-
-afterEach(() => {
-  jest.restoreAllMocks();
-});
+function makeRequest(overrides?: Partial<ExecuteRequest>): ExecuteRequest {
+  return {
+    target: "https://seller.example.com/api",
+    method: "GET",
+    policy: { maxPrice: "1000000", asset: "0xUSDC", network: "base-sepolia" } as PaymentPolicy,
+    requestId: "req-default",
+    clientId: "client-default",
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -207,138 +211,102 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
   });
 
   test("B1.1: DPI created after authorization", async () => {
-    const request: ExecuteRequest = {
-      target: "https://seller.example.com/api",
-      method: "GET",
-      policy: { maxPrice: "1000000", asset: "0xUSDC", network: "base-sepolia" } as PaymentPolicy,
-      requestId: "req-test-001",
-      clientId: "client-test",
-    };
-
-    try { await secretariat.execute(request); } catch {}
-
+    try { await secretariat.execute(makeRequest({ requestId: "req-b1-1" })); } catch {}
     expect(store.createPaymentIntentCallCount).toBeGreaterThanOrEqual(1);
   });
 
   test("B1.2: Authorization data persisted in DPI", async () => {
-    const request: ExecuteRequest = {
-      target: "https://seller.example.com/api",
-      method: "GET",
-      policy: { maxPrice: "1000000", asset: "0xUSDC", network: "base-sepolia" } as PaymentPolicy,
-      requestId: "req-test-002",
-      clientId: "client-test",
-    };
+    try { await secretariat.execute(makeRequest({ requestId: "req-b1-2" })); } catch {}
 
-    try { await secretariat.execute(request); } catch {}
-
-    let dpi: DurablePaymentIntent | null = null;
-    for (const op of (store as any).operations.values()) {
-      dpi = await store.getPaymentIntentByOperationId(op.operationId);
-      if (dpi) break;
-    }
-
-    expect(dpi).not.toBeNull();
-    expect(dpi!.network).toBe("base-sepolia");
-    expect(dpi!.asset).toBe("0xUSDC");
-    expect(dpi!.settlementState).toBe("AUTHORIZED");
-    expect(dpi!.requestId).toBe("req-test-002");
-    expect(dpi!.clientId).toBe("client-test");
+    const dpi = store.createPaymentIntentCallLog[0];
+    expect(dpi).toBeDefined();
+    expect(dpi.network).toBe("base-sepolia");
+    expect(dpi.asset).toBe("0xUSDC");
+    expect(dpi.settlementState).toBe("AUTHORIZED");
+    expect(dpi.requestId).toBe("req-b1-2");
+    expect(dpi.clientId).toBe("client-default");
+    expect(dpi.payTo).toBe("0xSellerAddress");
+    expect(dpi.value).toBe("1000000");
   });
 
   test("B1.3: Persistence happens before submission", async () => {
     const callOrder: string[] = [];
 
-    const originalCreate = store.createPaymentIntent.bind(store);
+    const origCreate = store.createPaymentIntent.bind(store);
     store.createPaymentIntent = async (intent: DurablePaymentIntent) => {
       callOrder.push("createPaymentIntent");
-      return originalCreate(intent);
+      return origCreate(intent);
     };
 
-    const originalSubmit = adapter.submit.bind(adapter);
+    const origSubmit = adapter.submit.bind(adapter);
     adapter.submit = async (...args: any[]) => {
       callOrder.push("submit");
-      return originalSubmit(...args);
+      return origSubmit(...args);
     };
 
-    const request: ExecuteRequest = {
-      target: "https://seller.example.com/api",
-      method: "GET",
-      policy: { maxPrice: "1000000", asset: "0xUSDC", network: "base-sepolia" } as PaymentPolicy,
-      requestId: "req-test-003",
-    };
-
-    try { await secretariat.execute(request); } catch {}
+    try { await secretariat.execute(makeRequest({ requestId: "req-b1-3" })); } catch {}
 
     const createIdx = callOrder.indexOf("createPaymentIntent");
     const submitIdx = callOrder.indexOf("submit");
-    if (createIdx >= 0 && submitIdx >= 0) {
+    expect(createIdx).toBeGreaterThanOrEqual(0);
+    if (submitIdx >= 0) {
       expect(createIdx).toBeLessThan(submitIdx);
-    } else if (createIdx >= 0) {
-      expect(createIdx).toBeGreaterThanOrEqual(0);
     }
   });
 
   test("B1.4: Restart recovery — DPI survives runtime destruction", async () => {
-    const request: ExecuteRequest = {
-      target: "https://seller.example.com/api",
-      method: "GET",
-      policy: { maxPrice: "1000000", asset: "0xUSDC", network: "base-sepolia" } as PaymentPolicy,
-      requestId: "req-test-004",
-      clientId: "client-restart",
-    };
-
     // Runtime A: execute and persist DPI
-    try { await secretariat.execute(request); } catch {}
+    try { await secretariat.execute(makeRequest({ requestId: "req-b1-4", clientId: "client-restart" })); } catch {}
 
-    // Capture persisted intents (simulates DB state)
-    const savedIntents = store.getStoredIntents();
-    expect(savedIntents.size).toBeGreaterThanOrEqual(1);
+    // Verify DPI exists in Runtime A store
+    expect(store.createPaymentIntentCallCount).toBeGreaterThanOrEqual(1);
 
-    // Simulate restart: NEW store instance, restore from "DB"
-    const store2 = new TestDurableStore();
-    store2.restoreIntents(savedIntents);
+    // Simulate restart: create NEW store with same persisted data
+    const restartedStore = store.cloneForRestart();
 
-    // NEW StateMachine with fresh store
-    const adapter2 = new TestPaymentAdapter();
+    // Create NEW Secretariat instance (Runtime B)
     const adapters2 = new Map<string, PaymentAdapter>();
-    adapters2.set("base-sepolia", adapter2);
+    adapters2.set("base-sepolia", new TestPaymentAdapter());
     const secretariat2 = new Secretariat({
-      evidenceStore: store2,
+      evidenceStore: restartedStore,
       signer: mockSigner,
       adapters: adapters2,
     });
 
-    // Verify DPI is recoverable from new runtime
-    let foundDpi: DurablePaymentIntent | null = null;
-    for (const intent of savedIntents.values()) {
-      if (intent.requestId === "req-test-004") {
-        foundDpi = await store2.getPaymentIntentByOperationId(intent.operationId);
+    // Find the operation from Runtime A
+    let foundOpId: string | null = null;
+    for (const op of restartedStore["operations"].values()) {
+      if (op.requestId === "req-b1-4") {
+        foundOpId = op.operationId;
         break;
       }
     }
+    expect(foundOpId).not.toBeNull();
 
-    expect(foundDpi).not.toBeNull();
-    expect(foundDpi!.clientId).toBe("client-restart");
-    expect(foundDpi!.requestId).toBe("req-test-004");
-    expect(foundDpi!.settlementState).toBe("AUTHORIZED");
-    expect(foundDpi!.network).toBe("base-sepolia");
-    expect(foundDpi!.asset).toBe("0xUSDC");
+    // Recover DPI from restarted store using operationId
+    const recoveredDpi = await restartedStore.getPaymentIntentByOperationId(foundOpId!);
+    expect(recoveredDpi).not.toBeNull();
+    expect(recoveredDpi!.requestId).toBe("req-b1-4");
+    expect(recoveredDpi!.clientId).toBe("client-restart");
+    expect(recoveredDpi!.settlementState).toBe("AUTHORIZED");
+    expect(recoveredDpi!.network).toBe("base-sepolia");
+    expect(recoveredDpi!.asset).toBe("0xUSDC");
+    expect(recoveredDpi!.payTo).toBe("0xSellerAddress");
+    expect(recoveredDpi!.value).toBe("1000000");
   });
 
-  test("B1.5: Idempotent identity — no duplicate DPI for same operation", async () => {
-    const request: ExecuteRequest = {
-      target: "https://seller.example.com/api",
-      method: "GET",
-      policy: { maxPrice: "1000000", asset: "0xUSDC", network: "base-sepolia" } as PaymentPolicy,
-      requestId: "req-idempotent",
-      clientId: "client-idempotent",
-    };
+  test("B1.5: Idempotent identity — no duplicate DPI for same request", async () => {
+    const req = makeRequest({ requestId: "req-idempotent", clientId: "client-idempotent" });
 
-    try { await secretariat.execute(request); } catch {}
+    // First execution
+    try { await secretariat.execute(req); } catch {}
     const firstCallCount = store.createPaymentIntentCallCount;
+    expect(firstCallCount).toBeGreaterThanOrEqual(1);
 
-    try { await secretariat.execute(request); } catch {}
+    // Second execution with same identity — 8.1-A idempotency returns existing operation
+    try { await secretariat.execute(req); } catch {}
 
+    // createPaymentIntent should NOT have been called again
     expect(store.createPaymentIntentCallCount).toBe(firstCallCount);
   });
 });
