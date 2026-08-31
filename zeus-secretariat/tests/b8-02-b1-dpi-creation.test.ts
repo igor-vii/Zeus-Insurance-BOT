@@ -51,12 +51,12 @@ function createMock402Response(): Response {
 
 let originalFetch: typeof globalThis.fetch;
 
-beforeAll(() => {
+beforeEach(() => {
   originalFetch = globalThis.fetch;
-  globalThis.fetch = jest.fn().mockResolvedValue(createMock402Response());
+  globalThis.fetch = jest.fn().mockResolvedValue(createMock402Response()) as any;
 });
 
-afterAll(() => {
+afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
