@@ -14,10 +14,8 @@ import type {
   DurableEvidenceStore,
   EvidenceRecord,
   Operation,
-  OperationStatus,
   PaymentPolicy,
   ExecuteRequest,
-  ExecutionResult,
   PaymentRequirement,
   PaymentAuthorization,
   SigningContext,
@@ -27,6 +25,28 @@ import type {
   PaymentSubmissionResult,
 } from '../src/core/types';
 import { Secretariat } from '../src/core/state-machine';
+
+// ---------------------------------------------------------------------------
+// Mock 402 Response for discovery phase
+// ---------------------------------------------------------------------------
+
+function createMock402Response(): Response {
+  const x402Challenge = {
+    accepts: [{
+      scheme: "exact",
+      network: "base-sepolia",
+      amount: "1000000",
+      asset: "0xUSDC",
+      payTo: "0xSellerAddress",
+      maxTimeoutSeconds: 300,
+    }],
+  };
+  const encoded = btoa(JSON.stringify(x402Challenge));
+  return new Response(null, {
+    status: 402,
+    headers: { "PAYMENT-REQUIRED": encoded },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // In-Memory Durable Store for testing
@@ -81,11 +101,26 @@ class TestDurableStore implements DurableEvidenceStore {
   async getReconciliationObservations(): Promise<any[]> { return []; }
   async saveSettledEvidenceBundle(): Promise<void> {}
   async saveNotSettledEvidenceBundle(): Promise<void> {}
-  async getOperationByClientAndRequestId(): Promise<Operation | null> { return null; }
+  async getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null> {
+    for (const op of this.operations.values()) {
+      if (op.clientId === clientId && op.requestId === requestId) return { ...op };
+    }
+    return null;
+  }
+
+  /** Expose internal intents for restart simulation */
+  getStoredIntents(): Map<string, DurablePaymentIntent> {
+    return new Map(this.intents);
+  }
+
+  /** Restore intents from serialized data (simulates DB reconnect) */
+  restoreIntents(intents: Map<string, DurablePaymentIntent>): void {
+    this.intents = new Map(intents);
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Mock PaymentAdapter (legacy — still used by StateMachine internally)
+// Mock PaymentAdapter
 // ---------------------------------------------------------------------------
 
 class TestPaymentAdapter implements PaymentAdapter {
@@ -128,6 +163,29 @@ const mockSigner: PaymentSigner = {
 };
 
 // ---------------------------------------------------------------------------
+// Global fetch mock setup
+// ---------------------------------------------------------------------------
+
+let originalFetch: typeof globalThis.fetch;
+
+beforeAll(() => {
+  originalFetch = globalThis.fetch;
+});
+
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
+
+beforeEach(() => {
+  // Mock fetch to return 402 with valid x402 challenge
+  globalThis.fetch = jest.fn().mockResolvedValue(createMock402Response());
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -157,15 +215,8 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
       clientId: "client-test",
     };
 
-    // Execute will run discovery → authorizePayment
-    // We expect it to fail at submit (mock), but DPI should exist
-    try {
-      await secretariat.execute(request);
-    } catch {
-      // Expected — mock adapter may not complete full flow
-    }
+    try { await secretariat.execute(request); } catch {}
 
-    // Verify DPI was created
     expect(store.createPaymentIntentCallCount).toBeGreaterThanOrEqual(1);
   });
 
@@ -180,25 +231,21 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
 
     try { await secretariat.execute(request); } catch {}
 
-    // Find the DPI
-    const ops = store["operations"];
     let dpi: DurablePaymentIntent | null = null;
-    for (const op of ops.values()) {
+    for (const op of (store as any).operations.values()) {
       dpi = await store.getPaymentIntentByOperationId(op.operationId);
       if (dpi) break;
     }
 
-    if (dpi) {
-      expect(dpi.network).toBe("base-sepolia");
-      expect(dpi.asset).toBe("0xUSDC");
-      expect(dpi.settlementState).toBe("AUTHORIZED");
-      expect(dpi.requestId).toBe("req-test-002");
-      expect(dpi.clientId).toBe("client-test");
-    }
+    expect(dpi).not.toBeNull();
+    expect(dpi!.network).toBe("base-sepolia");
+    expect(dpi!.asset).toBe("0xUSDC");
+    expect(dpi!.settlementState).toBe("AUTHORIZED");
+    expect(dpi!.requestId).toBe("req-test-002");
+    expect(dpi!.clientId).toBe("client-test");
   });
 
   test("B1.3: Persistence happens before submission", async () => {
-    // Track ordering: createPaymentIntent must be called before submit
     const callOrder: string[] = [];
 
     const originalCreate = store.createPaymentIntent.bind(store);
@@ -222,13 +269,11 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
 
     try { await secretariat.execute(request); } catch {}
 
-    // If both were called, createPaymentIntent must come first
     const createIdx = callOrder.indexOf("createPaymentIntent");
     const submitIdx = callOrder.indexOf("submit");
     if (createIdx >= 0 && submitIdx >= 0) {
       expect(createIdx).toBeLessThan(submitIdx);
     } else if (createIdx >= 0) {
-      // createPaymentIntent called, submit not reached — still valid
       expect(createIdx).toBeGreaterThanOrEqual(0);
     }
   });
@@ -242,23 +287,42 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
       clientId: "client-restart",
     };
 
+    // Runtime A: execute and persist DPI
     try { await secretariat.execute(request); } catch {}
 
-    // Simulate restart: create NEW store instance with same data
-    // In real scenario, this would be a new PostgresEvidenceStore connecting to same DB
-    // Here we verify the data is in the store and retrievable
+    // Capture persisted intents (simulates DB state)
+    const savedIntents = store.getStoredIntents();
+    expect(savedIntents.size).toBeGreaterThanOrEqual(1);
+
+    // Simulate restart: NEW store instance, restore from "DB"
+    const store2 = new TestDurableStore();
+    store2.restoreIntents(savedIntents);
+
+    // NEW StateMachine with fresh store
+    const adapter2 = new TestPaymentAdapter();
+    const adapters2 = new Map<string, PaymentAdapter>();
+    adapters2.set("base-sepolia", adapter2);
+    const secretariat2 = new Secretariat({
+      evidenceStore: store2,
+      signer: mockSigner,
+      adapters: adapters2,
+    });
+
+    // Verify DPI is recoverable from new runtime
     let foundDpi: DurablePaymentIntent | null = null;
-    for (const op of store["operations"].values()) {
-      const dpi = await store.getPaymentIntentByOperationId(op.operationId);
-      if (dpi && dpi.requestId === "req-test-004") {
-        foundDpi = dpi;
+    for (const intent of savedIntents.values()) {
+      if (intent.requestId === "req-test-004") {
+        foundDpi = await store2.getPaymentIntentByOperationId(intent.operationId);
         break;
       }
     }
 
     expect(foundDpi).not.toBeNull();
     expect(foundDpi!.clientId).toBe("client-restart");
+    expect(foundDpi!.requestId).toBe("req-test-004");
     expect(foundDpi!.settlementState).toBe("AUTHORIZED");
+    expect(foundDpi!.network).toBe("base-sepolia");
+    expect(foundDpi!.asset).toBe("0xUSDC");
   });
 
   test("B1.5: Idempotent identity — no duplicate DPI for same operation", async () => {
@@ -270,15 +334,11 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
       clientId: "client-idempotent",
     };
 
-    // First execution
     try { await secretariat.execute(request); } catch {}
     const firstCallCount = store.createPaymentIntentCallCount;
 
-    // Second execution with same identity should NOT create another DPI
-    // (8.1-A idempotency returns existing operation before reaching authorizePayment)
     try { await secretariat.execute(request); } catch {}
 
-    // createPaymentIntent should not have been called again
     expect(store.createPaymentIntentCallCount).toBe(firstCallCount);
   });
 });
