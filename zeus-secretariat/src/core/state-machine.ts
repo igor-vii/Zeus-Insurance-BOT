@@ -64,6 +64,10 @@ function generateRequestId(): string {
   return `req_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
 
+function generatePaymentIntentId(): string {
+  return `pi_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
 function now(): number {
   return Date.now();
 }
