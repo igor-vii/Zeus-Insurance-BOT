@@ -182,7 +182,12 @@ function makeRequest(overrides?: Partial<ExecuteRequest>): ExecuteRequest {
   return {
     target: "https://seller.example.com/api",
     method: "GET",
-    policy: { maxPrice: "1000000", asset: "0xUSDC", network: "base-sepolia" } as PaymentPolicy,
+    policy: {
+      maxPrice: "1000000",
+      allowedNetworks: ["base-sepolia"],
+      allowedAssets: ["0xUSDC"],
+      authorizationMode: "policy-bound",
+    } as PaymentPolicy,
     requestId: "req-default",
     clientId: "client-default",
     ...overrides,
