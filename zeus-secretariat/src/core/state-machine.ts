@@ -21,6 +21,7 @@ import {
   ExecutionEvidence,
   EvidenceStore,
   DurableEvidenceStore,
+  DurablePaymentIntent,
   PaymentSigner,
   PaymentAdapter,
   PaymentRequirement,
