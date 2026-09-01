@@ -119,6 +119,7 @@ describe("BLOCK 8.2-B.3-B1: Identity Handoff Correctness", () => {
       adapters,
       settlementAdapter: new TestSettlementAdapter(),
       reconciliationEngine: new TestReconEngine(),
+      atomicSettlementHandoff: store, // R2.1-FIX-5: test store implements AtomicSettlementHandoff
     });
   });
 
