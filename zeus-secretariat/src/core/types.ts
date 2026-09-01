@@ -876,6 +876,14 @@ export interface DurableEvidenceStore {
 
   // B8-001: Durable idempotency lookup
   getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
+
+  // B.3-B2-FIX: Reconciliation job lifecycle (lease-safe atomic operations)
+  createReconciliationJob(paymentIntentId: string, nextProbeAt: Date): Promise<string>;
+  getDueReconciliationJobs(): Promise<Array<{ jobId: string; paymentIntentId: string; probeCount: number }>>;
+  claimReconciliationJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean>;
+  completeReconciliationJob(jobId: string, workerId: string): Promise<boolean>;
+  rescheduleReconciliationJob(jobId: string, workerId: string, nextProbeAt: Date): Promise<boolean>;
+  failReconciliationJob(jobId: string, workerId: string, error: string): Promise<boolean>;
 }
 
 // ============================================================================
