@@ -129,3 +129,93 @@ describe("BLOCK 8 R2.1: Production Composition Root", () => {
     expect(b.stores.evidenceStore).toBe((b.reconciliationEngine as any).store);
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// R2.1-FIX-6: Strengthened tests
+// ---------------------------------------------------------------------------
+
+describe("BLOCK 8 R2.1-FIX-6: Strengthened Composition Tests", () => {
+  let originalEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    originalEnv = { ...process.env };
+    process.env["ZEUS_RPC_PROVIDERS"] = JSON.stringify([
+      { providerId: "a", underlyingProvider: "alchemy", rpcUrl: "https://a.example.com", maxStalenessBlocks: 10 },
+      { providerId: "b", underlyingProvider: "infura", rpcUrl: "https://b.example.com", maxStalenessBlocks: 10 },
+    ]);
+    process.env["ZEUS_FACILITATOR_URL"] = "https://facilitator.example.com";
+    process.env["ZEUS_SELLER_URL"] = "https://seller.example.com";
+    process.env["ZEUS_SIGNER_PRIVATE_KEY"] = "0x" + "a".repeat(64);
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    jest.clearAllMocks();
+  });
+
+  test("R2.1-FIX-6-1: recovery failure prevents worker startup", async () => {
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const c = createSecretariatComposition();
+
+    // Mock recoverAfterCrash to throw
+    const origRecover = c.reconciliationEngine.recoverAfterCrash;
+    c.reconciliationEngine.recoverAfterCrash = async () => { throw new Error("RECOVERY_FAILED"); };
+
+    // recover() should throw — worker must NOT be started
+    await expect(c.recover()).rejects.toThrow("RECOVERY_FAILED");
+
+    // Worker should not have been started
+    expect((c.reconciliationWorker as any).running).toBeFalsy();
+
+    // Restore
+    c.reconciliationEngine.recoverAfterCrash = origRecover;
+  });
+
+  test("R2.1-FIX-6-2: PostSettlementEngine receives ExecutionStore (not InMemoryExecutionStore)", async () => {
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const c = createSecretariatComposition();
+
+    // PostSettlementEngine.paymentStore should be the shared evidenceStore
+    expect((c.postSettlementEngine as any).paymentStore).toBe(c.stores.evidenceStore);
+
+    // executionStore should be the shared executionStore (PostgresExecutionStore satisfies ExecutionStore interface)
+    expect((c.postSettlementEngine as any).executionStore).toBe(c.stores.executionStore);
+  });
+
+  test("R2.1-FIX-6-3: shutdown completes worker stop before returning", async () => {
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const c = createSecretariatComposition();
+    c.startWorker();
+
+    expect((c.reconciliationWorker as any).running).toBe(true);
+
+    // shutdown should resolve only after worker is stopped
+    await c.shutdown();
+
+    expect((c.reconciliationWorker as any).running).toBe(false);
+  });
+
+  test("R2.1-FIX-6-4: double shutdown is safe and idempotent", async () => {
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const c = createSecretariatComposition();
+    c.startWorker();
+
+    await c.shutdown();
+    // Second shutdown should not throw or cause side effects
+    await expect(c.shutdown()).resolves.not.toThrow();
+
+    expect((c.reconciliationWorker as any).running).toBe(false);
+  });
+
+  test("R2.1-FIX-6-5: no as any in PostSettlementEngine construction", async () => {
+    // Static verification: composition source should not contain "as any" for executionStore
+    const fs = await import("fs");
+    const source = fs.readFileSync(
+      require("path").join(__dirname, "../../src/lib/secretariat-composition.ts"),
+      "utf-8"
+    );
+    // The line that previously had "stores.executionStore as any" should now be clean
+    expect(source).not.toMatch(/executionStore\s+as\s+any/);
+  });
+});
