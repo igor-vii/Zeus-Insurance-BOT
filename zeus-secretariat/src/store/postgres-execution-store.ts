@@ -124,7 +124,7 @@ export class PostgresExecutionStore {
 
   async updateAttemptStatus(
     attemptId: string,
-    status: ExecutionStatus,
+    status: ExecutionObligationStatus,
     extra?: Partial<ExecutionAttempt>,
   ): Promise<void> {
     const setObj: Record<string, unknown> = {
@@ -330,7 +330,7 @@ export class PostgresExecutionStore {
       operationId: row.operationId,
       executionId: row.executionId,
       attemptNumber: row.attemptNumber,
-      status: row.status as ExecutionStatus,
+      status: row.status as ExecutionObligationStatus,
       requestUrl: row.requestUrl ?? undefined,
       requestMethod: row.requestMethod ?? undefined,
       requestBody: row.requestBody ?? undefined,
