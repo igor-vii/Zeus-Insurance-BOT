@@ -34,13 +34,7 @@ export type ExecutionCapability =
   | "RESULT_RETRIEVAL"       // can query result without re-executing
   | "NONE";                  // no recovery possible — honest UNKNOWN
 
-export type ExecutionStatus =
-  | "PENDING"
-  | "ATTEMPTED"
-  | "SUCCESS"
-  | "HTTP_FAILURE"
-  | "DELIVERY_UNKNOWN"
-  | "UNRESOLVABLE";
+// ExecutionStatus imported from ./types (canonical)
 
 export type RecoveryJobType =
   | "EXECUTION"
