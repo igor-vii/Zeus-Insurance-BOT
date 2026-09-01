@@ -29,15 +29,27 @@ const server: Server = app.listen(port, (err?: Error) => {
 // SIGTERM and SIGINT both trigger the same idempotent shutdown path.
 let shuttingDown = false;
 
+/**
+ * R2.1-FIX-5: Await server.close() completion before process.exit().
+ * Ensures all in-flight HTTP requests complete before worker/app shutdown.
+ */
 async function handleShutdown(signal: string): Promise<void> {
   if (shuttingDown) return; // idempotent
   shuttingDown = true;
 
   logger.info({ signal }, "Shutdown signal received");
 
-  // 1. Stop accepting new connections
-  server.close(() => {
-    logger.info("HTTP server closed");
+  // 1. Stop accepting new connections and wait for in-flight to complete
+  await new Promise<void>((resolve, reject) => {
+    server.close((err) => {
+      if (err) {
+        logger.error({ err }, "Error closing HTTP server");
+        reject(err);
+      } else {
+        logger.info("HTTP server closed");
+        resolve();
+      }
+    });
   });
 
   // 2. Run application-level graceful shutdown (worker, event listener, etc.)
