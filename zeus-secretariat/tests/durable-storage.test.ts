@@ -17,6 +17,7 @@
 
 import { PostgresEvidenceStore } from "../src/store/postgres-store";
 import type { DurablePaymentIntent } from "../src/core/types";
+import { db } from "@workspace/db";
 
 const HAS_DB = !!process.env.DATABASE_URL;
 
@@ -24,7 +25,7 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
   let store: PostgresEvidenceStore;
 
   beforeEach(() => {
-    store = new PostgresEvidenceStore();
+    store = new PostgresEvidenceStore(db);
   });
 
   // ---- Test AA: Restart Resilience ----
@@ -57,7 +58,7 @@ describe.skip("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
     await store.createIntentWithNonce(intent, payer);
 
     // Step 2: Simulate restart — create NEW store instance
-    const store2 = new PostgresEvidenceStore();
+    const store2 = new PostgresEvidenceStore(db);
 
     // Step 3: Verify data survived
     const recovered = await store2.getPaymentIntentByOperationId(operationId);
