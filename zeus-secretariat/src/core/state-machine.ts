@@ -34,6 +34,7 @@ import {
 
 import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../adapters/x402-facilitator-client';
 import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliation-engine';
+import type { RecoveryJob, ExecutionAttempt } from './post-settlement-engine';
 
 // Legacy types used internally by StateMachine (Phase 2.1 payment flow)
 // These are NOT the canonical V0 DurablePaymentIntent — they exist only for
