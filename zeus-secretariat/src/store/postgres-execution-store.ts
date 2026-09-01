@@ -104,7 +104,7 @@ export class PostgresExecutionStore {
   }
 
   async getAttemptById(attemptId: string): Promise<ExecutionAttempt | null> {
-    const rows = await db
+    const rows = await this.db
       .select()
       .from(executionAttemptsTable)
       .where(eq(executionAttemptsTable.attemptId, attemptId))
@@ -114,7 +114,7 @@ export class PostgresExecutionStore {
   }
 
   async getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]> {
-    const rows = await db
+    const rows = await this.db
       .select()
       .from(executionAttemptsTable)
       .where(eq(executionAttemptsTable.operationId, operationId))
@@ -136,7 +136,7 @@ export class PostgresExecutionStore {
       ...(extra?.startedAt !== undefined ? { startedAt: new Date(extra.startedAt) } : {}),
       ...(extra?.completedAt !== undefined ? { completedAt: new Date(extra.completedAt) } : {}),
     };
-    await db
+    await this.db
       .update(executionAttemptsTable)
       .set(setObj)
       .where(eq(executionAttemptsTable.attemptId, attemptId));
@@ -163,7 +163,7 @@ export class PostgresExecutionStore {
   }
 
   async getJob(jobId: string): Promise<RecoveryJob | null> {
-    const rows = await db
+    const rows = await this.db
       .select()
       .from(recoveryJobsTable)
       .where(eq(recoveryJobsTable.jobId, jobId))
@@ -225,7 +225,7 @@ export class PostgresExecutionStore {
       setObj.lockedBy = null;
       setObj.lockedUntil = null;
     }
-    await db
+    await this.db
       .update(recoveryJobsTable)
       .set(setObj)
       .where(eq(recoveryJobsTable.jobId, jobId));
