@@ -8,7 +8,7 @@
  */
 
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "@workspace/db";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   paymentIntentsTable,
   nonceRegistryTable,
@@ -34,11 +34,20 @@ interface PaymentIntentRow {
 }
 
 export class PostgresEvidenceStore implements DurableEvidenceStore {
+  private readonly db: NodePgDatabase;
+
+  /**
+   * @param db - Drizzle database instance. Pass the shared @workspace/db instance
+   *             to ensure single connection pool across all consumers.
+   */
+  constructor(db: NodePgDatabase) {
+    this.db = db;
+  }
 
   // P0-1: Create intent BEFORE network call. UNIQUE(operation_id) at DB level.
   async createPaymentIntent(intent: DurablePaymentIntent): Promise<void> {
     try {
-      await db.insert(paymentIntentsTable).values({
+      await this.db.insert(paymentIntentsTable).values({
         paymentIntentId: intent.paymentIntentId, operationId: intent.operationId,
         requestId: intent.requestId ?? null, clientId: intent.clientId ?? null,
         authorizer: intent.authorizer, payTo: intent.payTo, value: intent.value,
@@ -85,7 +94,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     // State predicate is sufficient because: (1) each state has exactly one valid next-state set,
     // (2) UNIQUE(payment_intent_id) ensures single row, (3) PostgreSQL row-level locking
     // during UPDATE prevents concurrent modifications to the same row.
-    const result = await db.update(paymentIntentsTable).set(setObj).where(
+    const result = await this.db.update(paymentIntentsTable).set(setObj).where(
       and(eq(paymentIntentsTable.paymentIntentId, intentId), eq(paymentIntentsTable.settlementState, expectedState))
     );
     return Array.isArray(result) ? result.length > 0 : (result as any)?.rowCount > 0;
@@ -93,7 +102,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
 
   // P0-5 + section 3: THE economic safety guard. DB read only. No cache.
   async canCreateNewPayment(operationId: string): Promise<boolean> {
-    const rows = await db.select({ settlementState: paymentIntentsTable.settlementState })
+    const rows = await this.db.select({ settlementState: paymentIntentsTable.settlementState })
       .from(paymentIntentsTable).where(eq(paymentIntentsTable.operationId, operationId)).limit(1);
     if (rows.length === 0) return true;
     return allowNewPayment(rows[0].settlementState as SettlementState);
@@ -122,7 +131,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     // Also append to intent's JSONB field using atomic concatenation
     const intent = await this.getPaymentIntentByOperationId(record.operationId);
     if (intent) {
-      await db.execute(sql`
+      await this.db.execute(sql`
         UPDATE payment_intents
         SET reconciliation_observations = COALESCE(reconciliation_observations, '[]'::jsonb) || ${JSON.stringify(record)}::jsonb,
             updated_at = NOW()
@@ -137,7 +146,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
 
   async appendReconciliationObservation(obs: ReconciliationObservation): Promise<void> {
-    await db.insert(reconciliationObservationsTable).values({
+    await this.db.insert(reconciliationObservationsTable).values({
       observationId: obs.attemptId + "-" + obs.rpcProviderId,
       paymentIntentId: obs.paymentIntentId, attemptId: obs.attemptId,
       rpcProviderId: obs.rpcProviderId, underlyingProvider: "",
@@ -148,7 +157,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
 
   async getReconciliationObservations(id: string): Promise<ReconciliationObservation[]> {
-    const rows = await db.select().from(reconciliationObservationsTable)
+    const rows = await this.db.select().from(reconciliationObservationsTable)
       .where(eq(reconciliationObservationsTable.paymentIntentId, id));
     return rows.map((r: any) => ({
       attemptId: r.attemptId, paymentIntentId: r.paymentIntentId,
@@ -159,23 +168,23 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
 
   async saveSettledEvidenceBundle(id: string, bundle: SettledEvidenceBundle): Promise<void> {
-    await db.update(paymentIntentsTable).set({ settledEvidenceBundle: bundle, updatedAt: new Date() })
+    await this.db.update(paymentIntentsTable).set({ settledEvidenceBundle: bundle, updatedAt: new Date() })
       .where(eq(paymentIntentsTable.paymentIntentId, id));
   }
 
   async saveNotSettledEvidenceBundle(id: string, bundle: NotSettledEvidenceBundle): Promise<void> {
-    await db.update(paymentIntentsTable).set({ notSettledEvidenceBundle: bundle, updatedAt: new Date() })
+    await this.db.update(paymentIntentsTable).set({ notSettledEvidenceBundle: bundle, updatedAt: new Date() })
       .where(eq(paymentIntentsTable.paymentIntentId, id));
   }
 
   // P0-6: Intent lookups using settlement_state directly
   async getPaymentIntentById(id: string): Promise<DurablePaymentIntent | null> {
-    const rows = await db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.paymentIntentId, id)).limit(1);
+    const rows = await this.db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.paymentIntentId, id)).limit(1);
     return rows.length === 0 ? null : this.rowToIntent(rows[0] as PaymentIntentRow);
   }
 
   async getPaymentIntentByOperationId(opId: string): Promise<DurablePaymentIntent | null> {
-    const rows = await db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.operationId, opId)).limit(1);
+    const rows = await this.db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.operationId, opId)).limit(1);
     return rows.length === 0 ? null : this.rowToIntent(rows[0] as PaymentIntentRow);
   }
 
@@ -185,31 +194,31 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     if (extra?.facilitatorHttpStatus !== undefined) setObj.facilitatorHttpStatus = extra.facilitatorHttpStatus;
     if (extra?.facilitatorResponseBody !== undefined) setObj.facilitatorResponseBody = extra.facilitatorResponseBody;
     if (extra?.errorReason !== undefined) setObj.errorReason = extra.errorReason;
-    await db.update(paymentIntentsTable).set(setObj).where(eq(paymentIntentsTable.paymentIntentId, id));
+    await this.db.update(paymentIntentsTable).set(setObj).where(eq(paymentIntentsTable.paymentIntentId, id));
   }
 
   // P0-6: Batch reconciliation - finds non-terminal intents directly by settlement_state
   async getNonTerminalIntents(): Promise<DurablePaymentIntent[]> {
     const states = ["SUBMITTING", "SUBMITTED", "SETTLEMENT_PENDING", "RECONCILING"];
-    const rows = await db.select().from(paymentIntentsTable)
+    const rows = await this.db.select().from(paymentIntentsTable)
       .where(sql`${paymentIntentsTable.settlementState} = ANY(${states})`);
     return rows.map((r: any) => this.rowToIntent(r as PaymentIntentRow));
   }
 
   // Nonce registry
   async reserveNonce(nonce: string, operationId: string, payer: string): Promise<void> {
-    try { await db.insert(nonceRegistryTable).values({ nonce, operationId, status: "RESERVED", payer }); }
+    try { await this.db.insert(nonceRegistryTable).values({ nonce, operationId, status: "RESERVED", payer }); }
     catch (err: unknown) { if ((err as any).code === "23505") throw new Error("NONCE_ALREADY_RESERVED: " + nonce); throw err; }
   }
   async getNonce(nonce: string): Promise<NonceRecord | null> {
-    const rows = await db.select().from(nonceRegistryTable).where(eq(nonceRegistryTable.nonce, nonce)).limit(1);
+    const rows = await this.db.select().from(nonceRegistryTable).where(eq(nonceRegistryTable.nonce, nonce)).limit(1);
     if (rows.length === 0) return null;
     const r = rows[0] as any;
     return { nonce: r.nonce, operationId: r.operationId, status: r.status, payer: r.payer, createdAt: r.createdAt.getTime(), updatedAt: r.updatedAt.getTime() };
   }
-  async markNonceSigned(n: string): Promise<void> { await db.update(nonceRegistryTable).set({ status: "SIGNED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
-  async markNonceSubmitted(n: string): Promise<void> { await db.update(nonceRegistryTable).set({ status: "SUBMITTED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
-  async markNonceSettled(n: string): Promise<void> { await db.update(nonceRegistryTable).set({ status: "SETTLED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
+  async markNonceSigned(n: string): Promise<void> { await this.db.update(nonceRegistryTable).set({ status: "SIGNED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
+  async markNonceSubmitted(n: string): Promise<void> { await this.db.update(nonceRegistryTable).set({ status: "SUBMITTED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
+  async markNonceSettled(n: string): Promise<void> { await this.db.update(nonceRegistryTable).set({ status: "SETTLED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
   // P1: reserveNonce + createPaymentIntent should be atomic.
   // In production, wrap in a transaction: BEGIN; reserveNonce; createPaymentIntent; COMMIT;
   // If createPaymentIntent fails (duplicate operation_id), ROLLBACK releases the nonce.
@@ -270,7 +279,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
 
   async getOperationsByStatus(status: OperationStatus): Promise<Operation[]> {
-    const rows = await db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.settlementState, status as string));
+    const rows = await this.db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.settlementState, status as string));
     return rows.map((r: any) => ({ operationId: r.operationId, currentState: r.settlementState, paymentState: r.settlementState } as any));
   }
 
@@ -278,7 +287,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   async claimReconciliationJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean> {
     const lockUntil = new Date(Date.now() + lockDurationMs);
     const q = sql`UPDATE reconciliation_jobs SET status = ${"RUNNING"}, locked_by = ${workerId}, locked_until = ${lockUntil}, probe_count = probe_count + 1, updated_at = NOW() WHERE job_id = ${jobId} AND (status = ${"PENDING"} OR (status = ${"RUNNING"} AND locked_until < NOW())) RETURNING job_id`;
-    const result = await db.execute(q);
+    const result = await this.db.execute(q);
     return Array.isArray(result) && result.length > 0;
   }
 
@@ -288,12 +297,12 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     // Relies on partial unique index rj_active_per_intent_idx (migration 0007).
     const jobId = "rj-" + Date.now() + "-" + Math.random().toString(36).slice(2);
     try {
-      await db.insert(reconciliationJobsTable).values({ jobId, paymentIntentId, status: "PENDING", probeCount: 0, nextProbeAt });
+      await this.db.insert(reconciliationJobsTable).values({ jobId, paymentIntentId, status: "PENDING", probeCount: 0, nextProbeAt });
       return jobId;
     } catch (err: any) {
       // Unique violation — active job already exists. Look it up and return existing jobId.
       if (err?.code === "23505" || err?.message?.includes("unique") || err?.message?.includes("duplicate")) {
-        const existing = await db.execute(sql`
+        const existing = await this.db.execute(sql`
           SELECT job_id FROM reconciliation_jobs
           WHERE payment_intent_id = ${paymentIntentId}
             AND status IN (${"PENDING"}, ${"RUNNING"})
@@ -310,7 +319,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   async getDueReconciliationJobs(): Promise<Array<{ jobId: string; paymentIntentId: string; probeCount: number }>> {
     // B.3-B2-FIX: Discover both due PENDING jobs AND expired RUNNING leases.
     // locked_until IS NULL is NOT treated as expired.
-    const rows = await db.execute(sql`
+    const rows = await this.db.execute(sql`
       SELECT job_id, payment_intent_id, probe_count
       FROM reconciliation_jobs
       WHERE (
@@ -330,14 +339,14 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     if (updates.nextProbeAt) setObj.nextProbeAt = updates.nextProbeAt;
     if (updates.lastError !== undefined) setObj.lastError = updates.lastError;
     if (updates.probeCount !== undefined) setObj.probeCount = updates.probeCount;
-    await db.update(reconciliationJobsTable).set(setObj).where(eq(reconciliationJobsTable.jobId, jobId));
+    await this.db.update(reconciliationJobsTable).set(setObj).where(eq(reconciliationJobsTable.jobId, jobId));
   }
 
   // B.3-B2-FIX: Atomic lease-safe lifecycle methods
 
   async completeReconciliationJob(jobId: string, workerId: string): Promise<boolean> {
     // RUNNING -> COMPLETED, release lease. Ownership-checked.
-    const result = await db.execute(sql`
+    const result = await this.db.execute(sql`
       UPDATE reconciliation_jobs
       SET status = ${"COMPLETED"}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
       WHERE job_id = ${jobId} AND status = ${"RUNNING"} AND locked_by = ${workerId}
@@ -349,7 +358,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   async rescheduleReconciliationJob(jobId: string, workerId: string, nextProbeAt: Date): Promise<boolean> {
     // RUNNING -> PENDING with new nextProbeAt, release lease. Ownership-checked.
     // probe_count is NOT incremented here — increment happens at claim time only.
-    const result = await db.execute(sql`
+    const result = await this.db.execute(sql`
       UPDATE reconciliation_jobs
       SET status = ${"PENDING"}, next_probe_at = ${nextProbeAt}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
       WHERE job_id = ${jobId} AND status = ${"RUNNING"} AND locked_by = ${workerId}
@@ -360,7 +369,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
 
   async failReconciliationJob(jobId: string, workerId: string, error: string): Promise<boolean> {
     // RUNNING -> UNRESOLVABLE, record error, release lease. Ownership-checked.
-    const result = await db.execute(sql`
+    const result = await this.db.execute(sql`
       UPDATE reconciliation_jobs
       SET status = ${"UNRESOLVABLE"}, last_error = ${error}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
       WHERE job_id = ${jobId} AND status = ${"RUNNING"} AND locked_by = ${workerId}
@@ -373,7 +382,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   // job.probe_count is the authoritative scheduling counter; DPI.probeCount is a derived cache
   // that ReconciliationEngine reads to compute nextProbeMs via getNextProbeDelay().
   async updatePaymentIntentProbeCount(paymentIntentId: string, probeCount: number): Promise<void> {
-    await db.execute(sql`
+    await this.db.execute(sql`
       UPDATE payment_intents
       SET probe_count = ${probeCount}, updated_at = NOW()
       WHERE payment_intent_id = ${paymentIntentId}
