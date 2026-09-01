@@ -676,6 +676,9 @@ export class Secretariat {
         const nextProbeAt = new Date(Date.now() + nextProbeMs);
 
         try {
+          if (typeof durableStore.createReconciliationJob !== "function") {
+            throw new Error("Store does not implement createReconciliationJob");
+          }
           const jobId = await durableStore.createReconciliationJob(dpi.paymentIntentId, nextProbeAt);
           this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_JOB_CREATED', {
             paymentIntentId: dpi.paymentIntentId,
