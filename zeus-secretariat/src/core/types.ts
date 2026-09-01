@@ -890,27 +890,6 @@ export interface DurableEvidenceStore {
 }
 
 // ============================================================================
-// EXECUTION STORE INTERFACE (R2.1-FIX-1: formalized contract)
-// ============================================================================
-
-/**
- * Canonical execution store contract.
- * Implemented by both InMemoryExecutionStore and PostgresExecutionStore.
- * PostSettlementEngine depends on this interface, not a concrete class.
- */
-export interface ExecutionStore {
-  saveAttempt(attempt: ExecutionAttempt): Promise<void>;
-  getAttemptById(attemptId: string): Promise<ExecutionAttempt | null>;
-  getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]>;
-  updateAttemptStatus(attemptId: string, status: ExecutionStatus, extra?: Partial<ExecutionAttempt>): Promise<void>;
-  saveJob(job: RecoveryJob): Promise<void>;
-  getJob(jobId: string): Promise<RecoveryJob | null>;
-  getPendingJobs(): Promise<RecoveryJob[]>;
-  claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean>;
-  updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void>;
-}
-
-// ============================================================================
 // PAYMENT SUBMISSION STORE INTERFACE (P0 - no as any, no optional methods)
 // ============================================================================
 
