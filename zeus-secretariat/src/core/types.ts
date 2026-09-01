@@ -893,26 +893,6 @@ export interface DurableEvidenceStore {
 // ATOMIC SETTLEMENT → EXECUTION HANDOFF CONTRACT (R2.1-FIX-5)
 // ============================================================================
 
-/**
- * Typed contract for atomic settlement-to-execution handoff.
- * Implementations MUST persist ALL three mutations in a single DB transaction:
- *   1. payment_intents CAS (settlement_state → SETTLED)
- *   2. recovery_jobs INSERT
- *   3. execution_attempts INSERT
- * If any step fails, the entire transaction MUST roll back.
- * Returns true if CAS succeeded and all inserts completed.
- * Returns false if CAS failed (already settled).
- * Throws on infrastructure failure (caller must fail closed).
- */
-export interface AtomicSettlementHandoff {
-  settleAndCreateExecutionObligation(
-    paymentIntentId: string,
-    operationId: string,
-    settledEvidenceBundle: unknown,
-    job: RecoveryJob,
-    attempt: ExecutionAttempt,
-  ): Promise<boolean>;
-}
 
 // ============================================================================
 // PAYMENT SUBMISSION STORE INTERFACE (P0 - no as any, no optional methods)
