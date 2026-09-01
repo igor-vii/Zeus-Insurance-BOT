@@ -190,13 +190,13 @@ export class InMemoryExecutionStore {
 
 export class PostSettlementEngine {
   private readonly paymentStore: DurableEvidenceStore;
-  private readonly executionStore: InMemoryExecutionStore;
+  private readonly executionStore: ExecutionStore;
   private readonly sellerAdapter: SellerExecutionAdapter;
   private readonly config: Required<PostSettlementConfig>;
 
   constructor(
     paymentStore: DurableEvidenceStore,
-    executionStore: InMemoryExecutionStore,
+    executionStore: ExecutionStore,
     sellerAdapter: SellerExecutionAdapter,
     config: PostSettlementConfig,
   ) {
