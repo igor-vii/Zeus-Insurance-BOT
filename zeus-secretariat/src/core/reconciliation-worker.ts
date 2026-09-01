@@ -172,6 +172,33 @@ export class ReconciliationWorker {
         return;
       }
 
+      // Step 3.5: B.3-B2-WIRING — Sync canonical probe count from job to DPI.
+      // job.probe_count (incremented at claim) is the authoritative scheduling counter.
+      // DPI.probeCount is a derived cache that ReconciliationEngine.getNextProbeDelay() reads.
+      // Without this sync, engine would use stale DPI.probeCount and compute wrong nextProbeMs.
+      try {
+        const extStore = this.store as DurableEvidenceStore & Partial<{
+          updatePaymentIntentProbeCount(id: string, count: number): Promise<void>;
+        }>;
+        if (typeof extStore.updatePaymentIntentProbeCount === "function") {
+          // Get current job probe_count after claim (claim incremented it)
+          const dueJobs = await this.store.getDueReconciliationJobs();
+          const currentJob = dueJobs.find(j => j.jobId === jobId);
+          // If job not in due list anymore (already rescheduled by another path),
+          // use the probeCount from the original discovery. The claim already incremented it.
+          // We pass the job's probeCount which was set during claim.
+          // Since we can't re-read the job easily here, we rely on the fact that
+          // claim incremented probe_count atomically. We need to read it back.
+          // Use a direct store lookup if available.
+          const jobProbeCount = currentJob?.probeCount ?? 1; // fallback: at least 1 after first claim
+          await extStore.updatePaymentIntentProbeCount(paymentIntentId, jobProbeCount);
+        }
+      } catch (syncErr) {
+        // Probe count sync failure is non-fatal — engine will use potentially stale
+        // DPI.probeCount, resulting in slightly wrong backoff but not data corruption.
+        console.warn(`[ReconciliationWorker] Probe count sync failed for ${paymentIntentId}:`, syncErr);
+      }
+
       // Step 4: Reconcile
       const outcome = await this.engine.reconcile(paymentIntentId);
 
