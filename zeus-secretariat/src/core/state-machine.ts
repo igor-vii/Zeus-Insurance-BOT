@@ -535,32 +535,80 @@ export class Secretariat {
     this.transitionState(operation, 'PAYMENT_SUBMITTED');
     operation.timestamps.paymentSubmittedAt = now();
 
-    const requirement = await this.getPaymentRequirementFromEvidence(operation);
-    if (!requirement) {
-      throw new Error('No payment requirement found for submission');
+    // B8.2-B.2: Use canonical V2 settlement path via SettlementAdapter.
+    // Legacy PaymentAdapter.submit() is NOT used for production submission.
+
+    // 1. Retrieve persisted DurablePaymentIntent (authoritative record from B.1)
+    const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    const dpi = typeof durableStore.getPaymentIntentByOperationId === "function"
+      ? await durableStore.getPaymentIntentByOperationId(operation.operationId)
+      : null;
+
+    if (!dpi) {
+      throw new Error('No DurablePaymentIntent found for submission — B.1 persistence required');
     }
 
+    // 2. Retrieve authorization from evidence (created in authorizePayment)
     const authorization = await this.getAuthorizationFromEvidence(operation);
     if (!authorization) {
       throw new Error('No payment authorization found for submission');
     }
 
-    // Get adapter for the network
-    const adapter = this.getAdapterForNetwork(requirement.network);
+    // 3. Construct canonical V2 PaymentPayload from DPI + authorization
+    const v2Payload = {
+      x402Version: 2 as const,
+      accepted: {
+        scheme: authorization.scheme || "exact",
+        network: dpi.network,
+        amount: dpi.value,
+        asset: dpi.asset,
+        payTo: dpi.payTo,
+        maxTimeoutSeconds: dpi.validBefore > 0 && dpi.validAfter >= 0
+          ? dpi.validBefore - dpi.validAfter
+          : 300,
+      },
+      payload: {
+        signature: authorization.signature,
+        authorization: {
+          from: dpi.authorizer || "",
+          to: dpi.payTo,
+          value: dpi.value,
+          validAfter: String(dpi.validAfter),
+          validBefore: String(dpi.validBefore),
+          nonce: dpi.nonce,
+        },
+      },
+    };
 
-    // Submit payment
-    const submissionResult = await adapter.submit(requirement, authorization);
-
-    if (!submissionResult.success) {
-      this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_FAILED', {
-        error: submissionResult.errorMessage,
-      });
-      throw new Error(submissionResult.errorMessage ?? 'Payment submission failed');
+    // 4. Submit via canonical SettlementAdapter
+    const settlementAdapter = this.config.settlementAdapter;
+    if (!settlementAdapter) {
+      throw new Error('No settlementAdapter configured — required for V2 payment submission');
     }
 
+    const result = await settlementAdapter.submit(dpi, v2Payload);
+
+    // 5. Handle result
+    if (result.status === "REJECTED") {
+      this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_FAILED', {
+        error: result.reason,
+      });
+      throw new Error(result.reason ?? 'Payment submission rejected');
+    }
+
+    if (result.status === "UNKNOWN") {
+      // UNKNOWN remains UNKNOWN — do NOT convert to FAILED
+      this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_UNKNOWN', {
+        error: result.error,
+      });
+      operation.paymentState = 'SUBMITTED';
+      return;
+    }
+
+    // SUBMITTED
     this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMITTED', {
-      transactionHash: submissionResult.transactionHash,
-      rawData: submissionResult.rawData,
+      transactionHash: result.txHash,
+      rawData: result.rawResponse,
     });
 
     operation.paymentState = 'SUBMITTED';
