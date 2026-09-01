@@ -148,25 +148,22 @@ export function createSecretariatComposition(): SecretariatComposition {
 
   let shutdownCalled = false;
 
+  /**
+   * R2.1-FIX-4: Recovery failure is FATAL for V0 economic safety.
+   * If recovery fails, the error propagates and prevents worker startup.
+   * This ensures no orphaned work is silently abandoned.
+   */
   async function recover(): Promise<void> {
-    // Reconciliation crash recovery
-    try {
-      const results = await reconciliationEngine.recoverAfterCrash();
-      if (results.size > 0) {
-        logger.info(`[composition] recoverAfterCrash: reconciled ${results.size} intents`);
-      }
-    } catch (err) {
-      logger.warn("[composition] recoverAfterCrash failed", err);
+    // Reconciliation crash recovery — failure is fatal
+    const reconResults = await reconciliationEngine.recoverAfterCrash();
+    if (reconResults.size > 0) {
+      logger.info(`[composition] recoverAfterCrash: reconciled ${reconResults.size} intents`);
     }
 
-    // Post-settlement execution recovery
-    try {
-      const recovered = await postSettlementEngine.recoverPendingJobs();
-      if (recovered.length > 0) {
-        logger.info(`[composition] PostSettlementEngine: recovered ${recovered.length} jobs`);
-      }
-    } catch (err) {
-      logger.warn("[composition] PostSettlementEngine recovery failed", err);
+    // Post-settlement execution recovery — failure is fatal
+    const execRecovered = await postSettlementEngine.recoverPendingJobs();
+    if (execRecovered.length > 0) {
+      logger.info(`[composition] PostSettlementEngine: recovered ${execRecovered.length} jobs`);
     }
   }
 
