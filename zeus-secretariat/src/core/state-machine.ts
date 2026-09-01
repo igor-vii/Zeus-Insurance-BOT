@@ -145,6 +145,12 @@ export interface SecretariatConfig {
   settlementAdapter?: SettlementAdapter;
   /** Canonical reconciliation engine. Required for settlement verification. */
   reconciliationEngine?: ReconciliationEngine;
+  /**
+   * R2.1-FIX-5: REQUIRED atomic settlement → execution handoff.
+   * Production MUST provide PostgresExecutionStore implementing this contract.
+   * If unavailable, settlement → execution handoff will fail closed.
+   */
+  atomicSettlementHandoff: AtomicSettlementHandoff;
 }
 
 export class Secretariat {
