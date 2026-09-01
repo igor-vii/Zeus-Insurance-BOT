@@ -260,50 +260,55 @@ export class PostgresExecutionStore {
     attempt: ExecutionAttempt,
   ): Promise<boolean> {
     try {
-      // Step 1: CAS transition to SETTLED
-      const casResult = await this.db.execute(sql`
-        UPDATE payment_intents
-        SET settlement_state = ${"SETTLED"},
-            settled_evidence_bundle = ${JSON.stringify(settledEvidenceBundle)}::jsonb,
-            version = version + 1,
-            settled_at = NOW(),
-            updated_at = NOW()
-        WHERE payment_intent_id = ${paymentIntentId}
-          AND settlement_state IN (${"SETTLEMENT_PENDING"}, ${"RECONCILING"}, ${"SUBMITTED"})
-        RETURNING payment_intent_id
-      `);
+      // R2.1-FIX-3: All mutations in a single DB transaction.
+      // If CAS succeeds but job/attempt insert fails, entire transaction rolls back.
+      const result = await this.db.transaction(async (tx) => {
+        // Step 1: CAS transition to SETTLED
+        const casResult = await tx.execute(sql`
+          UPDATE payment_intents
+          SET settlement_state = ${"SETTLED"},
+              settled_evidence_bundle = ${JSON.stringify(settledEvidenceBundle)}::jsonb,
+              version = version + 1,
+              settled_at = NOW(),
+              updated_at = NOW()
+          WHERE payment_intent_id = ${paymentIntentId}
+            AND settlement_state IN (${"SETTLEMENT_PENDING"}, ${"RECONCILING"}, ${"SUBMITTED"})
+          RETURNING payment_intent_id
+        `);
 
-      if (!Array.isArray(casResult) || casResult.length === 0) {
-        // CAS failed — already settled or invalid state
-        return false;
-      }
+        if (!Array.isArray(casResult) || casResult.length === 0) {
+          return false;
+        }
 
-      // Step 2: Insert recovery job (EXECUTION, PENDING)
-      await this.db.insert(recoveryJobsTable).values({
-        jobId: job.jobId,
-        operationId: job.operationId,
-        jobType: job.jobType,
-        status: job.status,
-        priority: job.priority,
-        maxAttempts: job.maxAttempts,
-        currentAttempt: job.currentAttempt,
-        metadata: job.metadata ?? null,
+        // Step 2: Insert recovery job (within same transaction)
+        await tx.insert(recoveryJobsTable).values({
+          jobId: job.jobId,
+          operationId: job.operationId,
+          jobType: job.jobType,
+          status: job.status,
+          priority: job.priority,
+          maxAttempts: job.maxAttempts,
+          currentAttempt: job.currentAttempt,
+          metadata: job.metadata ?? null,
+        });
+
+        // Step 3: Insert initial execution attempt (within same transaction)
+        await tx.insert(executionAttemptsTable).values({
+          attemptId: attempt.attemptId,
+          operationId: attempt.operationId,
+          executionId: attempt.executionId,
+          attemptNumber: attempt.attemptNumber,
+          status: attempt.status,
+          requestUrl: attempt.requestUrl ?? null,
+          requestMethod: attempt.requestMethod ?? null,
+          requestBody: attempt.requestBody ?? null,
+          idempotencyKey: attempt.idempotencyKey ?? null,
+        });
+
+        return true;
       });
 
-      // Step 3: Insert initial execution attempt (PENDING)
-      await this.db.insert(executionAttemptsTable).values({
-        attemptId: attempt.attemptId,
-        operationId: attempt.operationId,
-        executionId: attempt.executionId,
-        attemptNumber: attempt.attemptNumber,
-        status: attempt.status,
-        requestUrl: attempt.requestUrl ?? null,
-        requestMethod: attempt.requestMethod ?? null,
-        requestBody: attempt.requestBody ?? null,
-        idempotencyKey: attempt.idempotencyKey ?? null,
-      });
-
-      return true;
+      return result ?? false;
     } catch (err: unknown) {
       // On unique violation (duplicate job/attempt), the obligation already exists
       const pgErr = err as { code?: string };
