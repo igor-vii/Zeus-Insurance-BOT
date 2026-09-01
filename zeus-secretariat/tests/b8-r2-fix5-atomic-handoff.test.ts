@@ -156,13 +156,16 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Transactional Handoff", () => {
 
     // Verify all three records exist
     const pi = await db.execute(sql`SELECT settlement_state FROM payment_intents WHERE payment_intent_id = ${testPiId}`);
-    expect((pi as any)[0]?.settlement_state).toBe("SETTLED");
+    const piRows = pi as Array<{ settlement_state: string }>;
+    expect(piRows[0]?.settlement_state).toBe("SETTLED");
 
     const rj = await db.execute(sql`SELECT job_id FROM recovery_jobs WHERE job_id = ${job.jobId}`);
-    expect((rj as any).length).toBeGreaterThan(0);
+    const rjRows = rj as Array<{ job_id: string }>;
+    expect(rjRows.length).toBeGreaterThan(0);
 
     const ea = await db.execute(sql`SELECT attempt_id FROM execution_attempts WHERE attempt_id = ${attempt.attemptId}`);
-    expect((ea as any).length).toBeGreaterThan(0);
+    const eaRows = ea as Array<{ attempt_id: string }>;
+    expect(eaRows.length).toBeGreaterThan(0);
 
     // Cleanup
     await db.execute(sql`DELETE FROM execution_attempts WHERE attempt_id = ${attempt.attemptId}`);
@@ -202,12 +205,74 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Transactional Handoff", () => {
 
     // No job or attempt should have been created
     const rj = await db.execute(sql`SELECT job_id FROM recovery_jobs WHERE job_id = ${job.jobId}`);
-    expect((rj as any).length).toBe(0);
+    const rjFailRows = rj as Array<{ job_id: string }>;
+    expect(rjFailRows.length).toBe(0);
 
     const ea = await db.execute(sql`SELECT attempt_id FROM execution_attempts WHERE attempt_id = ${attempt.attemptId}`);
-    expect((ea as any).length).toBe(0);
+    const eaFailRows = ea as Array<{ attempt_id: string }>;
+    expect(eaFailRows.length).toBe(0);
 
     // Cleanup
     await db.execute(sql`DELETE FROM payment_intents WHERE payment_intent_id = ${testPiId}`);
+  });
+
+  test("FIX-5-5-ROLLBACK: partial transaction failure rolls back ALL mutations", async () => {
+    const now = Date.now();
+    const testOpId = `op-fix5-rb-${now}`;
+    const testPiId = `pi-fix5-rb-${now}`;
+    const testJobId = `rj-fix5-rb-${now}`;
+
+    // Setup: create PI in SETTLEMENT_PENDING state
+    await db.execute(sql`
+      INSERT INTO payment_intents (payment_intent_id, operation_id, settlement_state, created_at, updated_at, version)
+      VALUES (${testPiId}, ${testOpId}, ${"SETTLEMENT_PENDING"}, NOW(), NOW(), 1)
+      ON CONFLICT (payment_intent_id) DO UPDATE SET settlement_state = ${"SETTLEMENT_PENDING"}
+    `);
+
+    // Execute a transaction that succeeds partially then fails — same mechanism as production
+    let caughtError = false;
+    try {
+      await db.transaction(async (tx) => {
+        // Step 1: CAS succeeds
+        await tx.execute(sql`
+          UPDATE payment_intents
+          SET settlement_state = ${"SETTLED"}, version = version + 1, updated_at = NOW()
+          WHERE payment_intent_id = ${testPiId}
+            AND settlement_state IN (${"SETTLEMENT_PENDING"}, ${"RECONCILING"}, ${"SUBMITTED"})
+        `);
+
+        // Step 2: Insert recovery job succeeds
+        await tx.execute(sql`
+          INSERT INTO recovery_jobs (job_id, operation_id, job_type, status, priority, max_attempts, current_attempt, metadata, created_at, updated_at)
+          VALUES (${testJobId}, ${testOpId}, ${"EXECUTION"}, ${"PENDING"}, 0, 3, 0, '{}'::jsonb, NOW(), NOW())
+        `);
+
+        // Step 3: Simulate failure AFTER both mutations succeeded within transaction
+        throw new Error("SIMULATED_FAILURE_AFTER_PARTIAL_COMMIT");
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message === "SIMULATED_FAILURE_AFTER_PARTIAL_COMMIT") {
+        caughtError = true;
+      } else {
+        throw err; // Re-throw unexpected errors
+      }
+    }
+
+    expect(caughtError).toBe(true);
+
+    // PROOF: PI must NOT be SETTLED (rollback reverted the UPDATE)
+    const piAfter = await db.execute(sql`SELECT settlement_state FROM payment_intents WHERE payment_intent_id = ${testPiId}`);
+    const piRows = piAfter as Array<{ settlement_state: string }>;
+    expect(piRows[0]?.settlement_state).not.toBe("SETTLED");
+    expect(piRows[0]?.settlement_state).toBe("SETTLEMENT_PENDING");
+
+    // PROOF: Recovery job must NOT exist (rollback reverted the INSERT)
+    const rjAfter = await db.execute(sql`SELECT job_id FROM recovery_jobs WHERE job_id = ${testJobId}`);
+    const rjRows = rjAfter as Array<{ job_id: string }>;
+    expect(rjRows.length).toBe(0);
+
+    // Cleanup
+    await db.execute(sql`DELETE FROM payment_intents WHERE payment_intent_id = ${testPiId}`);
+    await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${testJobId}`);
   });
 });
