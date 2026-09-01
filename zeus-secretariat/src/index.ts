@@ -54,7 +54,8 @@ export type { SellerExecutionAdapter, SellerExecutionRequest, SellerExecutionRes
 
 // Reconciliation engine (B.3-A: canonical settlement verification)
 export { ReconciliationEngine } from './core/reconciliation-engine';
-export type { ReconciliationOutcome, ReconciliationScheduleConfig, FinalityPolicy } from './core/reconciliation-engine';
+export type { ReconciliationOutcome } from './core/reconciliation-engine';
+// ReconciliationScheduleConfig and FinalityPolicy are exported from ./core/types
 
 // Reconciliation worker (B.3-B2: durable polling worker)
 export { ReconciliationWorker } from './core/reconciliation-worker';
