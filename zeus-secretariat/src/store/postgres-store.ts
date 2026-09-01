@@ -333,6 +333,42 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     await db.update(reconciliationJobsTable).set(setObj).where(eq(reconciliationJobsTable.jobId, jobId));
   }
 
+  // B.3-B2-FIX: Atomic lease-safe lifecycle methods
+
+  async completeReconciliationJob(jobId: string, workerId: string): Promise<boolean> {
+    // RUNNING -> COMPLETED, release lease. Ownership-checked.
+    const result = await db.execute(sql`
+      UPDATE reconciliation_jobs
+      SET status = ${"COMPLETED"}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
+      WHERE job_id = ${jobId} AND status = ${"RUNNING"} AND locked_by = ${workerId}
+      RETURNING job_id
+    `);
+    return Array.isArray(result) && result.length > 0;
+  }
+
+  async rescheduleReconciliationJob(jobId: string, workerId: string, nextProbeAt: Date): Promise<boolean> {
+    // RUNNING -> PENDING with new nextProbeAt, release lease. Ownership-checked.
+    // probe_count is NOT incremented here — increment happens at claim time only.
+    const result = await db.execute(sql`
+      UPDATE reconciliation_jobs
+      SET status = ${"PENDING"}, next_probe_at = ${nextProbeAt}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
+      WHERE job_id = ${jobId} AND status = ${"RUNNING"} AND locked_by = ${workerId}
+      RETURNING job_id
+    `);
+    return Array.isArray(result) && result.length > 0;
+  }
+
+  async failReconciliationJob(jobId: string, workerId: string, error: string): Promise<boolean> {
+    // RUNNING -> UNRESOLVABLE, record error, release lease. Ownership-checked.
+    const result = await db.execute(sql`
+      UPDATE reconciliation_jobs
+      SET status = ${"UNRESOLVABLE"}, last_error = ${error}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
+      WHERE job_id = ${jobId} AND status = ${"RUNNING"} AND locked_by = ${workerId}
+      RETURNING job_id
+    `);
+    return Array.isArray(result) && result.length > 0;
+  }
+
   private rowToIntent(row: PaymentIntentRow): DurablePaymentIntent {
     return {
       paymentIntentId: row.paymentIntentId, operationId: row.operationId,
