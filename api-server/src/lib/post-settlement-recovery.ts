@@ -12,6 +12,7 @@ import { PostSettlementEngine } from "zeus-secretariat";
 import { PostgresEvidenceStore } from "zeus-secretariat";
 import { PostgresExecutionStore } from "zeus-secretariat";
 import { HttpSellerExecutionAdapter } from "zeus-secretariat";
+import { db } from "@workspace/db";
 import { logger } from "../lib/logger.js";
 
 export async function recoverPostSettlementJobs(): Promise<void> {
@@ -22,8 +23,8 @@ export async function recoverPostSettlementJobs(): Promise<void> {
   }
 
   try {
-    const paymentStore = new PostgresEvidenceStore();
-    const executionStore = new PostgresExecutionStore();
+    const paymentStore = new PostgresEvidenceStore(db);
+    const executionStore = new PostgresExecutionStore(db);
     const sellerAdapter = new HttpSellerExecutionAdapter(
       parseInt(process.env["ZEUS_SELLER_TIMEOUT_MS"] ?? "30000", 10),
     );
