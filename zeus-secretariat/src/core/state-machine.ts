@@ -613,54 +613,86 @@ export class Secretariat {
   // ==========================================================================
 
   private async observeSettlement(operation: Operation): Promise<void> {
-    const requirement = await this.getPaymentRequirementFromEvidence(operation);
-    if (!requirement) {
-      throw new Error('No payment requirement found for settlement observation');
+    // B8.2-B.3-A: Canonical reconciliation via ReconciliationEngine.
+    // Legacy PaymentAdapter.observeSettlement() is NO LONGER USED in production path.
+
+    // 1. Retrieve persisted DPI to get paymentIntentId
+    const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    const dpi = typeof durableStore.getPaymentIntentByOperationId === "function"
+      ? await durableStore.getPaymentIntentByOperationId(operation.operationId)
+      : null;
+
+    if (!dpi) {
+      throw new Error('No DurablePaymentIntent found for reconciliation');
     }
 
-    const submissionResult = await this.getSubmissionResultFromEvidence(operation);
-    if (!submissionResult) {
-      throw new Error('No submission result found for settlement observation');
+    // 2. Call canonical ReconciliationEngine
+    const reconEngine = this.config.reconciliationEngine;
+    if (!reconEngine) {
+      // No reconciliation engine configured — remain in current state, do not fail
+      this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_SKIPPED', {
+        reason: 'No reconciliationEngine configured',
+      });
+      return;
     }
 
-    // Get adapter for the network
-    const adapter = this.getAdapterForNetwork(requirement.network);
+    this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_STARTED', {
+      paymentIntentId: dpi.paymentIntentId,
+    });
 
-    // Observe settlement
-    const observation = await adapter.observeSettlement(requirement, submissionResult);
+    const outcome: ReconciliationOutcome = await reconEngine.reconcile(dpi.paymentIntentId);
 
-    if (observation.settled) {
-      this.transitionState(operation, 'SETTLED');
-      operation.timestamps.settledAt = now();
-      operation.paymentState = 'SETTLED';
+    // 3. Map ReconciliationOutcome → OperationStatus transition
+    switch (outcome.status) {
+      case "SETTLED":
+        this.transitionState(operation, 'SETTLED');
+        operation.timestamps.settledAt = now();
+        operation.paymentState = 'SETTLED';
+        // Settlement proof is owned by ReconciliationEngine (evidence bundle).
+        // StateMachine records orchestration event only.
+        this.recordEvidence(operation, 'SETTLEMENT', 'SETTLEMENT_CONFIRMED', {
+          paymentIntentId: dpi.paymentIntentId,
+          evidenceBundle: outcome.evidence,
+        });
+        break;
 
-      // Create settlement proof
-      operation.settlementProof = {
-        transactionHash: observation.transactionHash,
-        blockNumber: observation.blockNumber,
-        timestamp: observation.timestamp ?? now(),
-        amount: observation.amount ?? requirement.amount,
-        asset: observation.asset ?? requirement.asset,
-        source: adapter.network,
-        rawData: observation.rawData,
-      };
+      case "NOT_SETTLED":
+        this.transitionState(operation, 'SETTLEMENT_FAILED');
+        operation.paymentState = 'FAILED';
+        this.recordEvidence(operation, 'SETTLEMENT', 'SETTLEMENT_NOT_CONFIRMED', {
+          paymentIntentId: dpi.paymentIntentId,
+          evidenceBundle: outcome.evidence,
+        });
+        break;
 
-      this.recordEvidence(operation, 'SETTLEMENT', 'SETTLEMENT_CONFIRMED', {
-        observation,
-        proof: operation.settlementProof,
-      });
-    } else {
-      // Settlement unknown - CRITICAL STATE
-      this.transitionState(operation, 'SETTLEMENT_UNKNOWN');
-      operation.paymentState = 'UNKNOWN';
+      case "RECONCILING":
+        // RECONCILING is NON-TERMINAL. Do NOT throw, do NOT convert to FAILED.
+        this.transitionState(operation, 'SETTLEMENT_PENDING');
+        operation.paymentState = 'PENDING';
+        this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_PENDING', {
+          paymentIntentId: dpi.paymentIntentId,
+          reason: outcome.reason,
+          nextProbeMs: outcome.nextProbeMs,
+        });
+        break;
 
-      this.recordEvidence(operation, 'SETTLEMENT', 'SETTLEMENT_UNKNOWN', {
-        observation,
-        warning: 'Cannot proceed until settlement status is determined',
-      });
+      case "UNRESOLVED_MANUAL":
+        this.transitionState(operation, 'UNRESOLVABLE');
+        operation.paymentState = 'FAILED';
+        this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_UNRESOLVED', {
+          paymentIntentId: dpi.paymentIntentId,
+          reason: outcome.reason,
+        });
+        break;
 
-      // Do NOT retry payment - wait for settlement confirmation
-      throw new Error('Settlement status unknown - recovery required');
+      case "INCIDENT":
+        this.transitionState(operation, 'UNRESOLVABLE');
+        operation.paymentState = 'FAILED';
+        this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_INCIDENT', {
+          paymentIntentId: dpi.paymentIntentId,
+          reason: outcome.reason,
+        });
+        break;
     }
   }
 
