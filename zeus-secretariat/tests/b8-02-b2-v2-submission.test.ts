@@ -16,9 +16,10 @@ import type {
   PaymentSigner,
   SettlementObservation,
   PaymentSubmissionResult,
-  CanonicalSettlementAdapter,
+
 } from '../src/core/types';
 import { Secretariat } from '../src/core/state-machine';
+import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../src/adapters/x402-facilitator-client';
 
 // ---------------------------------------------------------------------------
 // Mock fetch
@@ -123,7 +124,7 @@ class TestLegacyAdapter implements PaymentAdapter {
 // Mock Canonical Settlement Adapter
 // ---------------------------------------------------------------------------
 
-class TestSettlementAdapter implements CanonicalSettlementAdapter {
+class TestSettlementAdapter implements SettlementAdapter {
   public submitCalls: Array<{ intent: DurablePaymentIntent; payload: any }> = [];
   public responseStatus: "SUBMITTED" | "REJECTED" | "UNKNOWN" = "SUBMITTED";
 
