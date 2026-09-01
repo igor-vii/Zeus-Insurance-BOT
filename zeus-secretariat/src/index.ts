@@ -52,3 +52,18 @@ export { PostgresExecutionStore } from './store/postgres-execution-store';
 export { HttpSellerExecutionAdapter, MockSellerExecutionAdapter } from './adapters/seller-execution-adapter';
 export type { SellerExecutionAdapter, SellerExecutionRequest, SellerExecutionResult } from './adapters/seller-execution-adapter';
 
+// Reconciliation engine (B.3-A: canonical settlement verification)
+export { ReconciliationEngine } from './core/reconciliation-engine';
+export type { ReconciliationOutcome, ReconciliationScheduleConfig, FinalityPolicy } from './core/reconciliation-engine';
+
+// Reconciliation worker (B.3-B2: durable polling worker)
+export { ReconciliationWorker } from './core/reconciliation-worker';
+export type { ReconciliationWorkerConfig } from './core/reconciliation-worker';
+
+// Multi-RPC checker (required by ReconciliationEngine)
+export { MultiRpcChecker } from './core/multi-rpc-checker';
+
+// Shared store factory (R1: production composition primitive)
+export { createSharedStores } from './store/factory';
+export type { SharedStores } from './store/factory';
+
