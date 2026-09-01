@@ -111,7 +111,7 @@ export function createSecretariatComposition(): SecretariatComposition {
   // 8. Post-settlement engine (shared stores)
   const postSettlementEngine = new PostSettlementEngine(
     stores.evidenceStore,
-    stores.executionStore as any, // PostSettlementEngine expects InMemoryExecutionStore interface
+    stores.executionStore,
     sellerAdapter,
     {
       workerId: `api-server-${process.pid}`,
