@@ -484,7 +484,9 @@ export class Secretariat {
           validAfter: 0,
           validBefore: requirement.deadline ?? 0,
           paymentPayload: authorization.signature,
-          paymentPayloadHash: "",  // Computed in Block 8.2-B.2 when V2 payload is constructed
+          // TODO(B8.2-C/signer-block): paymentPayloadHash deferred. No existing hash utility found.
+      // Requires keccak256(viem) over canonical serialized PaymentPayload bytes.
+      paymentPayloadHash: "",
           settlementState: "AUTHORIZED",
           createdAt: ts,
           updatedAt: ts,
@@ -543,7 +545,7 @@ export class Secretariat {
     }
 
     // 3. Construct canonical V2 PaymentPayload from DPI + authorization
-    const v2Payload = {
+    const v2Payload: PaymentPayload = {
       x402Version: 2 as const,
       accepted: {
         scheme: authorization.scheme || "exact",
