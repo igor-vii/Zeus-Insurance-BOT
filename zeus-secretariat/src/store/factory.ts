@@ -11,6 +11,7 @@
  *   // Pass stores.evidenceStore to StateMachine, ReconciliationEngine, Worker, etc.
  */
 
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { PostgresEvidenceStore } from './postgres-store';
 import { PostgresExecutionStore } from './postgres-execution-store';
 
@@ -38,15 +39,7 @@ export interface SharedStores {
  * @param db - Existing Drizzle database instance from @workspace/db
  * @returns SharedStores with evidenceStore and executionStore
  */
-export function createSharedStores(db: unknown): SharedStores {
-  // PostgresEvidenceStore and PostgresExecutionStore both use the global
-  // db singleton from @workspace/db internally via `import { db } from "@workspace/db"`.
-  // The db parameter is accepted for API clarity and future-proofing,
-  // but current store implementations use the module-level singleton.
-  //
-  // When stores are refactored to accept db as constructor parameter,
-  // this factory will pass it through. For now, we verify the parameter
-  // is provided to enforce the contract at the call site.
+export function createSharedStores(db: NodePgDatabase): SharedStores {
   if (!db) {
     throw new Error(
       "createSharedStores requires a db instance. " +
@@ -55,7 +48,7 @@ export function createSharedStores(db: unknown): SharedStores {
   }
 
   return {
-    evidenceStore: new PostgresEvidenceStore(),
-    executionStore: new PostgresExecutionStore(),
+    evidenceStore: new PostgresEvidenceStore(db),
+    executionStore: new PostgresExecutionStore(db),
   };
 }
