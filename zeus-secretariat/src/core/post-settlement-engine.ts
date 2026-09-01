@@ -164,7 +164,7 @@ export class InMemoryExecutionStore {
     return this.attempts.get(attemptId) ?? null;
   }
 
-  async updateAttemptStatus(attemptId: string, status: ExecutionStatus, extra?: Partial<ExecutionAttempt>): Promise<void> {
+  async updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, extra?: Partial<ExecutionAttempt>): Promise<void> {
     const attempt = this.attempts.get(attemptId);
     if (!attempt) throw new Error("ATTEMPT_NOT_FOUND");
     attempt.status = status;
@@ -378,7 +378,7 @@ export class PostSettlementEngine {
   async processJob(jobId: string): Promise<{
     success: boolean;
     result?: SellerExecutionResult;
-    finalStatus: ExecutionStatus | RecoveryJobStatus;
+    finalStatus: ExecutionObligationStatus | RecoveryJobStatus;
   }> {
     // INV-AQ: Atomic claim
     const claimed = await this.executionStore.claimJob(
