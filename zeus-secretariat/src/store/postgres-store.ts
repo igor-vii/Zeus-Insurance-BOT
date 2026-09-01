@@ -369,6 +369,17 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return Array.isArray(result) && result.length > 0;
   }
 
+  // B.3-B2-WIRING: Sync canonical probe count from reconciliation_jobs to payment_intents.
+  // job.probe_count is the authoritative scheduling counter; DPI.probeCount is a derived cache
+  // that ReconciliationEngine reads to compute nextProbeMs via getNextProbeDelay().
+  async updatePaymentIntentProbeCount(paymentIntentId: string, probeCount: number): Promise<void> {
+    await db.execute(sql`
+      UPDATE payment_intents
+      SET probe_count = ${probeCount}, updated_at = NOW()
+      WHERE payment_intent_id = ${paymentIntentId}
+    `);
+  }
+
   private rowToIntent(row: PaymentIntentRow): DurablePaymentIntent {
     return {
       paymentIntentId: row.paymentIntentId, operationId: row.operationId,
