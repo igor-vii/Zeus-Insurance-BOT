@@ -277,19 +277,50 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   // P0-2: Atomic job claiming via SQL UPDATE...RETURNING
   async claimReconciliationJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean> {
     const lockUntil = new Date(Date.now() + lockDurationMs);
-    const q = sql`UPDATE reconciliation_jobs SET status = ${"RUNNING"}, locked_by = ${workerId}, locked_until = ${lockUntil}, current_attempt = current_attempt + 1, updated_at = NOW() WHERE job_id = ${jobId} AND (status = ${"PENDING"} OR (status = ${"RUNNING"} AND locked_until < NOW())) RETURNING job_id`;
+    const q = sql`UPDATE reconciliation_jobs SET status = ${"RUNNING"}, locked_by = ${workerId}, locked_until = ${lockUntil}, probe_count = probe_count + 1, updated_at = NOW() WHERE job_id = ${jobId} AND (status = ${"PENDING"} OR (status = ${"RUNNING"} AND locked_until < NOW())) RETURNING job_id`;
     const result = await db.execute(q);
     return Array.isArray(result) && result.length > 0;
   }
 
   async createReconciliationJob(paymentIntentId: string, nextProbeAt: Date): Promise<string> {
+    // B.3-B2-FIX: Idempotent creation. If an active (PENDING/RUNNING) job already exists
+    // for this paymentIntentId, return its jobId instead of creating a duplicate.
+    // Relies on partial unique index rj_active_per_intent_idx (migration 0007).
     const jobId = "rj-" + Date.now() + "-" + Math.random().toString(36).slice(2);
-    await db.insert(reconciliationJobsTable).values({ jobId, paymentIntentId, status: "PENDING", probeCount: 0, nextProbeAt });
-    return jobId;
+    try {
+      await db.insert(reconciliationJobsTable).values({ jobId, paymentIntentId, status: "PENDING", probeCount: 0, nextProbeAt });
+      return jobId;
+    } catch (err: any) {
+      // Unique violation — active job already exists. Look it up and return existing jobId.
+      if (err?.code === "23505" || err?.message?.includes("unique") || err?.message?.includes("duplicate")) {
+        const existing = await db.execute(sql`
+          SELECT job_id FROM reconciliation_jobs
+          WHERE payment_intent_id = ${paymentIntentId}
+            AND status IN (${"PENDING"}, ${"RUNNING"})
+          LIMIT 1
+        `);
+        if (Array.isArray(existing) && existing.length > 0) {
+          return (existing[0] as any).job_id;
+        }
+      }
+      throw err;
+    }
   }
 
   async getDueReconciliationJobs(): Promise<Array<{ jobId: string; paymentIntentId: string; probeCount: number }>> {
-    const rows = await db.execute(sql`SELECT job_id, payment_intent_id, probe_count FROM reconciliation_jobs WHERE status = ${"PENDING"} AND next_probe_at <= NOW() ORDER BY next_probe_at ASC LIMIT 100`);
+    // B.3-B2-FIX: Discover both due PENDING jobs AND expired RUNNING leases.
+    // locked_until IS NULL is NOT treated as expired.
+    const rows = await db.execute(sql`
+      SELECT job_id, payment_intent_id, probe_count
+      FROM reconciliation_jobs
+      WHERE (
+          status = ${"PENDING"} AND next_probe_at <= NOW()
+        ) OR (
+          status = ${"RUNNING"} AND locked_until IS NOT NULL AND locked_until < NOW()
+        )
+      ORDER BY next_probe_at ASC
+      LIMIT 100
+    `);
     return (Array.isArray(rows) ? rows : []).map((r: any) => ({ jobId: r.job_id, paymentIntentId: r.payment_intent_id, probeCount: r.probe_count }));
   }
 
