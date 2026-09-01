@@ -29,6 +29,8 @@ import {
   SigningContext,
 } from './types';
 
+import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../adapters/x402-facilitator-client';
+
 // Legacy types used internally by StateMachine (Phase 2.1 payment flow)
 // These are NOT the canonical V0 DurablePaymentIntent — they exist only for
 // the StateMachine's internal observeExecution_DEPRECATED path.
@@ -133,27 +135,13 @@ function isValidTransition(from: OperationStatus, to: OperationStatus): boolean 
  *   SUCCESS / DELIVERY_UNKNOWN / recovery
  */
 
-/**
- * Canonical settlement adapter contract for V2 payment submission.
- * Matches SettlementAdapter from x402-facilitator-client.ts without circular import.
- */
-export interface CanonicalSettlementAdapter {
-  submit(intent: DurablePaymentIntent, payload: unknown): Promise<{
-    status: "SUBMITTED" | "REJECTED" | "UNKNOWN";
-    txHash?: string;
-    reason?: string;
-    error?: string;
-    rawResponse?: unknown;
-  }>;
-}
-
 export interface SecretariatConfig {
   evidenceStore: EvidenceStore & Partial<DurableEvidenceStore>;
   signer: PaymentSigner;
   adapters: Map<string, PaymentAdapter>;
   capabilitySources?: CapabilitySource[];
   /** Canonical V2 settlement adapter. Required for production payment submission. */
-  settlementAdapter?: CanonicalSettlementAdapter;
+  settlementAdapter?: SettlementAdapter;
 }
 
 export class Secretariat {
