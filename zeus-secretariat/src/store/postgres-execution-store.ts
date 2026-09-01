@@ -20,7 +20,7 @@ import {
 } from "@workspace/db/schema";
 import type {
   ExecutionAttempt,
-  ExecutionStatus,
+  ExecutionObligationStatus,
   RecoveryJob,
   RecoveryJobStatus,
 } from "../core/post-settlement-engine";
