@@ -247,6 +247,11 @@ export class PostgresExecutionStore {
    * If any step fails, all are rolled back.
    * CAS on payment_intents prevents duplicate settlement.
    */
+  /**
+   * R2.1-FIX-3: Transactional settlement → execution handoff.
+   * All mutations (CAS on payment_intents + job insert + attempt insert)
+   * happen in a single DB transaction. If any step fails, all are rolled back.
+   */
   async settleAndCreateExecutionObligation(
     paymentIntentId: string,
     operationId: string,
