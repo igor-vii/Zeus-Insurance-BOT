@@ -42,11 +42,12 @@ export type PaymentStatus =
   | 'UNKNOWN';
 
 export type ExecutionStatus =
-  | 'NOT_STARTED'
   | 'PENDING'
-  | 'CONFIRMED'
-  | 'FAILED'
-  | 'UNKNOWN';
+  | 'ATTEMPTED'
+  | 'SUCCESS'
+  | 'HTTP_FAILURE'
+  | 'DELIVERY_UNKNOWN'
+  | 'UNRESOLVABLE';
 
 // ============================================================================
 // CORE DOMAIN OBJECTS
