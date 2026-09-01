@@ -27,6 +27,9 @@ import {
   PaymentRequirement,
   PaymentAuthorization,
   SigningContext,
+  AtomicSettlementHandoff,
+  RecoveryJob,
+  ExecutionAttempt,
 } from './types';
 
 import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../adapters/x402-facilitator-client';
