@@ -247,7 +247,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   // Queries payment_intents (not a separate operations table) because that is where
   // client_id and request_id are persisted. Reconstructs a minimal Operation from the intent.
   async getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null> {
-    const rows = await db
+    const rows = await this.db
       .select()
       .from(paymentIntentsTable)
       .where(and(
