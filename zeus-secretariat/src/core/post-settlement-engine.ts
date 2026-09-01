@@ -34,7 +34,19 @@ export type ExecutionCapability =
   | "RESULT_RETRIEVAL"       // can query result without re-executing
   | "NONE";                  // no recovery possible — honest UNKNOWN
 
-// ExecutionStatus imported from ./types (canonical)
+// ExecutionStatus imported from ./types (operation-level lifecycle)
+
+/**
+ * Canonical execution obligation status for execution attempts and recovery jobs.
+ * Distinct from operation-level ExecutionStatus in types.ts.
+ */
+export type ExecutionObligationStatus =
+  | "PENDING"
+  | "ATTEMPTED"
+  | "SUCCESS"
+  | "HTTP_FAILURE"
+  | "DELIVERY_UNKNOWN"
+  | "UNRESOLVABLE";
 
 export type RecoveryJobType =
   | "EXECUTION"
