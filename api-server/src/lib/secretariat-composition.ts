@@ -123,12 +123,15 @@ export function createSecretariatComposition(): SecretariatComposition {
   );
 
   // 9. Secretariat / StateMachine (shared everything)
+  // R2.1-FIX-5: Pass executionStore as typed AtomicSettlementHandoff.
+  // PostgresExecutionStore implements settleAndCreateExecutionObligation() transactionally.
   const secretariat = new Secretariat({
     evidenceStore: stores.evidenceStore,
     signer,
     adapters: new Map(), // Legacy PaymentAdapter map — empty for V2-only path
     settlementAdapter,
     reconciliationEngine,
+    atomicSettlementHandoff: stores.executionStore,
   });
 
   // 10. Reconciliation worker (shared store + engine)
