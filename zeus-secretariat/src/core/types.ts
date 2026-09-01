@@ -884,6 +884,9 @@ export interface DurableEvidenceStore {
   completeReconciliationJob(jobId: string, workerId: string): Promise<boolean>;
   rescheduleReconciliationJob(jobId: string, workerId: string, nextProbeAt: Date): Promise<boolean>;
   failReconciliationJob(jobId: string, workerId: string, error: string): Promise<boolean>;
+
+  // B.3-B2-WIRING: Sync canonical probe count from job to DPI before reconcile
+  updatePaymentIntentProbeCount(paymentIntentId: string, probeCount: number): Promise<void>;
 }
 
 // ============================================================================
