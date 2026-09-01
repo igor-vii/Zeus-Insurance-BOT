@@ -84,8 +84,16 @@ export class ReconciliationWorker {
   ) {
     this.store = store;
     this.engine = engine;
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.workerId = resolveWorkerId(config?.workerId);
+    // Resolve workerId first so config object satisfies Required<> fully
+    const resolvedWorkerId = resolveWorkerId(config?.workerId);
+    this.workerId = resolvedWorkerId;
+    this.config = {
+      pollIntervalMs: config?.pollIntervalMs ?? DEFAULT_CONFIG.pollIntervalMs,
+      leaseDurationMs: config?.leaseDurationMs ?? DEFAULT_CONFIG.leaseDurationMs,
+      errorBackoffMs: config?.errorBackoffMs ?? DEFAULT_CONFIG.errorBackoffMs,
+      batchSize: config?.batchSize ?? DEFAULT_CONFIG.batchSize,
+      workerId: resolvedWorkerId,
+    };
   }
 
   /** Start the polling loop. Idempotent — repeated calls do not create duplicate loops. */
