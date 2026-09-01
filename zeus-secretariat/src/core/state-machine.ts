@@ -1096,15 +1096,7 @@ export class Secretariat {
       attemptNumber: 1,
       status: "PENDING",
       idempotencyKey: operation.operationId, // INV-11: stable idempotency key
-      requestUrl: undefined,
-      requestMethod: undefined,
-      requestBody: undefined,
-      sellerResponse: undefined,
-      error: undefined,
-      startedAt: undefined,
-      completedAt: undefined,
       createdAt: now,
-      updatedAt: now,
     };
 
     const settledEvidence = operation.settlementProof ?? {
