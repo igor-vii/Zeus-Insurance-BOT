@@ -103,19 +103,57 @@ app.use("/api", router);
 // MCP server — AI agent interface at POST /mcp
 connectMCPServer(app);
 
+// ── Secretariat Composition Root (R2.1) ─────────────────────────────────────
+// Creates shared dependency graph for all Secretariat subsystems.
+let secretariatShutdown: (() => Promise<void>) | null = null;
+
+try {
+  const { createSecretariatComposition } = await import("./lib/secretariat-composition.js");
+  const composition = createSecretariatComposition();
+
+  // Startup recovery MUST happen before worker starts
+  await composition.recover();
+
+  // Start reconciliation worker (polling loop)
+  composition.startWorker();
+
+  // Export shutdown for signal handlers in index.ts
+  secretariatShutdown = composition.shutdown;
+
+  logger.info("[app] Secretariat composition root initialized");
+} catch (err) {
+  // Config validation failure is FATAL — don't start a partially-initialized server
+  logger.error({ err }, "[app] Secretariat composition failed — server cannot start");
+  process.exit(1);
+}
+
+// ── Existing Background Services ────────────────────────────────────────────
+// These are independent of Secretariat and remain as-is.
+
 // Start the 5-minute background sync scheduler
 startBackgroundSync();
 
-// Start on-chain event listener (disable with ENABLE_EVENT_LISTENER=false)
-startEventListener();
+// Start on-chain event listener (returns stop function)
+const stopEventListener = startEventListener();
 
-// Start PostSettlementEngine recovery (process pending execution jobs from previous runs)
-try {
-  const { recoverPostSettlementJobs } = await import("./lib/post-settlement-recovery.js");
-  await recoverPostSettlementJobs();
-  logger.info("PostSettlementEngine: startup recovery complete");
-} catch (e) {
-  logger.warn("PostSettlementEngine: startup recovery skipped", e);
+// ── Export shutdown hook for index.ts ────────────────────────────────────────
+export async function gracefulShutdown(): Promise<void> {
+  logger.info("[app] Graceful shutdown initiated");
+
+  // 1. Stop Secretariat (worker + reconciliation)
+  if (secretariatShutdown) {
+    await secretariatShutdown();
+  }
+
+  // 2. Stop event listener
+  if (stopEventListener) {
+    stopEventListener();
+  }
+
+  // Note: startBackgroundSync uses interval.unref() — no explicit stop needed.
+  // The interval will not prevent process exit.
+
+  logger.info("[app] Graceful shutdown complete");
 }
 
 app.use(Sentry.expressErrorHandler());
