@@ -66,7 +66,7 @@ export interface ExecutionAttempt {
   readonly operationId: string;
   readonly executionId: string;       // stable idempotency key (INV-9)
   readonly attemptNumber: number;
-  status: ExecutionStatus;
+  status: ExecutionObligationStatus;
   requestUrl?: string;
   requestMethod?: string;
   requestBody?: unknown;
@@ -109,7 +109,7 @@ export interface ExecutionStore {
   saveAttempt(attempt: ExecutionAttempt): Promise<void>;
   getAttemptById(attemptId: string): Promise<ExecutionAttempt | null>;
   getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]>;
-  updateAttemptStatus(attemptId: string, status: ExecutionStatus, extra?: Partial<ExecutionAttempt>): Promise<void>;
+  updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, extra?: Partial<ExecutionAttempt>): Promise<void>;
   saveJob(job: RecoveryJob): Promise<void>;
   getJob(jobId: string): Promise<RecoveryJob | null>;
   getPendingJobs(): Promise<RecoveryJob[]>;
