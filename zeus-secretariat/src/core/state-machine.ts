@@ -1080,11 +1080,28 @@ export class Secretariat {
       source: "StateMachine.observeSettlement",
     };
 
+    // B.3-B1: Retrieve authoritative DPI to obtain correct paymentIntentId.
+    // operationId ≠ paymentIntentId — they are separate identities for separate domains.
+    const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    const dpi = typeof durableStore.getPaymentIntentByOperationId === "function"
+      ? await durableStore.getPaymentIntentByOperationId(operation.operationId)
+      : null;
+
+    if (!dpi) {
+      // Cannot perform atomic handoff without authoritative DPI.
+      // Do NOT silently fall through to sequential persistence — that would mask
+      // a missing economic record with an incomplete execution obligation.
+      throw new Error(
+        `Cannot create execution obligation: no DurablePaymentIntent found for operationId=${operation.operationId}. ` +
+        `Settlement→execution handoff requires authoritative paymentIntentId from DPI.`
+      );
+    }
+
     // Try atomic handoff first (PostgresExecutionStore)
     if (typeof store.settleAndCreateExecutionObligation === "function") {
       const success = await store.settleAndCreateExecutionObligation(
-        operation.operationId,
-        operation.operationId,
+        dpi.paymentIntentId,     // ← payment domain identity (CAS on payment_intents)
+        operation.operationId,   // ← execution domain identity (jobs/attempts)
         settledEvidence,
         job,
         attempt,
@@ -1094,25 +1111,27 @@ export class Secretariat {
           jobId,
           attemptId,
           executionId: operation.operationId,
+          paymentIntentId: dpi.paymentIntentId,
         });
         return;
       }
       // CAS failed — already settled by another worker. Record evidence and return.
       this.recordEvidence(operation, 'EXECUTION', 'SETTLEMENT_ALREADY_PERSISTED', {
         note: 'CAS failed — settlement already persisted by another worker',
+        paymentIntentId: dpi.paymentIntentId,
       });
       return;
     }
 
-    // Fallback: sequential persistence (for stores without atomic handoff)
-    // Persist operation state
+    // Fallback: sequential persistence (for stores without atomic handoff).
+    // Still uses correct paymentIntentId from DPI — identity separation preserved.
     await this.persistOperation(operation);
 
-    // Record durable handoff evidence
     this.recordEvidence(operation, 'EXECUTION', 'DURABLE_EXECUTION_OBLIGATION_CREATED', {
       jobId,
       attemptId,
       executionId: operation.operationId,
+      paymentIntentId: dpi.paymentIntentId,
       note: 'Sequential persistence — atomic handoff not available on this store',
     });
   }
