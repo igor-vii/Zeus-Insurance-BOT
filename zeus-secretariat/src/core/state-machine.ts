@@ -665,16 +665,35 @@ export class Secretariat {
         });
         break;
 
-      case "RECONCILING":
+      case "RECONCILING": {
         // RECONCILING is NON-TERMINAL. Do NOT throw, do NOT convert to FAILED.
         this.transitionState(operation, 'SETTLEMENT_PENDING');
         operation.paymentState = 'UNKNOWN';
-        this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_PENDING', {
-          paymentIntentId: dpi.paymentIntentId,
-          reason: outcome.reason,
-          nextProbeMs: outcome.nextProbeMs,
-        });
+
+        // B.3-B2-WIRING: Create durable reconciliation job so worker can schedule next probe.
+        // Idempotent: if active job already exists for this paymentIntentId, returns existing jobId.
+        const nextProbeMs = outcome.nextProbeMs ?? 10_000;
+        const nextProbeAt = new Date(Date.now() + nextProbeMs);
+
+        try {
+          const jobId = await durableStore.createReconciliationJob(dpi.paymentIntentId, nextProbeAt);
+          this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_JOB_CREATED', {
+            paymentIntentId: dpi.paymentIntentId,
+            jobId,
+            nextProbeAt: nextProbeAt.toISOString(),
+            nextProbeMs,
+            reason: outcome.reason,
+          });
+        } catch (err) {
+          // Job creation failed — record but do not throw.
+          // recoverAfterCrash() will pick up non-terminal DPI on next startup.
+          this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_JOB_CREATION_FAILED', {
+            paymentIntentId: dpi.paymentIntentId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
         break;
+      }
 
       case "UNRESOLVED_MANUAL":
         this.transitionState(operation, 'UNRESOLVABLE');
