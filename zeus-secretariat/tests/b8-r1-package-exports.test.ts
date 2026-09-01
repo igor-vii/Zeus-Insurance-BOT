@@ -57,8 +57,9 @@ describe("BLOCK 8 R1: Public Package Exports", () => {
 describe("BLOCK 8 R1: Shared Store Factory", () => {
   test("R1.9: createSharedStores returns evidenceStore and executionStore", async () => {
     const { createSharedStores } = await import("../src/store/factory");
-    // Pass a truthy value as db placeholder — factory validates non-null
-    const stores = createSharedStores({ mock: true });
+    // Cast to any for unit test — real DB integration tested in durable-storage.test.ts
+    const mockDb = {} as any;
+    const stores = createSharedStores(mockDb);
     expect(stores.evidenceStore).toBeDefined();
     expect(stores.executionStore).toBeDefined();
   });
@@ -71,12 +72,13 @@ describe("BLOCK 8 R1: Shared Store Factory", () => {
 
   test("R1.11: returned stores are reusable instances (identity)", async () => {
     const { createSharedStores } = await import("../src/store/factory");
-    const stores = createSharedStores({ mock: true });
+    const mockDb = {} as any;
+    const stores = createSharedStores(mockDb);
     // Same reference when accessed multiple times
     expect(stores.evidenceStore).toBe(stores.evidenceStore);
     expect(stores.executionStore).toBe(stores.executionStore);
     // Different instances from separate factory calls
-    const stores2 = createSharedStores({ mock: true });
+    const stores2 = createSharedStores(mockDb);
     expect(stores.evidenceStore).not.toBe(stores2.evidenceStore);
   });
 });
