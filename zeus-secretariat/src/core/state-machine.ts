@@ -668,7 +668,7 @@ export class Secretariat {
       case "RECONCILING":
         // RECONCILING is NON-TERMINAL. Do NOT throw, do NOT convert to FAILED.
         this.transitionState(operation, 'SETTLEMENT_PENDING');
-        operation.paymentState = 'PENDING';
+        operation.paymentState = 'UNKNOWN';
         this.recordEvidence(operation, 'SETTLEMENT', 'RECONCILIATION_PENDING', {
           paymentIntentId: dpi.paymentIntentId,
           reason: outcome.reason,
