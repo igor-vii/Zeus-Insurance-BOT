@@ -539,7 +539,7 @@ export class PostSettlementEngine {
   private async performRetrieval(
     job: RecoveryJob,
     attempt: ExecutionAttempt,
-  ): Promise<{ success: boolean; finalStatus: ExecutionStatus | RecoveryJobStatus }> {
+  ): Promise<{ success: boolean; finalStatus: ExecutionObligationStatus | RecoveryJobStatus }> {
     const retrievalUrl = this.config.resultRetrievalUrl || `${this.config.sellerUrl}/result/${attempt.executionId}`;
 
     const request: SellerExecutionRequest = {
