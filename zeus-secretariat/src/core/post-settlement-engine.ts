@@ -17,6 +17,7 @@ import type {
   DurableEvidenceStore,
   DurablePaymentIntent,
   EvidenceRecord,
+  ExecutionStatus,
 } from "./types";
 import type {
   SellerExecutionAdapter,
@@ -87,6 +88,27 @@ export interface RecoveryJob {
   metadata?: unknown;
   createdAt: number;
   updatedAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// ExecutionStore Interface (R2.1-FIX-1: moved from types.ts to avoid circular dep)
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical execution store contract.
+ * Implemented by both InMemoryExecutionStore and PostgresExecutionStore.
+ * PostSettlementEngine depends on this interface, not a concrete class.
+ */
+export interface ExecutionStore {
+  saveAttempt(attempt: ExecutionAttempt): Promise<void>;
+  getAttemptById(attemptId: string): Promise<ExecutionAttempt | null>;
+  getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]>;
+  updateAttemptStatus(attemptId: string, status: ExecutionStatus, extra?: Partial<ExecutionAttempt>): Promise<void>;
+  saveJob(job: RecoveryJob): Promise<void>;
+  getJob(jobId: string): Promise<RecoveryJob | null>;
+  getPendingJobs(): Promise<RecoveryJob[]>;
+  claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean>;
+  updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void>;
 }
 
 export interface PostSettlementConfig {
