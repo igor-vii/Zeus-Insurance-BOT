@@ -30,6 +30,7 @@ import {
 } from './types';
 
 import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../adapters/x402-facilitator-client';
+import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliation-engine';
 
 // Legacy types used internally by StateMachine (Phase 2.1 payment flow)
 // These are NOT the canonical V0 DurablePaymentIntent — they exist only for
@@ -142,6 +143,8 @@ export interface SecretariatConfig {
   capabilitySources?: CapabilitySource[];
   /** Canonical V2 settlement adapter. Required for production payment submission. */
   settlementAdapter?: SettlementAdapter;
+  /** Canonical reconciliation engine. Required for settlement verification. */
+  reconciliationEngine?: ReconciliationEngine;
 }
 
 export class Secretariat {
