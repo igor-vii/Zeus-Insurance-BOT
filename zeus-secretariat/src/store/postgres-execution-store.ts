@@ -13,7 +13,7 @@
  */
 
 import { eq, and, sql, asc } from "drizzle-orm";
-import { db } from "@workspace/db";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   executionAttemptsTable,
   recoveryJobsTable,
@@ -73,8 +73,18 @@ export class PostgresExecutionStore {
   // ExecutionAttempt operations
   // =========================================================================
 
+  private readonly db: NodePgDatabase;
+
+  /**
+   * @param db - Drizzle database instance. Pass the shared @workspace/db instance
+   *             to ensure single connection pool across all consumers.
+   */
+  constructor(db: NodePgDatabase) {
+    this.db = db;
+  }
+
   async saveAttempt(attempt: ExecutionAttempt): Promise<void> {
-    await db.insert(executionAttemptsTable).values({
+    await this.db.insert(executionAttemptsTable).values({
       attemptId: attempt.attemptId,
       operationId: attempt.operationId,
       executionId: attempt.executionId,
@@ -137,7 +147,7 @@ export class PostgresExecutionStore {
   // =========================================================================
 
   async saveJob(job: RecoveryJob): Promise<void> {
-    await db.insert(recoveryJobsTable).values({
+    await this.db.insert(recoveryJobsTable).values({
       jobId: job.jobId,
       operationId: job.operationId,
       jobType: job.jobType,
@@ -167,7 +177,7 @@ export class PostgresExecutionStore {
    * Ordered by priority DESC, then createdAt ASC for fairness.
    */
   async getPendingJobs(): Promise<RecoveryJob[]> {
-    const rows = await db.execute(sql`
+    const rows = await this.db.execute(sql`
       SELECT * FROM recovery_jobs
       WHERE status = ${"PENDING"}
          OR (status = ${"RUNNING"} AND locked_until < NOW())
@@ -184,7 +194,7 @@ export class PostgresExecutionStore {
    */
   async claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean> {
     const lockUntil = new Date(Date.now() + lockDurationMs);
-    const result = await db.execute(sql`
+    const result = await this.db.execute(sql`
       UPDATE recovery_jobs
       SET status = ${"RUNNING"},
           locked_by = ${workerId},
@@ -246,7 +256,7 @@ export class PostgresExecutionStore {
   ): Promise<boolean> {
     try {
       // Step 1: CAS transition to SETTLED
-      const casResult = await db.execute(sql`
+      const casResult = await this.db.execute(sql`
         UPDATE payment_intents
         SET settlement_state = ${"SETTLED"},
             settled_evidence_bundle = ${JSON.stringify(settledEvidenceBundle)}::jsonb,
@@ -264,7 +274,7 @@ export class PostgresExecutionStore {
       }
 
       // Step 2: Insert recovery job (EXECUTION, PENDING)
-      await db.insert(recoveryJobsTable).values({
+      await this.db.insert(recoveryJobsTable).values({
         jobId: job.jobId,
         operationId: job.operationId,
         jobType: job.jobType,
@@ -276,7 +286,7 @@ export class PostgresExecutionStore {
       });
 
       // Step 3: Insert initial execution attempt (PENDING)
-      await db.insert(executionAttemptsTable).values({
+      await this.db.insert(executionAttemptsTable).values({
         attemptId: attempt.attemptId,
         operationId: attempt.operationId,
         executionId: attempt.executionId,
