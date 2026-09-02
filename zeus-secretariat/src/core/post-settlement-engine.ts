@@ -495,6 +495,19 @@ export class PostSettlementEngine {
       return { success: true, finalStatus: "SUCCESS" };
     }
 
+    // R2.2 Repair #3: ATTEMPTED after crash recovery means seller call was
+    // initiated but result was never persisted. Convert to DELIVERY_UNKNOWN
+    // so capability-based recovery handles it correctly. This prevents the
+    // permanent deadlock where markAttemptInProgress() rejects non-PENDING status.
+    if (latestAttempt.status === "ATTEMPTED") {
+      await this.executionStore.updateAttemptStatus(
+        latestAttempt.attemptId, "DELIVERY_UNKNOWN", fenceGeneration,
+        { errorReason: "RECOVERY: attempt was ATTEMPTED at crash recovery — seller call outcome unknown" },
+      );
+      // Update local reference so downstream capability checks see DELIVERY_UNKNOWN
+      latestAttempt.status = "DELIVERY_UNKNOWN";
+    }
+
     // INV-10: NONE capability + DELIVERY_UNKNOWN → UNRESOLVABLE
     if (
       capability === "NONE" &&
