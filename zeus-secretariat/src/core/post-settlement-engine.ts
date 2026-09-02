@@ -236,21 +236,23 @@ export class InMemoryExecutionStore {
   }
 
   /**
-   * Atomically claim a job (INV-AQ: only one worker gets it).
-   * Returns true if this worker claimed it, false if another worker already has it.
+   * R2.2 Repair #9: Atomically claim a job with fencing generation.
+   * Returns fence generation (monotonic per job) on success, null on failure.
+   * Uses currentAttempt as fence generation for in-memory test compatibility.
    */
-  async claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean> {
+  async claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<number | null> {
     const job = this.jobs.get(jobId);
-    if (!job) return false;
+    if (!job) return null;
     if (job.status !== "PENDING" && !(job.status === "RUNNING" && job.lockedUntil && job.lockedUntil < Date.now())) {
-      return false;
+      return null;
     }
     job.status = "RUNNING";
     job.lockedBy = workerId;
     job.lockedUntil = Date.now() + lockDurationMs;
     job.currentAttempt += 1;
     job.updatedAt = Date.now();
-    return true;
+    // Return currentAttempt as monotonic fence generation
+    return job.currentAttempt;
   }
 
   async updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void> {
