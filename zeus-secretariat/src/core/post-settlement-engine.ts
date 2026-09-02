@@ -430,14 +430,14 @@ export class PostSettlementEngine {
     result?: SellerExecutionResult;
     finalStatus: ExecutionObligationStatus | RecoveryJobStatus;
   }> {
-    // INV-AQ: Atomic claim
-    const claimed = await this.executionStore.claimJob(
+    // R2.2 Repair #9: Atomic claim returns fence generation for stale-worker protection.
+    const fenceGeneration = await this.executionStore.claimJob(
       jobId,
       this.config.workerId,
       this.config.lockDurationMs,
     );
 
-    if (!claimed) {
+    if (fenceGeneration === null) {
       return { success: false, finalStatus: "RUNNING" };
     }
 
