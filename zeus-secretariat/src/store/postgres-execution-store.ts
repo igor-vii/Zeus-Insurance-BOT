@@ -122,11 +122,24 @@ export class PostgresExecutionStore {
     return rows.map((r: any) => this.rowToAttempt(r as ExecutionAttemptRow));
   }
 
+  /**
+   * R2.2 Repair #9: Update attempt status with fencing + terminal monotonicity.
+   *
+   * Fencing: Requires current fence_generation from the owning recovery job.
+   * Stale workers presenting an old generation are rejected (returns false).
+   *
+   * Terminal monotonicity: Once an attempt reaches a terminal state
+   * (SUCCESS, HTTP_FAILURE, DELIVERY_UNKNOWN, UNRESOLVABLE), no further
+   * transitions are permitted.
+   *
+   * Returns true if the update was applied, false if rejected.
+   */
   async updateAttemptStatus(
     attemptId: string,
     status: ExecutionObligationStatus,
+    fenceGeneration: number,
     extra?: Partial<ExecutionAttempt>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const setObj: Record<string, unknown> = {
       status,
       ...(extra?.responseStatusCode !== undefined ? { responseStatusCode: extra.responseStatusCode } : {}),
@@ -136,10 +149,51 @@ export class PostgresExecutionStore {
       ...(extra?.startedAt !== undefined ? { startedAt: new Date(extra.startedAt) } : {}),
       ...(extra?.completedAt !== undefined ? { completedAt: new Date(extra.completedAt) } : {}),
     };
-    await this.db
-      .update(executionAttemptsTable)
-      .set(setObj)
-      .where(eq(executionAttemptsTable.attemptId, attemptId));
+
+    // Atomic update with fence check + terminal monotonicity guard.
+    // Joins recovery_jobs via operation_id to verify current ownership generation.
+    // Excludes all terminal states to enforce irreversibility.
+    const casResult = await this.db.execute(sql`
+      UPDATE execution_attempts ea
+      SET status = ${status},
+          response_status_code = COALESCE(${setObj.responseStatusCode ?? null}, ea.response_status_code),
+          response_body = COALESCE(${JSON.stringify(setObj.responseBody ?? null)}::jsonb, ea.response_body),
+          response_headers = COALESCE(${JSON.stringify(setObj.responseHeaders ?? null)}::jsonb, ea.response_headers),
+          error_reason = COALESCE(${setObj.errorReason ?? null}, ea.error_reason),
+          started_at = COALESCE(${setObj.startedAt ?? null}, ea.started_at),
+          completed_at = COALESCE(${setObj.completedAt ?? null}, ea.completed_at)
+      FROM recovery_jobs rj
+      WHERE ea.attempt_id = ${attemptId}
+        AND rj.operation_id = ea.operation_id
+        AND rj.fence_generation = ${fenceGeneration}
+        AND ea.status NOT IN (${"SUCCESS"}, ${"HTTP_FAILURE"}, ${"DELIVERY_UNKNOWN"}, ${"UNRESOLVABLE"})
+    `);
+
+    const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
+    return !!(rows && rows.length > 0);
+  }
+
+  /**
+   * R2.2 Repair #9: Transition attempt to ATTEMPTED before seller call.
+   * Durably distinguishes "not yet started" from "seller call may be in flight".
+   * Uses same fencing + monotonicity guards as updateAttemptStatus.
+   */
+  async markAttemptInProgress(
+    attemptId: string,
+    fenceGeneration: number,
+  ): Promise<boolean> {
+    const casResult = await this.db.execute(sql`
+      UPDATE execution_attempts ea
+      SET status = ${"ATTEMPTED"},
+          started_at = NOW()
+      FROM recovery_jobs rj
+      WHERE ea.attempt_id = ${attemptId}
+        AND rj.operation_id = ea.operation_id
+        AND rj.fence_generation = ${fenceGeneration}
+        AND ea.status = ${"PENDING"}
+    `);
+    const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
+    return !!(rows && rows.length > 0);
   }
 
   // =========================================================================
