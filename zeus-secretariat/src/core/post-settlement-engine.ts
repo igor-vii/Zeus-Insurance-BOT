@@ -478,7 +478,7 @@ export class PostSettlementEngine {
     const latestAttempt = attempts[attempts.length - 1];
 
     if (!latestAttempt) {
-      await this.executionStore.updateJobStatus(jobId, "FAILED", {
+      await this.executionStore.updateJobStatus(jobId, "FAILED", fenceGeneration, {
         lastError: "No execution attempt found",
       });
       return { success: false, finalStatus: "FAILED" };
@@ -486,7 +486,7 @@ export class PostSettlementEngine {
 
     // Check if already resolved
     if (latestAttempt.status === "SUCCESS") {
-      await this.executionStore.updateJobStatus(jobId, "COMPLETED");
+      await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration);
       return { success: true, finalStatus: "SUCCESS" };
     }
 
@@ -499,7 +499,7 @@ export class PostSettlementEngine {
       // But for DELIVERY_UNKNOWN with NONE, we stop
       if (latestAttempt.status === "DELIVERY_UNKNOWN") {
         await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration);
-        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", {
+        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
           lastError: "INV-10: DELIVERY_UNKNOWN with NONE capability — no blind retry",
         });
 
@@ -523,7 +523,7 @@ export class PostSettlementEngine {
     // Handle result
     switch (result.kind) {
       case "SUCCESS":
-        await this.executionStore.updateJobStatus(jobId, "COMPLETED");
+        await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration);
         await this.appendEvidence(job.operationId, "EXECUTION_SUCCESS", {
           attemptId: latestAttempt.attemptId,
           statusCode: result.statusCode,
@@ -532,7 +532,7 @@ export class PostSettlementEngine {
 
       case "HTTP_FAILURE":
         // HTTP failure is a definitive answer — execution happened but failed
-        await this.executionStore.updateJobStatus(jobId, "FAILED", {
+        await this.executionStore.updateJobStatus(jobId, "FAILED", fenceGeneration, {
           lastError: `HTTP ${result.statusCode}`,
         });
         await this.appendEvidence(job.operationId, "EXECUTION_HTTP_FAILURE", {
@@ -545,7 +545,7 @@ export class PostSettlementEngine {
         if (capability === "NONE") {
           // INV-10: No blind retry
           await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration);
-          await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", {
+          await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
             lastError: "INV-10: DELIVERY_UNKNOWN with NONE capability",
           });
           return { success: false, result, finalStatus: "UNRESOLVABLE" };
@@ -567,7 +567,7 @@ export class PostSettlementEngine {
             updatedAt: Date.now(),
           });
 
-          await this.executionStore.updateJobStatus(jobId, "COMPLETED", {
+          await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration, {
             lastError: "DELIVERY_UNKNOWN — retrieval job created",
           });
 
@@ -592,7 +592,7 @@ export class PostSettlementEngine {
           });
 
           // Re-queue the job
-          await this.executionStore.updateJobStatus(jobId, "PENDING", {
+          await this.executionStore.updateJobStatus(jobId, "PENDING", fenceGeneration, {
             lockedBy: undefined,
             lockedUntil: undefined,
           });
@@ -601,7 +601,7 @@ export class PostSettlementEngine {
         }
 
         // Max attempts reached
-        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", {
+        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
           lastError: `Max attempts (${job.maxAttempts}) reached with DELIVERY_UNKNOWN`,
         });
         return { success: false, result, finalStatus: "UNRESOLVABLE" };
@@ -638,13 +638,13 @@ export class PostSettlementEngine {
         responseBody: result.body,
         completedAt: Date.now(),
       });
-      await this.executionStore.updateJobStatus(job.jobId, "COMPLETED");
+      await this.executionStore.updateJobStatus(job.jobId, "COMPLETED", fenceGeneration);
       return { success: true, finalStatus: "SUCCESS" };
     }
 
     if (result.kind === "HTTP_FAILURE" && result.statusCode === 404) {
       // Not found — result not available yet
-      await this.executionStore.updateJobStatus(job.jobId, "PENDING", {
+      await this.executionStore.updateJobStatus(job.jobId, "PENDING", fenceGeneration, {
         lockedBy: undefined,
         lockedUntil: undefined,
         lastError: "Result not found yet — will retry observation",
@@ -653,7 +653,7 @@ export class PostSettlementEngine {
     }
 
     // Other failures
-    await this.executionStore.updateJobStatus(job.jobId, "UNRESOLVABLE", {
+    await this.executionStore.updateJobStatus(job.jobId, "UNRESOLVABLE", fenceGeneration, {
       lastError: `Retrieval failed: ${result.kind}`,
     });
     return { success: false, finalStatus: "UNRESOLVABLE" };
