@@ -216,12 +216,12 @@ describe("R2.2-R9: UNKNOWN Preservation & Idempotency", () => {
     const opId = "op-stable-key";
     const execId = "exec-stable-key";
 
-    // Attempt 1
-    const att1 = makeAttempt({ operationId: opId, executionId: execId, attemptNumber: 1, idempotencyKey: execId });
+    // Attempt 1 — explicit unique attemptId to avoid Date.now() collision
+    const att1 = makeAttempt({ attemptId: "att-stable-1", operationId: opId, executionId: execId, attemptNumber: 1, idempotencyKey: execId });
     await store.saveAttempt(att1);
 
-    // Attempt 2 (retry) — same executionId, same idempotencyKey
-    const att2 = makeAttempt({ operationId: opId, executionId: execId, attemptNumber: 2, idempotencyKey: execId });
+    // Attempt 2 (retry) — same executionId, same idempotencyKey, different attemptId
+    const att2 = makeAttempt({ attemptId: "att-stable-2", operationId: opId, executionId: execId, attemptNumber: 2, idempotencyKey: execId });
     await store.saveAttempt(att2);
 
     const attempts = await store.getAttemptsByOperation(opId);
@@ -297,8 +297,8 @@ describeIfDb("R2.2-R9: PostgreSQL Fencing Integration", () => {
       VALUES (${jobId}, ${opId}, ${"EXECUTION"}, ${"PENDING"}, 0, 3, 0, 0, '{}'::jsonb, NOW(), NOW())
     `);
     await db.execute(sql`
-      INSERT INTO execution_attempts (attempt_id, operation_id, execution_id, attempt_number, status, idempotency_key, created_at, updated_at)
-      VALUES (${attId}, ${opId}, ${opId}, 1, ${"PENDING"}, ${opId}, NOW(), NOW())
+      INSERT INTO execution_attempts (attempt_id, operation_id, execution_id, attempt_number, status, idempotency_key, created_at)
+      VALUES (${attId}, ${opId}, ${opId}, 1, ${"PENDING"}, ${opId}, NOW())
     `);
 
     const store = new PES(db);
@@ -334,8 +334,8 @@ describeIfDb("R2.2-R9: PostgreSQL Fencing Integration", () => {
       VALUES (${jobId}, ${opId}, ${"EXECUTION"}, ${"PENDING"}, 0, 3, 0, 0, '{}'::jsonb, NOW(), NOW())
     `);
     await db.execute(sql`
-      INSERT INTO execution_attempts (attempt_id, operation_id, execution_id, attempt_number, status, idempotency_key, created_at, updated_at)
-      VALUES (${attId}, ${opId}, ${opId}, 1, ${"PENDING"}, ${opId}, NOW(), NOW())
+      INSERT INTO execution_attempts (attempt_id, operation_id, execution_id, attempt_number, status, idempotency_key, created_at)
+      VALUES (${attId}, ${opId}, ${opId}, 1, ${"PENDING"}, ${opId}, NOW())
     `);
 
     const store = new PES(db);
