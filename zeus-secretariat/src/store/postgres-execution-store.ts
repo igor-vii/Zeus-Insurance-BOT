@@ -192,20 +192,32 @@ export class PostgresExecutionStore {
    * Only one worker/process can successfully claim a given job.
    * Stale RUNNING jobs (locked_until < NOW()) are reclaimable.
    */
-  async claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean> {
+  /**
+   * R2.2 Repair #9: Atomically claim a recovery job with fencing generation.
+   * Returns the new fence generation on success, or null if claim failed.
+   * The fence generation is monotonically incremented on each claim and must
+   * be presented when committing state transitions to prevent stale workers.
+   */
+  async claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<number | null> {
     const lockUntil = new Date(Date.now() + lockDurationMs);
-    const result = await this.db.execute(sql`
+    const casResult = await this.db.execute(sql`
       UPDATE recovery_jobs
       SET status = ${"RUNNING"},
           locked_by = ${workerId},
           locked_until = ${lockUntil},
           current_attempt = current_attempt + 1,
+          fence_generation = fence_generation + 1,
           updated_at = NOW()
       WHERE job_id = ${jobId}
         AND (status = ${"PENDING"} OR (status = ${"RUNNING"} AND locked_until < NOW()))
-      RETURNING job_id
+      RETURNING fence_generation
     `);
-    return Array.isArray(result) && result.length > 0;
+    // Drizzle node-postgres returns { rows: [...] } or plain array depending on version
+    const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
+    if (!rows || rows.length === 0) {
+      return null;
+    }
+    return rows[0].fence_generation as number;
   }
 
   async updateJobStatus(
