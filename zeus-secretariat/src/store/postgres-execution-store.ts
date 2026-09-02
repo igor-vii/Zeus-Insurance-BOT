@@ -276,7 +276,10 @@ export class PostgresExecutionStore {
           RETURNING payment_intent_id
         `);
 
-        if (!Array.isArray(casResult) || casResult.length === 0) {
+        // R2.1-FIX-5-REPAIR-3K: Drizzle tx.execute() with node-postgres returns
+        // { rows: Row[] } object, NOT a plain array. Inspect .rows for CAS result.
+        const casRows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
+        if (!casRows || casRows.length === 0) {
           return false;
         }
 
