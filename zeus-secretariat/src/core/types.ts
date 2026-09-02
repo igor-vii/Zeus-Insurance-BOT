@@ -552,6 +552,50 @@ export interface PaymentSubmissionResult {
   rawData?: unknown;
 }
 
+/**
+ * SettlementAdapter interface for Phase 2.3+
+ * Handles the boundary between signed authorization and blockchain settlement
+ */
+export interface SettlementAdapter {
+  /**
+   * Submit signed payment authorization for settlement
+   * 
+   * CRITICAL: This method should only be called ONCE per intent.
+   * Even if response is UNKNOWN, do NOT call submit() again.
+   * Use reconciliation to determine actual status.
+   */
+  submit(
+    auth: SignedPaymentAuthorization
+  ): Promise<SettlementSubmissionResult>;
+}
+
+/**
+ * SettlementSubmissionResult - Result of payment submission
+ * 
+ * Key distinction from PaymentSubmissionResult:
+ * - SUBMITTED: Successfully sent to facilitator/network
+ * - REJECTED: Explicitly rejected by facilitator/network
+ * - UNKNOWN: Network error/timeout - status unclear, requires reconciliation
+ */
+export interface SettlementSubmissionResult {
+  status: 'SUBMITTED' | 'REJECTED' | 'UNKNOWN';
+  
+  /**
+   * Unique identifier for this submission (from facilitator)
+   */
+  submissionId?: string;
+  
+  /**
+   * Transaction hash if available
+   */
+  txHash?: string;
+  
+  /**
+   * Reason for rejection or unknown status
+   */
+  reason?: string;
+}
+
 // ============================================================================
 // REQUEST CONTEXT
 // ============================================================================

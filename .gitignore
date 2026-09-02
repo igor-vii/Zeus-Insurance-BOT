@@ -1,1 +1,72 @@
-Nothing should be ignored based on the provided file changes. The modified file 'zeus-secretariat/src/adapters/local-eoa-signer.ts' is a TypeScript source file that should not be added to .gitignore. Since there are no build artifacts, dependencies, or temporary files in the changes, no additional ignore rules are needed.
+```
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py.class
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/modules/
+*.sublime-workspace
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Node.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+node_modules/
+jspm_packages/
+*.tsbuildinfo
+.nyc_output
+coverage/
+.nyc_output/
+istanbul.yml
+.jest/
+.scoverage/
+
+# TypeScript
+*.tsbuildinfo
+dist/
+build/
+node_modules/
+
+# General
+.DS_Store
+Thumbs.db
+```
