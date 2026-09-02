@@ -32,6 +32,9 @@ import {
 import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../adapters/x402-facilitator-client';
 import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliation-engine';
 import type { RecoveryJob, ExecutionAttempt, AtomicSettlementHandoff } from './post-settlement-engine';
+import type { PaymentAuthorizationRequest, PaymentSignatureResult } from './payment-types';
+import { CryptoNonceGenerator } from './nonce-generator';
+import { keccak256, toBytes } from 'viem';
 
 // Legacy types used internally by StateMachine (Phase 2.1 payment flow)
 // These are NOT the canonical V0 DurablePaymentIntent — they exist only for
@@ -74,6 +77,18 @@ function generatePaymentIntentId(): string {
 
 function now(): number {
   return Date.now();
+}
+
+function requireNonEmpty(value: string | undefined, field: string): string {
+  if (!value || value.trim().length === 0) {
+    throw new Error(`Invalid payment authorization: ${field} is required`);
+  }
+  return value;
+}
+
+function toEpochSeconds(deadlineMs: number | undefined, currentMs: number): number {
+  const deadline = deadlineMs ?? currentMs + 300_000;
+  return deadline > 10_000_000_000 ? Math.floor(deadline / 1000) : Math.floor(deadline);
 }
 
 // ============================================================================
@@ -456,54 +471,210 @@ export class Secretariat {
       throw new Error('No payment requirement found for authorization');
     }
 
-    // Get adapter for the network
-    const adapter = this.getAdapterForNetwork(requirement.network);
-    
-    // Create signing context
+    const canonicalV2 = Boolean(this.config.settlementAdapter);
+    const adapter = canonicalV2 ? this.config.adapters.get(requirement.network) : this.getAdapterForNetwork(requirement.network);
+    const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    const signerWithAddress = this.config.signer as PaymentSigner & {
+      getAddress?: () => Promise<string>;
+    };
+
+    // The nonce is part of the immutable signing context, not something
+    // invented after the signature has already been requested.
     const context: SigningContext = {
       operationId: operation.operationId,
       requirement,
+      nonce: new CryptoNonceGenerator().generate(),
     };
 
-    // Sign payment using external signer
-    const authorization = await adapter.createAuthorization(requirement, this.config.signer, context);
+    const authorizer = canonicalV2
+      ? requireNonEmpty(await signerWithAddress.getAddress?.(), "authorizer")
+      : await signerWithAddress.getAddress?.();
+    const payTo = requireNonEmpty(requirement.payee, "payTo");
+    const validAfter = Math.floor(now() / 1000);
+    const validBefore = toEpochSeconds(requirement.deadline, now());
+    if (validBefore <= validAfter) {
+      throw new Error("Invalid payment authorization: validBefore must be after validAfter");
+    }
 
-    // B8.2-B.1: Create canonical DurablePaymentIntent and persist BEFORE any settlement.
-    // Local PaymentIntent is retained as transient orchestration data only — NOT authoritative.
-    const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
-
-    if (typeof durableStore.createPaymentIntent === "function") {
-      // Check for existing DPI (idempotency — do not create duplicate economic operation)
+    // B8.2-B.1: the canonical DPI is created before asking the signer for a
+    // signature. The pending payload is replaced atomically once signing
+    // returns; the binding fields are complete from the beginning.
+    let preCreatedIntent: DurablePaymentIntent | null = null;
+    if (canonicalV2) {
+      const canonicalAuthorizer = requireNonEmpty(authorizer, "authorizer");
+      const canonicalNonce = requireNonEmpty(context.nonce, "nonce");
+      if (typeof durableStore.createPaymentIntent !== "function") {
+        throw new Error("Canonical V2 payment flow requires durable payment intent persistence");
+      }
       const existingIntent = typeof durableStore.getPaymentIntentByOperationId === "function"
         ? await durableStore.getPaymentIntentByOperationId(operation.operationId)
         : null;
-
-      if (!existingIntent) {
-        const ts = now();
-        const durableIntent: DurablePaymentIntent = {
+      if (existingIntent) {
+        if (
+          existingIntent.authorizer !== canonicalAuthorizer ||
+          existingIntent.payTo !== payTo ||
+          existingIntent.nonce !== canonicalNonce ||
+          existingIntent.value !== requirement.amount
+        ) {
+          throw new Error(`Payment intent binding mismatch for operation ${operation.operationId}`);
+        }
+        preCreatedIntent = existingIntent;
+      } else {
+        const pendingPayload = JSON.stringify({
+          status: "SIGNING",
+          operationId: operation.operationId,
+          authorizer: canonicalAuthorizer,
+          payTo,
+          value: requirement.amount,
+          asset: requirement.asset,
+          network: requirement.network,
+          nonce: canonicalNonce,
+          validAfter,
+          validBefore,
+        });
+        preCreatedIntent = {
           paymentIntentId: generatePaymentIntentId(),
           operationId: operation.operationId,
           requestId: operation.requestId,
           clientId: operation.clientId,
-          authorizer: "",  // Not available from legacy PaymentAuthorization; populated by V2 signer path
-          payTo: requirement.payee,
+          authorizer: canonicalAuthorizer,
+          payTo,
           value: requirement.amount,
           asset: requirement.asset,
           network: requirement.network,
-          nonce: context.nonce ?? "",
-          validAfter: 0,
-          validBefore: requirement.deadline ?? 0,
-          paymentPayload: authorization.signature,
-          // TODO(B8.2-C/signer-block): paymentPayloadHash deferred. No existing hash utility found.
-      // Requires keccak256(viem) over canonical serialized PaymentPayload bytes.
-      paymentPayloadHash: "",
+          nonce: canonicalNonce,
+          validAfter,
+          validBefore,
+          paymentPayload: pendingPayload,
+          paymentPayloadHash: keccak256(toBytes(pendingPayload)),
           settlementState: "AUTHORIZED",
-          createdAt: ts,
-          updatedAt: ts,
+          createdAt: now(),
+          updatedAt: now(),
         };
-
-        await durableStore.createPaymentIntent(durableIntent);
+        if (typeof durableStore.createIntentWithNonce === "function") {
+          await durableStore.createIntentWithNonce(preCreatedIntent, canonicalAuthorizer);
+        } else {
+          await durableStore.createPaymentIntent(preCreatedIntent);
+        }
       }
+    }
+
+    let authorization: PaymentAuthorization;
+    if (canonicalV2 && adapter) {
+      authorization = await adapter.createAuthorization(requirement, this.config.signer, context);
+    } else if (canonicalV2) {
+      const strictSigner = this.config.signer as unknown as {
+        signPayment(request: PaymentAuthorizationRequest): Promise<PaymentSignatureResult>;
+      };
+      const signed = await strictSigner.signPayment({
+        operationId: operation.operationId,
+        scheme: "exact",
+        network: requirement.network,
+        asset: requirement.asset,
+        payer: requireNonEmpty(authorizer, "authorizer"),
+        payTo,
+        amount: requirement.amount,
+        nonce: context.nonce!,
+        validAfter,
+        validBefore,
+        createdAt: new Date().toISOString(),
+      });
+      if (signed.operationId !== operation.operationId || signed.payer !== authorizer || signed.nonce !== context.nonce) {
+        throw new Error(`Payment signer binding mismatch for operation ${operation.operationId}`);
+      }
+      authorization = {
+        signature: requireNonEmpty(signed.signature, "signature"),
+        scheme: "exact",
+        timestamp: Date.parse(signed.signedAt) || now(),
+        context,
+        authorizer: signed.payer,
+        payTo,
+        value: requirement.amount,
+        validAfter,
+        validBefore,
+      };
+    } else {
+      if (!adapter) {
+        throw new Error(`No payment adapter found for network: ${requirement.network}`);
+      }
+      authorization = await adapter.createAuthorization(requirement, this.config.signer, context);
+    }
+
+    requireNonEmpty(authorization.signature, "signature");
+    if (canonicalV2) {
+      const persistedAuthorizer = requireNonEmpty(authorization.authorizer ?? authorizer, "authorizer");
+      if (persistedAuthorizer !== authorizer) {
+        throw new Error(`Payment authorization authorizer mismatch for operation ${operation.operationId}`);
+      }
+      if (authorization.payTo !== undefined && authorization.payTo !== payTo) {
+        throw new Error(`Payment authorization payTo mismatch for operation ${operation.operationId}`);
+      }
+      if (authorization.context.nonce !== context.nonce) {
+        throw new Error(`Payment authorization nonce mismatch for operation ${operation.operationId}`);
+      }
+
+      const signedPayload: PaymentPayload = {
+        x402Version: 2 as const,
+        accepted: {
+          scheme: authorization.scheme || "exact",
+          network: requirement.network,
+          amount: requirement.amount,
+          asset: requirement.asset,
+          payTo,
+          maxTimeoutSeconds: validBefore - validAfter,
+        },
+        payload: {
+          signature: authorization.signature,
+          authorization: {
+            from: persistedAuthorizer,
+            to: payTo,
+            value: requirement.amount,
+            validAfter: String(validAfter),
+            validBefore: String(validBefore),
+            nonce: context.nonce!,
+          },
+        },
+      };
+      const serializedPayload = JSON.stringify(signedPayload);
+      const updateAuthorization = (durableStore as DurableEvidenceStore & {
+        updatePaymentIntentAuthorization?: (
+          paymentIntentId: string,
+          fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,
+        ) => Promise<void>;
+      }).updatePaymentIntentAuthorization;
+      if (preCreatedIntent && typeof updateAuthorization === "function") {
+        await updateAuthorization(preCreatedIntent.paymentIntentId, {
+          paymentPayload: serializedPayload,
+          paymentPayloadHash: keccak256(toBytes(serializedPayload)),
+        });
+      }
+    }
+
+    // Legacy stores retain a transient compatibility record, but it still
+    // carries a real nonce, signer address, and payload hash.
+    if (!canonicalV2 && typeof durableStore.createPaymentIntent === "function") {
+      const legacyAuthorizer = requireNonEmpty(authorization.authorizer ?? authorizer, "authorizer");
+      const payload = authorization.signature;
+      const durableIntent: DurablePaymentIntent = {
+        paymentIntentId: generatePaymentIntentId(),
+        operationId: operation.operationId,
+        requestId: operation.requestId,
+        clientId: operation.clientId,
+        authorizer: legacyAuthorizer,
+        payTo,
+        value: requirement.amount,
+        asset: requirement.asset,
+        network: requirement.network,
+        nonce: context.nonce!,
+        validAfter,
+        validBefore,
+        paymentPayload: payload,
+        paymentPayloadHash: keccak256(toBytes(payload)),
+        settlementState: "AUTHORIZED",
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      await durableStore.createPaymentIntent(durableIntent);
     }
 
     // Retain local PaymentIntent as transient orchestration data for legacy flow continuity.

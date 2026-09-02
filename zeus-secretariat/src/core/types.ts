@@ -275,6 +275,17 @@ export interface PaymentAuthorization {
    * Context used for signing
    */
   context: SigningContext;
+
+  /**
+   * Canonical EIP-3009 binding fields. Legacy adapters may omit these while
+   * the compatibility path is in use; the production V2 path validates them
+   * before accepting the authorization.
+   */
+  authorizer?: string;
+  payTo?: string;
+  value?: string;
+  validAfter?: number;
+  validBefore?: number;
 }
 
 export interface SigningContext {
@@ -289,6 +300,12 @@ export interface SigningContext {
 // ============================================================================
 
 export interface PaymentSigner {
+  /**
+   * Address controlled by the signer. Required by the canonical V2 path so
+   * the durable intent can be bound before requesting a signature.
+   */
+  getAddress?: () => Promise<string>;
+
   /**
    * Sign a payment requirement
    * @param requirement - Payment requirement to sign
@@ -824,6 +841,10 @@ export interface DurableEvidenceStore {
   getOperationsByStatus(status: OperationStatus): Promise<Operation[]>;
   createPaymentIntent(intent: DurablePaymentIntent): Promise<void>;
   getPaymentIntentByOperationId(operationId: string): Promise<DurablePaymentIntent | null>;
+  updatePaymentIntentAuthorization?: (
+    paymentIntentId: string,
+    fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,
+  ) => Promise<void>;
   updatePaymentIntentStatus(
     intentId: string,
     status: SettlementState,

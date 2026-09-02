@@ -188,6 +188,17 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return rows.length === 0 ? null : this.rowToIntent(rows[0] as PaymentIntentRow);
   }
 
+  async updatePaymentIntentAuthorization(
+    id: string,
+    fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,
+  ): Promise<void> {
+    await this.db.update(paymentIntentsTable).set({
+      paymentPayload: fields.paymentPayload,
+      paymentPayloadHash: fields.paymentPayloadHash,
+      updatedAt: new Date(),
+    }).where(eq(paymentIntentsTable.paymentIntentId, id));
+  }
+
   async updatePaymentIntentStatus(id: string, status: SettlementState, extra?: any): Promise<void> {
     const setObj: Record<string, unknown> = { settlementState: status, version: sql`${paymentIntentsTable.version} + 1`, updatedAt: new Date() };
     if (extra?.txHash !== undefined) setObj.txHash = extra.txHash;
