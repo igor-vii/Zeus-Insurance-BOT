@@ -220,10 +220,13 @@ export class InMemoryExecutionStore {
     return true;
   }
 
-  // R2.2 Repair #9: Mark attempt as in-progress (ATTEMPTED) before seller call.
-  async markAttemptInProgress(attemptId: string, _fenceGeneration: number): Promise<boolean> {
+  // R2.2 Repair #1A: Mark attempt as in-progress with stale-worker protection.
+  async markAttemptInProgress(attemptId: string, fenceGeneration: number): Promise<boolean> {
     const attempt = this.attempts.get(attemptId);
     if (!attempt || attempt.status !== "PENDING") return false;
+    // Stale-worker protection: verify fence via owning job
+    const job = Array.from(this.jobs.values()).find((j) => j.operationId === attempt.operationId);
+    if (!job || job.currentAttempt !== fenceGeneration) return false;
     attempt.status = "ATTEMPTED";
     attempt.startedAt = Date.now();
     return true;
@@ -264,13 +267,15 @@ export class InMemoryExecutionStore {
   }
 
   /**
-   * R2.2 Repair #1: Fenced job status update for InMemory store.
-   * Does not enforce fencing (test-only), but matches interface contract.
+   * R2.2 Repair #1A: Fenced job status update with stale-worker protection.
+   * Checks fenceGeneration against job.currentAttempt (monotonic per claim).
    * Terminal states are irreversible.
    */
-  async updateJobStatus(jobId: string, status: RecoveryJobStatus, _fenceGeneration: number, extra?: Partial<RecoveryJob>): Promise<boolean> {
+  async updateJobStatus(jobId: string, status: RecoveryJobStatus, fenceGeneration: number, extra?: Partial<RecoveryJob>): Promise<boolean> {
     const job = this.jobs.get(jobId);
     if (!job) return false;
+    // Stale-worker protection: reject if fence doesn't match current generation
+    if (job.currentAttempt !== fenceGeneration) return false;
     // Terminal monotonicity: reject transitions from terminal states
     const terminalStates = ["COMPLETED", "FAILED", "UNRESOLVABLE"];
     if (terminalStates.includes(job.status)) return false;
