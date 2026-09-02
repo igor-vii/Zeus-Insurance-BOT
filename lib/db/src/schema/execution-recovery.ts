@@ -64,6 +64,7 @@ export const recoveryJobsTable = pgTable(
     currentAttempt: integer("current_attempt").notNull().default(0),
     lockedBy: text("locked_by"),                       // worker ID that claimed this job (INV-AQ)
     lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    fenceGeneration: integer("fence_generation").notNull().default(0), // R2.2-R9: monotonic ownership generation for stale-worker fencing
     lastError: text("last_error"),
     metadata: jsonb("metadata"),                       // arbitrary context
     createdAt: timestamp("created_at", { withTimezone: true })
