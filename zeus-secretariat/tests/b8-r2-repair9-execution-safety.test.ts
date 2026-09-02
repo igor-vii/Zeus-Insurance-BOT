@@ -183,10 +183,18 @@ describe("R2.2-R9: IN_PROGRESS Transition", () => {
   test("T6: markAttemptInProgress transitions PENDING → ATTEMPTED", async () => {
     const { InMemoryExecutionStore } = require("../src/core/post-settlement-engine");
     const store = new InMemoryExecutionStore() as ExecutionStore;
-    const attempt = makeAttempt();
+
+    // Repair #1A: markAttemptInProgress requires owning RecoveryJob for fence validation.
+    // Create job with matching operationId and claim it to establish fence generation.
+    const job = makeJob();
+    await store.saveJob(job);
+    const attempt = makeAttempt({ operationId: job.operationId });
     await store.saveAttempt(attempt);
 
-    const marked = await store.markAttemptInProgress(attempt.attemptId, 1);
+    const fence = await store.claimJob(job.jobId, "worker-t6", 30000);
+    expect(fence).not.toBeNull();
+
+    const marked = await store.markAttemptInProgress(attempt.attemptId, fence!);
     expect(marked).toBe(true);
 
     const updated = await store.getAttemptById(attempt.attemptId);
