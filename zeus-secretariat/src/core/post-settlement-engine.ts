@@ -495,17 +495,111 @@ export class PostSettlementEngine {
       return { success: true, finalStatus: "SUCCESS" };
     }
 
-    // R2.2 Repair #3: ATTEMPTED after crash recovery means seller call was
-    // initiated but result was never persisted. Convert to DELIVERY_UNKNOWN
-    // so capability-based recovery handles it correctly. This prevents the
-    // permanent deadlock where markAttemptInProgress() rejects non-PENDING status.
+    // R2.2 Repair #3A: ATTEMPTED after crash recovery means seller call was
+    // initiated but result was never persisted. Handle each capability path
+    // directly to avoid terminal-state guard rejections and ensure the original
+    // ATTEMPTED attempt is NEVER re-executed.
     if (latestAttempt.status === "ATTEMPTED") {
+      const recoveryReason = "RECOVERY: attempt was ATTEMPTED at crash recovery — seller call outcome unknown";
+
+      // --- NONE: ATTEMPTED → UNRESOLVABLE directly (skip DELIVERY_UNKNOWN to avoid terminal→terminal rejection) ---
+      if (capability === "NONE") {
+        await this.executionStore.updateAttemptStatus(
+          latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration,
+          { errorReason: recoveryReason },
+        );
+        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+          lastError: "INV-10: ATTEMPTED at crash recovery with NONE capability — no blind retry",
+        });
+        await this.appendEvidence(job.operationId, "EXECUTION_UNRESOLVABLE", {
+          reason: recoveryReason,
+          attemptId: latestAttempt.attemptId,
+        });
+        return { success: false, finalStatus: "UNRESOLVABLE" };
+      }
+
+      // --- RESULT_RETRIEVAL: Create retrieval job, do NOT re-execute original attempt ---
+      if (capability === "RESULT_RETRIEVAL") {
+        // Mark original attempt as DELIVERY_UNKNOWN (non-terminal→terminal is allowed)
+        await this.executionStore.updateAttemptStatus(
+          latestAttempt.attemptId, "DELIVERY_UNKNOWN", fenceGeneration,
+          { errorReason: recoveryReason },
+        );
+        // Create retrieval job (same pattern as post-execution DELIVERY_UNKNOWN handling)
+        const retrievalJobId = `job-retrieval-${Date.now()}`;
+        await this.executionStore.saveJob({
+          jobId: retrievalJobId,
+          operationId: job.operationId,
+          jobType: "RETRIEVAL",
+          status: "PENDING",
+          priority: 1,
+          maxAttempts: 3,
+          currentAttempt: 0,
+          metadata: { capability, originalJobId: jobId },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration, {
+          lastError: "ATTEMPTED at crash recovery — retrieval job created",
+        });
+        await this.appendEvidence(job.operationId, "RETRIEVAL_CREATED", {
+          reason: recoveryReason,
+          retrievalJobId,
+          attemptId: latestAttempt.attemptId,
+        });
+        return { success: false, finalStatus: "DELIVERY_UNKNOWN" };
+      }
+
+      // --- EXECUTION_IDEMPOTENT: Create NEW attempt, do NOT re-execute original ---
+      if (capability === "EXECUTION_IDEMPOTENT") {
+        // Mark original attempt as DELIVERY_UNKNOWN
+        await this.executionStore.updateAttemptStatus(
+          latestAttempt.attemptId, "DELIVERY_UNKNOWN", fenceGeneration,
+          { errorReason: recoveryReason },
+        );
+        // Create new attempt with SAME idempotency key (INV-9)
+        if (job.currentAttempt < job.maxAttempts) {
+          const newAttemptId = `attempt-retry-${Date.now()}`;
+          await this.executionStore.saveAttempt({
+            attemptId: newAttemptId,
+            operationId: job.operationId,
+            executionId: latestAttempt.executionId, // SAME stable key
+            attemptNumber: latestAttempt.attemptNumber + 1,
+            status: "PENDING",
+            requestUrl: latestAttempt.requestUrl,
+            requestMethod: latestAttempt.requestMethod,
+            requestBody: latestAttempt.requestBody,
+            idempotencyKey: latestAttempt.idempotencyKey, // SAME key
+            createdAt: Date.now(),
+          });
+          // Re-queue the job for the new attempt
+          await this.executionStore.updateJobStatus(jobId, "PENDING", fenceGeneration, {
+            lockedBy: undefined,
+            lockedUntil: undefined,
+          });
+          await this.appendEvidence(job.operationId, "EXECUTION_RETRY_CREATED", {
+            reason: recoveryReason,
+            newAttemptId,
+            originalAttemptId: latestAttempt.attemptId,
+          });
+          return { success: false, finalStatus: "DELIVERY_UNKNOWN" };
+        }
+        // Max attempts reached
+        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+          lastError: `Max attempts (${job.maxAttempts}) reached — ATTEMPTED at crash recovery`,
+        });
+        return { success: false, finalStatus: "UNRESOLVABLE" };
+      }
+
+      // Unknown capability — treat as NONE (safe default)
       await this.executionStore.updateAttemptStatus(
-        latestAttempt.attemptId, "DELIVERY_UNKNOWN", fenceGeneration,
-        { errorReason: "RECOVERY: attempt was ATTEMPTED at crash recovery — seller call outcome unknown" },
+        latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration,
+        { errorReason: recoveryReason },
       );
-      // Update local reference so downstream capability checks see DELIVERY_UNKNOWN
-      latestAttempt.status = "DELIVERY_UNKNOWN";
+      await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+        lastError: "ATTEMPTED at crash recovery with unknown capability",
+      });
+      return { success: false, finalStatus: "UNRESOLVABLE" };
     }
 
     // INV-10: NONE capability + DELIVERY_UNKNOWN → UNRESOLVABLE
