@@ -113,8 +113,8 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Integration", () => {
 
     // Setup: create PI in SETTLEMENT_PENDING state
     await db.execute(sql`
-      INSERT INTO payment_intents (payment_intent_id, operation_id, settlement_state, created_at, updated_at, version)
-      VALUES (${piId}, ${opId}, ${"SETTLEMENT_PENDING"}, NOW(), NOW(), 1)
+      INSERT INTO payment_intents (payment_intent_id, operation_id, authorizer, pay_to, value, asset, network, nonce, valid_after, valid_before, payment_payload, payment_payload_hash, settlement_state, created_at, updated_at, version)
+      VALUES (${piId}, ${opId}, 'test-authorizer', '0xTestPayTo', '0.000001', 'USDC', 'base-sepolia', '0', 0, 9999999999, '{}', '0xhash', ${"SETTLEMENT_PENDING"}, NOW(), NOW(), 1)
       ON CONFLICT (payment_intent_id) DO UPDATE SET settlement_state = ${"SETTLEMENT_PENDING"}
     `);
 
@@ -170,8 +170,8 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Integration", () => {
 
     // Setup: create PI in SETTLEMENT_PENDING state
     await db.execute(sql`
-      INSERT INTO payment_intents (payment_intent_id, operation_id, settlement_state, created_at, updated_at, version)
-      VALUES (${piId}, ${opId}, ${"SETTLEMENT_PENDING"}, NOW(), NOW(), 1)
+      INSERT INTO payment_intents (payment_intent_id, operation_id, authorizer, pay_to, value, asset, network, nonce, valid_after, valid_before, payment_payload, payment_payload_hash, settlement_state, created_at, updated_at, version)
+      VALUES (${piId}, ${opId}, 'test-authorizer', '0xTestPayTo', '0.000001', 'USDC', 'base-sepolia', '0', 0, 9999999999, '{}', '0xhash', ${"SETTLEMENT_PENDING"}, NOW(), NOW(), 1)
       ON CONFLICT (payment_intent_id) DO UPDATE SET settlement_state = ${"SETTLEMENT_PENDING"}
     `);
 
