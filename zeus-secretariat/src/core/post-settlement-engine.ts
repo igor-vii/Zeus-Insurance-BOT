@@ -263,12 +263,21 @@ export class InMemoryExecutionStore {
     return job.currentAttempt;
   }
 
-  async updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void> {
+  /**
+   * R2.2 Repair #1: Fenced job status update for InMemory store.
+   * Does not enforce fencing (test-only), but matches interface contract.
+   * Terminal states are irreversible.
+   */
+  async updateJobStatus(jobId: string, status: RecoveryJobStatus, _fenceGeneration: number, extra?: Partial<RecoveryJob>): Promise<boolean> {
     const job = this.jobs.get(jobId);
-    if (!job) throw new Error("JOB_NOT_FOUND");
+    if (!job) return false;
+    // Terminal monotonicity: reject transitions from terminal states
+    const terminalStates = ["COMPLETED", "FAILED", "UNRESOLVABLE"];
+    if (terminalStates.includes(job.status)) return false;
     job.status = status;
     if (extra) Object.assign(job, extra);
     job.updatedAt = Date.now();
+    return true;
   }
 }
 
