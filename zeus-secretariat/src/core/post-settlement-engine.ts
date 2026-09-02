@@ -109,11 +109,20 @@ export interface ExecutionStore {
   saveAttempt(attempt: ExecutionAttempt): Promise<void>;
   getAttemptById(attemptId: string): Promise<ExecutionAttempt | null>;
   getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]>;
-  updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, extra?: Partial<ExecutionAttempt>): Promise<void>;
+  /**
+   * R2.2-R9: Requires fenceGeneration for stale-worker protection.
+   * Terminal states (SUCCESS, HTTP_FAILURE, DELIVERY_UNKNOWN, UNRESOLVABLE) are irreversible.
+   * Returns true if update succeeded, false if rejected (stale fence or terminal state).
+   */
+  updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean>;
   saveJob(job: RecoveryJob): Promise<void>;
   getJob(jobId: string): Promise<RecoveryJob | null>;
   getPendingJobs(): Promise<RecoveryJob[]>;
-  claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean>;
+  /**
+   * R2.2-R9: Returns fence generation on successful claim, null on failure.
+   * Fence generation is atomically incremented with lease acquisition.
+   */
+  claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<{ claimed: boolean; fenceGeneration: number | null }>;
   updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void>;
 }
 
