@@ -124,7 +124,13 @@ export interface ExecutionStore {
    */
   claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<number | null>;
   markAttemptInProgress(attemptId: string, fenceGeneration: number): Promise<boolean>;
-  updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void>;
+  /**
+   * R2.2 Repair #1: Fenced job status update.
+   * Requires current fenceGeneration to prevent stale workers from modifying job state.
+   * Terminal states (COMPLETED, FAILED, UNRESOLVABLE) are irreversible.
+   * Returns true if update succeeded, false if rejected (stale fence or terminal).
+   */
+  updateJobStatus(jobId: string, status: RecoveryJobStatus, fenceGeneration: number, extra?: Partial<RecoveryJob>): Promise<boolean>;
 }
 
 
