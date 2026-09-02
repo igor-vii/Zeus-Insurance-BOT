@@ -362,14 +362,21 @@ export class PostSettlementEngine {
    * INV-10: If capability = NONE and status = DELIVERY_UNKNOWN → UNRESOLVABLE
    * INV-13: Raw result stored BEFORE state machine interpretation
    */
-  async executeAttempt(attemptId: string): Promise<SellerExecutionResult> {
+  /**
+   * R2.2 Repair #9: Execute seller call with fencing protection.
+   * Transitions attempt to ATTEMPTED (in-progress) BEFORE seller call
+   * to durably distinguish "not started" from "call may be in flight".
+   */
+  async executeAttempt(attemptId: string, fenceGeneration: number): Promise<SellerExecutionResult> {
     const attempt = await this.executionStore.getAttemptById(attemptId);
     if (!attempt) throw new Error("ATTEMPT_NOT_FOUND");
 
-    // Mark as attempted
-    await this.executionStore.updateAttemptStatus(attemptId, "ATTEMPTED", {
-      startedAt: Date.now(),
-    });
+    // R2.2 Repair #9: Explicit IN_PROGRESS transition before seller call.
+    // If this fails (stale fence or already transitioned), abort execution.
+    const marked = await this.executionStore.markAttemptInProgress(attemptId, fenceGeneration);
+    if (!marked) {
+      throw new Error("FENCE_REJECTED: lost ownership before seller call");
+    }
 
     const request: SellerExecutionRequest = {
       idempotencyKey: attempt.idempotencyKey ?? attempt.executionId,
