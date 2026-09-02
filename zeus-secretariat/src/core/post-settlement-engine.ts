@@ -397,7 +397,7 @@ export class PostSettlementEngine {
     // NOW interpret and update status
     switch (result.kind) {
       case "SUCCESS":
-        await this.executionStore.updateAttemptStatus(attemptId, "SUCCESS", {
+        await this.executionStore.updateAttemptStatus(attemptId, "SUCCESS", fenceGeneration, {
           responseStatusCode: result.statusCode,
           responseBody: result.body,
           responseHeaders: result.headers,
@@ -406,7 +406,7 @@ export class PostSettlementEngine {
         break;
 
       case "HTTP_FAILURE":
-        await this.executionStore.updateAttemptStatus(attemptId, "HTTP_FAILURE", {
+        await this.executionStore.updateAttemptStatus(attemptId, "HTTP_FAILURE", fenceGeneration, {
           responseStatusCode: result.statusCode,
           responseBody: result.body,
           responseHeaders: result.headers,
@@ -415,7 +415,7 @@ export class PostSettlementEngine {
         break;
 
       case "DELIVERY_UNKNOWN":
-        await this.executionStore.updateAttemptStatus(attemptId, "DELIVERY_UNKNOWN", {
+        await this.executionStore.updateAttemptStatus(attemptId, "DELIVERY_UNKNOWN", fenceGeneration, {
           errorReason: result.reason,
           completedAt: Date.now(),
         });
@@ -479,7 +479,7 @@ export class PostSettlementEngine {
       // For PENDING with NONE capability, we still try once (first execution)
       // But for DELIVERY_UNKNOWN with NONE, we stop
       if (latestAttempt.status === "DELIVERY_UNKNOWN") {
-        await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE");
+        await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration);
         await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", {
           lastError: "INV-10: DELIVERY_UNKNOWN with NONE capability — no blind retry",
         });
@@ -499,7 +499,7 @@ export class PostSettlementEngine {
     }
 
     // Execute or retry
-    const result = await this.executeAttempt(latestAttempt.attemptId);
+    const result = await this.executeAttempt(latestAttempt.attemptId, fenceGeneration);
 
     // Handle result
     switch (result.kind) {
@@ -525,7 +525,7 @@ export class PostSettlementEngine {
       case "DELIVERY_UNKNOWN":
         if (capability === "NONE") {
           // INV-10: No blind retry
-          await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE");
+          await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration);
           await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", {
             lastError: "INV-10: DELIVERY_UNKNOWN with NONE capability",
           });
@@ -613,7 +613,7 @@ export class PostSettlementEngine {
     });
 
     if (result.kind === "SUCCESS") {
-      await this.executionStore.updateAttemptStatus(attempt.attemptId, "SUCCESS", {
+      await this.executionStore.updateAttemptStatus(attempt.attemptId, "SUCCESS", fenceGeneration, {
         responseStatusCode: result.statusCode,
         responseBody: result.body,
         completedAt: Date.now(),
