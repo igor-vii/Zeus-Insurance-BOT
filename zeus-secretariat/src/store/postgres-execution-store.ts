@@ -167,6 +167,7 @@ export class PostgresExecutionStore {
         AND rj.operation_id = ea.operation_id
         AND rj.fence_generation = ${fenceGeneration}
         AND ea.status NOT IN (${"SUCCESS"}, ${"HTTP_FAILURE"}, ${"DELIVERY_UNKNOWN"}, ${"UNRESOLVABLE"})
+       RETURNING ea.attempt_id
     `);
 
     const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
@@ -191,6 +192,7 @@ export class PostgresExecutionStore {
         AND rj.operation_id = ea.operation_id
         AND rj.fence_generation = ${fenceGeneration}
         AND ea.status = ${"PENDING"}
+       RETURNING ea.attempt_id
     `);
     const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
     return !!(rows && rows.length > 0);

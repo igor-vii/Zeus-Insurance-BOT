@@ -15,6 +15,10 @@ import type {
 import type { RecoveryJob, ExecutionAttempt } from "../src/core/post-settlement-engine";
 import { sql } from "drizzle-orm";
 
+function resultRows<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : (result?.rows ?? []);
+}
+
 // ===========================================================================
 // FIX-5-1: Typed Contract Enforcement (Compile-Time Proof)
 // ===========================================================================
@@ -135,8 +139,8 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Integration", () => {
         `);
         // Mutation 3: INSERT execution_attempt
         await tx.execute(sql`
-          INSERT INTO execution_attempts (attempt_id, operation_id, execution_id, attempt_number, status, idempotency_key, created_at, updated_at)
-          VALUES (${attId}, ${opId}, ${opId}, 1, ${"PENDING"}, ${opId}, NOW(), NOW())
+          INSERT INTO execution_attempts (attempt_id, operation_id, execution_id, attempt_number, status, idempotency_key, created_at)
+          VALUES (${attId}, ${opId}, ${opId}, 1, ${"PENDING"}, ${opId}, NOW())
         `);
         // Deterministic failure AFTER all three mutations succeeded
         throw new Error("ROLLBACK_TEST_3I");
@@ -149,15 +153,15 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Integration", () => {
 
     // PROOF: payment_intent reverted to SETTLEMENT_PENDING
     const piAfter = await db.execute(sql`SELECT settlement_state FROM payment_intents WHERE payment_intent_id = ${piId}`);
-    expect((piAfter as any[])[0]?.settlement_state).toBe("SETTLEMENT_PENDING");
+    expect(resultRows(piAfter)[0]?.settlement_state).toBe("SETTLEMENT_PENDING");
 
     // PROOF: recovery_job does NOT exist
     const rjAfter = await db.execute(sql`SELECT job_id FROM recovery_jobs WHERE job_id = ${jobId}`);
-    expect((rjAfter as any[]).length).toBe(0);
+    expect(resultRows(rjAfter).length).toBe(0);
 
     // PROOF: execution_attempt does NOT exist
     const eaAfter = await db.execute(sql`SELECT attempt_id FROM execution_attempts WHERE attempt_id = ${attId}`);
-    expect((eaAfter as any[]).length).toBe(0);
+    expect(resultRows(eaAfter).length).toBe(0);
 
     // Cleanup
     await db.execute(sql`DELETE FROM payment_intents WHERE payment_intent_id = ${piId}`);
@@ -192,19 +196,19 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Integration", () => {
 
     // Verify payment_intent = SETTLED with correct operationId
     const piCheck = await db.execute(sql`SELECT settlement_state, operation_id FROM payment_intents WHERE payment_intent_id = ${piId}`);
-    const piRow = (piCheck as any[])[0];
+    const piRow = resultRows(piCheck)[0];
     expect(piRow?.settlement_state).toBe("SETTLED");
     expect(piRow?.operation_id).toBe(opId);
 
     // Verify recovery_job exists with correct operationId
     const rjCheck = await db.execute(sql`SELECT job_id, operation_id FROM recovery_jobs WHERE job_id = ${job.jobId}`);
-    const rjRow = (rjCheck as any[])[0];
+    const rjRow = resultRows(rjCheck)[0];
     expect(rjRow).toBeDefined();
     expect(rjRow?.operation_id).toBe(opId);
 
     // Verify execution_attempt exists with correct operationId and executionId
     const eaCheck = await db.execute(sql`SELECT attempt_id, operation_id, execution_id, attempt_number FROM execution_attempts WHERE attempt_id = ${att.attemptId}`);
-    const eaRow = (eaCheck as any[])[0];
+    const eaRow = resultRows(eaCheck)[0];
     expect(eaRow).toBeDefined();
     expect(eaRow?.operation_id).toBe(opId);
     expect(eaRow?.execution_id).toBe(opId);

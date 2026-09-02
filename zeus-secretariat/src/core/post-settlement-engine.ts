@@ -123,6 +123,7 @@ export interface ExecutionStore {
    * Fence generation is atomically incremented with lease acquisition.
    */
   claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<number | null>;
+  markAttemptInProgress(attemptId: string, fenceGeneration: number): Promise<boolean>;
   updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void>;
 }
 
@@ -199,11 +200,12 @@ export class InMemoryExecutionStore {
     return this.attempts.get(attemptId) ?? null;
   }
 
-  // R2.2 Repair #9: fenceGeneration accepted for interface compatibility.
-  // InMemoryExecutionStore does not enforce fencing (test-only).
-  async updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, _fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean> {
+  // R2.2 Repair #9: enforce the current operation fence before mutating state.
+  async updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean> {
     const attempt = this.attempts.get(attemptId);
     if (!attempt) return false;
+    const job = Array.from(this.jobs.values()).find((candidate) => candidate.operationId === attempt.operationId);
+    if (!job || job.currentAttempt !== fenceGeneration) return false;
     // Terminal monotonicity: reject transitions from terminal states
     const terminalStates = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
     if (terminalStates.includes(attempt.status)) return false;
@@ -497,7 +499,7 @@ export class PostSettlementEngine {
 
     // INV-11: RETRIEVAL — observation, not re-execution
     if (job.jobType === "RETRIEVAL" && capability === "RESULT_RETRIEVAL") {
-      return await this.performRetrieval(job, latestAttempt);
+      return await this.performRetrieval(job, latestAttempt, fenceGeneration);
     }
 
     // Execute or retry
@@ -598,6 +600,7 @@ export class PostSettlementEngine {
   private async performRetrieval(
     job: RecoveryJob,
     attempt: ExecutionAttempt,
+    fenceGeneration: number,
   ): Promise<{ success: boolean; finalStatus: ExecutionObligationStatus | RecoveryJobStatus }> {
     const retrievalUrl = this.config.resultRetrievalUrl || `${this.config.sellerUrl}/result/${attempt.executionId}`;
 

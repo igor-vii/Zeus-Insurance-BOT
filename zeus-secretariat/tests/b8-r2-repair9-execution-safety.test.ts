@@ -14,6 +14,10 @@ import { sql } from "drizzle-orm";
 // Shared test fixtures
 // ===========================================================================
 
+function resultRows<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : (result?.rows ?? []);
+}
+
 function makeAttempt(overrides?: Partial<ExecutionAttempt>): ExecutionAttempt {
   const now = Date.now();
   return {
@@ -351,7 +355,7 @@ describeIfDb("R2.2-R9: PostgreSQL Fencing Integration", () => {
 
     // Verify still SUCCESS
     const check = await db.execute(sql`SELECT status FROM execution_attempts WHERE attempt_id = ${attId}`);
-    expect((check as any[])[0]?.status).toBe("SUCCESS");
+    expect(resultRows(check)[0]?.status).toBe("SUCCESS");
 
     // Cleanup
     await db.execute(sql`DELETE FROM execution_attempts WHERE attempt_id = ${attId}`);
