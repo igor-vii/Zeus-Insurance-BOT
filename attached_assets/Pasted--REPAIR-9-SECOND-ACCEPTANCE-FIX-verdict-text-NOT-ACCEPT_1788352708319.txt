@@ -1,0 +1,481 @@
+# REPAIR #9 — SECOND ACCEPTANCE FIX
+
+Текущий verdict:
+
+```text
+NOT ACCEPTED
+```
+
+Текущий canonical `origin/main`:
+
+```text
+7ba1cdc8
+R2.2 Repair #9 fix: add required NOT NULL fields to FIX-5 payment_intents fixture
+```
+
+Worktree после reset чистый. Push не выполнялся.
+
+---
+
+## CURRENT EVIDENCE
+
+### Typecheck
+
+```text
+FAIL
+```
+
+Ошибки:
+
+```text
+src/core/post-settlement-engine.ts:378
+Property 'markAttemptInProgress' does not exist on type 'ExecutionStore'.
+
+src/core/post-settlement-engine.ts:618
+Cannot find name 'fenceGeneration'.
+```
+
+### Repair #9
+
+```text
+9/12 PASS
+```
+
+Failures:
+
+```text
+T2  stale in-memory worker can mutate status
+T11 PostgreSQL current worker update
+T12 PostgreSQL terminal SUCCESS transition
+```
+
+При этом проходят:
+
+```text
+T1
+T3-T10
+```
+
+включая:
+
+* fence generation;
+* idempotency key;
+* PostgreSQL concurrent claim;
+* in-memory terminal-state checks.
+
+### FIX-5
+
+```text
+4/6 PASS
+```
+
+Failures:
+
+```text
+FIX-5-5B
+execution_attempts.updated_at does not exist
+
+FIX-5-6
+payment_intents.settlement_state === undefined
+expected SETTLED
+```
+
+### Regression
+
+```text
+70/70 PASS
+```
+
+Не менять regression production paths без необходимости.
+
+---
+
+# TASK
+
+Исправить **только подтверждённые проблемы ниже**.
+
+Не начинать Repair #10.
+
+Не менять архитектуру.
+
+---
+
+## FIX A — TYPECHECK: markAttemptInProgress
+
+Production code вызывает:
+
+```text
+ExecutionStore.markAttemptInProgress(...)
+```
+
+но интерфейс `ExecutionStore` этого метода не содержит.
+
+Проверить canonical execution lifecycle и существующую реализацию.
+
+Нужно привести interface и implementation к одному контракту.
+
+Важно:
+
+```text
+PENDING
+→ IN_PROGRESS / ATTEMPTED
+→ seller call
+```
+
+должен оставаться durable transition перед seller call.
+
+Не просто удалить вызов ради typecheck.
+
+После исправления:
+
+```text
+typecheck = PASS
+```
+
+---
+
+## FIX B — TYPECHECK: fenceGeneration
+
+В:
+
+```text
+src/core/post-settlement-engine.ts:618
+```
+
+используется `fenceGeneration`, который не находится в области видимости.
+
+Проверить фактический intended value из execution claim.
+
+Не вводить произвольное значение.
+
+Правильная semantics:
+
+```text
+claimJob()
+→ returns fenceGeneration
+→ execution lifecycle carries that generation
+→ fenced mutation uses that exact generation
+```
+
+После исправления:
+
+```text
+typecheck = PASS
+```
+
+---
+
+# FIX C — T2 STALE IN-MEMORY WORKER
+
+Текущий результат:
+
+```text
+Expected false
+Received true
+```
+
+То есть stale worker всё ещё может изменить статус.
+
+Проверить именно fenced mutation path.
+
+Ожидаемая semantics:
+
+```text
+worker A
+generation N
+
+worker B
+generation N+1
+
+worker A mutation
+→ REJECTED / false
+```
+
+Current worker:
+
+```text
+generation N+1
+→ mutation allowed
+```
+
+Не ослаблять тест.
+
+Не добавлять delay.
+
+Не сравнивать только `workerId`.
+
+Fencing identity должна оставаться:
+
+```text
+jobId + workerId + fenceGeneration
+```
+
+---
+
+# FIX D — T11 CURRENT POSTGRES WORKER
+
+Сейчас:
+
+```text
+Expected true
+Received false
+```
+
+Это особенно важно, потому что T10 уже доказывает concurrent claim.
+
+Нужно определить, почему **валидный current worker** не проходит fenced update.
+
+Проверить:
+
+* jobId;
+* workerId;
+* fenceGeneration;
+* claim result;
+* SQL predicate;
+* persisted generation;
+* transaction boundaries.
+
+Не делать SQL менее строгим ради прохождения теста.
+
+Цель:
+
+```text
+current worker + current generation
+→ update succeeds
+```
+
+а:
+
+```text
+stale worker + old generation
+→ update rejected
+```
+
+---
+
+# FIX E — T12 TERMINAL SUCCESS
+
+Сейчас:
+
+```text
+Expected true
+Received false
+```
+
+Проверить, не является ли это следствием той же ошибки fencing identity, что и T11.
+
+Не менять terminal monotonicity contract.
+
+Требуется:
+
+```text
+valid current worker
+→ valid terminal SUCCESS transition
+```
+
+При этом уже подтверждённое правило сохранить:
+
+```text
+terminal
+→ cannot regress
+```
+
+---
+
+# FIX F — execution_attempts.updated_at
+
+FIX-5-5B использует:
+
+```text
+updated_at
+```
+
+но в реальной schema этой колонки нет.
+
+Исправить fixture.
+
+Не добавлять production column.
+
+После исправления тест должен дойти до реальной atomic handoff verification.
+
+---
+
+# FIX G — FIX-5-6 settlement_state
+
+Сейчас тест получает:
+
+```text
+payment_intents.settlement_state
+→ undefined
+```
+
+ожидается:
+
+```text
+SETTLED
+```
+
+Сначала определить, почему fixture/query/result shape возвращает `undefined`.
+
+Проверить:
+
+* реальную schema;
+* column name;
+* Drizzle mapping;
+* SELECT;
+* returned row shape;
+* atomic handoff implementation.
+
+Не менять accepted FIX-5 semantics.
+
+Цель:
+
+```text
+settleAndCreateExecutionObligation()
+→ payment intent durable state = SETTLED
+```
+
+и это должно быть подтверждено тестом.
+
+Если production implementation уже корректна, исправлять только stale test/query field.
+
+Если production implementation действительно не сохраняет SETTLED — показать exact evidence перед изменением.
+
+---
+
+# НЕ ТРОГАТЬ
+
+Не менять:
+
+* FIX-5 atomic transaction design;
+* payment protocol;
+* payment identity;
+* seller protocol;
+* UNKNOWN semantics;
+* Repair #10;
+* insurance;
+* arbitration;
+* SLA;
+* reputation;
+* regression tests ради green status.
+
+Не удалять падающие тесты.
+
+Не ослаблять assertions.
+
+Не добавлять artificial sleeps.
+
+---
+
+# ACCEPTANCE AFTER PATCH
+
+Запустить строго:
+
+### 1. Typecheck
+
+```text
+PASS
+```
+
+### 2. Repair #9
+
+```text
+12/12 PASS
+```
+
+Особенно:
+
+```text
+T2
+T10
+T11
+T12
+```
+
+### 3. FIX-5
+
+```text
+6/6 PASS
+```
+
+### 4. Regression
+
+```text
+70/70 PASS
+```
+
+### 5. Git
+
+Показать:
+
+```text
+git status
+git diff
+git log -1 --oneline
+```
+
+После подтверждения всех тестов сделать **реальный commit**.
+
+Не использовать hypothetical SHA.
+
+---
+
+# STOP CONDITION
+
+Если T11/T12 после исправления fixture продолжают падать именно на production fencing logic:
+
+не маскировать проблему.
+
+Показать:
+
+```text
+worker identity
+fence generation
+persisted DB generation
+SQL predicate
+affected rows
+```
+
+и остановиться для архитектурного решения.
+
+Если FIX-5-6 требует изменения accepted atomic settlement semantics — также остановиться.
+
+---
+
+# FINAL REPORT
+
+Формат:
+
+```text
+HEAD:
+COMMIT:
+
+Typecheck:
+Repair #9:
+  T1:
+  T2:
+  ...
+  T12:
+
+FIX-5:
+  5B:
+  6:
+
+Regression:
+  70/70
+
+Files changed:
+Commit SHA:
+
+Verdict:
+```
+
+Цель:
+
+```text
+REPAIR #9 READY FOR INDEPENDENT ACCEPTANCE
+```
+
+Только после независимого tester acceptance можно закрыть Repair #9.
+
+**Repair #10 НЕ НАЧИНАТЬ.**
