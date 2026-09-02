@@ -780,6 +780,8 @@ export interface RpcProviderConfig {
   readonly underlyingProvider: string; // "alchemy" | "infura" | "ankr" | etc.
   readonly rpcUrl: string;
   readonly maxStalenessBlocks: number; // how many blocks behind is acceptable
+  /** Expected EVM chain ID. A provider returning another chain is invalid. */
+  readonly chainId?: number;
 }
 
 /**

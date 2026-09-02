@@ -34,6 +34,7 @@ import {
   DEFAULT_FINALITY_POLICY,
 } from "./types";
 import type { MultiRpcChecker, TransactionCheckResult } from "./multi-rpc-checker";
+import { keccak256, toBytes } from "viem";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,6 +52,7 @@ export type ReconciliationOutcome =
 // ---------------------------------------------------------------------------
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const AUTHORIZATION_USED_TOPIC = keccak256(toBytes("AuthorizationUsed(address,bytes32)"));
 
 interface TransferEvent {
   from: string;
@@ -64,8 +66,10 @@ function parseTransferLogs(
   expectedFrom: string,
   expectedTo: string,
   expectedMinValue: bigint,
+  expectedTokenContract: string,
 ): TransferEvent | null {
   for (const log of logs) {
+    if (log.address.toLowerCase() !== expectedTokenContract.toLowerCase()) continue;
     if (log.topics[0] !== TRANSFER_TOPIC) continue;
     if (log.topics.length < 3) continue;
     const from = "0x" + log.topics[1].slice(26).toLowerCase();
@@ -78,6 +82,27 @@ function parseTransferLogs(
     if (value < expectedMinValue) continue;
 
     return { from, to, value, tokenContract: log.address.toLowerCase() };
+  }
+  return null;
+}
+
+function findAuthorizationUsedLog(
+  logs: Array<{ address: string; topics: string[]; data: string; logIndex: number }>,
+  expectedTokenContract: string,
+  expectedAuthorizer: string,
+  expectedNonce: string,
+): number | null {
+  const authorizerTopic = `0x${expectedAuthorizer.replace(/^0x/i, "").toLowerCase().padStart(64, "0")}`;
+  const nonceTopic = `0x${expectedNonce.replace(/^0x/i, "").toLowerCase().padStart(64, "0")}`;
+  for (const log of logs) {
+    if (
+      log.address.toLowerCase() === expectedTokenContract.toLowerCase() &&
+      log.topics[0]?.toLowerCase() === AUTHORIZATION_USED_TOPIC.toLowerCase() &&
+      log.topics[1]?.toLowerCase() === authorizerTopic &&
+      log.topics[2]?.toLowerCase() === nonceTopic
+    ) {
+      return log.logIndex;
+    }
   }
   return null;
 }
@@ -202,10 +227,25 @@ export class ReconciliationEngine {
       intent.authorizer,
       intent.payTo,
       BigInt(intent.value),
+      intent.asset,
     );
 
     if (!transfer) {
       return { status: "UNRESOLVED_MANUAL", reason: "§7-8: No matching Transfer event found in successful transaction" };
+    }
+
+    const authorizationUsedLogIndex = findAuthorizationUsedLog(
+      tx.logs,
+      intent.asset,
+      intent.authorizer,
+      intent.nonce,
+    );
+    if (authorizationUsedLogIndex === null) {
+      return {
+        status: "RECONCILING",
+        reason: "§7: Successful transaction has no matching AuthorizationUsed event",
+        nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+      };
     }
 
     // Build SETTLED evidence bundle (§7 + §22)
@@ -213,7 +253,7 @@ export class ReconciliationEngine {
       authorizationUsed: {
         transactionHash: intent.txHash!,
         blockNumber: tx.blockNumber!,
-        logIndex: 0, // would be extracted from AuthorizationUsed log
+        logIndex: authorizationUsedLogIndex,
       },
       receipt: {
         status: 1,
@@ -297,11 +337,24 @@ export class ReconciliationEngine {
 
     // §10: authorizationState == true → recover txHash via AuthorizationUsed
     if (authState === true) {
-      // Try to find the transaction via event scan
-      // For now, transition to RECONCILING and let next probe try txHash recovery
+      const authorizationScan = await this.rpcChecker.findAuthorizationUsedEvent(
+        intent.asset,
+        intent.authorizer,
+        intent.nonce,
+      );
+      if (authorizationScan.agreement === "UNANIMOUS" && authorizationScan.unanimousValue) {
+        const recovered = authorizationScan.unanimousValue;
+        await this.store.updatePaymentIntentStatus(
+          intent.paymentIntentId,
+          intent.settlementState,
+          { txHash: recovered.transactionHash },
+        );
+      }
       return {
         status: "RECONCILING",
-        reason: "§10: authorizationState=true — attempting txHash recovery via AuthorizationUsed",
+        reason: authorizationScan.agreement === "UNANIMOUS"
+          ? "§10: authorizationState=true — recovered txHash from AuthorizationUsed"
+          : "§10: authorizationState=true — attempting txHash recovery via AuthorizationUsed",
         nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
       };
     }

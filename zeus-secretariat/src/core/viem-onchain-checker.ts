@@ -6,7 +6,7 @@
  * authorizationState == true alone is NOT sufficient for SETTLED
  */
 
-import { createPublicClient, http, parseAbiItem, type PublicClient } from "viem";
+import { createPublicClient, http, keccak256, parseAbiItem, toBytes, type PublicClient } from "viem";
 // Chain is provided via OnChainNetworkConfig (no hardcoded network)
 import type { RpcProviderConfig, FinalityPolicy } from "./types";
 import { DEFAULT_FINALITY_POLICY } from "./types";
@@ -15,6 +15,7 @@ import { DEFAULT_FINALITY_POLICY } from "./types";
 const AUTHORIZATION_USED_EVENT = parseAbiItem(
   "event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)"
 );
+const AUTHORIZATION_USED_TOPIC = keccak256(toBytes("AuthorizationUsed(address,bytes32)"));
 
 // ERC-20 Transfer(address from, address to, uint256 value)
 const TRANSFER_EVENT = parseAbiItem(
@@ -81,12 +82,21 @@ export class ViemOnChainChecker {
     return this.networkConfig.tokenContractAddress;
   }
 
+  private async assertExpectedChain(): Promise<void> {
+    const expectedChainId = Number(this.networkConfig.chain.id);
+    const actualChainId = await this.client.getChainId();
+    if (actualChainId !== expectedChainId) {
+      throw new Error(`RPC returned chain ${actualChainId}; expected ${expectedChainId}`);
+    }
+  }
+
   async getBlockNumber(): Promise<number> {
     return Number(await this.client.getBlockNumber());
   }
 
   /** section 6: Check authorizationState(authorizer, nonce) */
   async checkAuthorizationState(tokenContract: `0x${string}`, authorizer: `0x${string}`, nonce: `0x${string}`): Promise<boolean> {
+    await this.assertExpectedChain();
     return await this.client.readContract({
       address: tokenContract,
       abi: [AUTH_STATE_ABI],
@@ -103,6 +113,7 @@ export class ViemOnChainChecker {
     fromBlock: bigint,
     toBlock: bigint,
   ): Promise<AuthorizationUsedResult | null> {
+    await this.assertExpectedChain();
     const logs = await this.client.getLogs({
       address: tokenContract,
       event: AUTHORIZATION_USED_EVENT,
@@ -133,6 +144,7 @@ export class ViemOnChainChecker {
     transfer: TransferMatchResult | null;
     authorizationUsed: AuthorizationUsedResult | null;
   } | null> {
+    await this.assertExpectedChain();
     const receipt = await this.client.getTransactionReceipt({ hash: txHash });
     if (!receipt) return null;
 
@@ -153,13 +165,11 @@ export class ViemOnChainChecker {
         // Check if this is AuthorizationUsed event
         try {
           // Manual topic matching to avoid viem version compatibility issues
-          const authUsedTopic = "0x" + Array.from(new TextEncoder().encode("AuthorizationUsed(address,bytes32)")).reduce((acc, b) => acc + b.toString(16).padStart(2, "0"), "");
-          // Simplified: check if log has 3 topics (event signature + 2 indexed args)
-          if (log.topics.length >= 3) {
+          if (log.topics[0]?.toLowerCase() === AUTHORIZATION_USED_TOPIC.toLowerCase() && log.topics.length >= 3) {
             authorizationUsed = {
               transactionHash: txHash,
               blockNumber,
-              logIndex: log.logIndex ?? 0,
+              logIndex: log.logIndex!,
             };
           }
         } catch { /* not AuthorizationUsed */ }

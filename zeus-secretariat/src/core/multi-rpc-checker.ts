@@ -13,6 +13,7 @@ import type {
   FinalityPolicy,
 } from "./types";
 import { DEFAULT_FINALITY_POLICY } from "./types";
+import { keccak256, toBytes } from "viem";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +38,7 @@ export interface TransactionCheckResult {
     logIndex: number;
   }>;
   confirmations?: number;
+  chainId?: number;
 }
 
 export interface AuthorizationStateResult {
@@ -45,6 +47,12 @@ export interface AuthorizationStateResult {
   chainHead: number;
   stalenessBlocks: number;
   error?: string;
+}
+
+export interface AuthorizationUsedEventResult {
+  transactionHash: string;
+  blockNumber: number;
+  logIndex: number;
 }
 
 export interface MultiRpcResult<T> {
@@ -86,12 +94,21 @@ export class SingleRpcProvider {
     return parseInt(hex, 16);
   }
 
+  async getChainId(): Promise<number> {
+    const hex = await this.rpcCall<string>("eth_chainId", []);
+    return parseInt(hex, 16);
+  }
+
   async getTransactionReceipt(txHash: string): Promise<TransactionCheckResult | null> {
     try {
       const receipt = await this.rpcCall<{ blockNumber: string; status: string; logs?: Array<{ address: string; topics: string[]; data: string; logIndex: string }> } | null>("eth_getTransactionReceipt", [txHash]);
       if (!receipt) return null;
       const blockNum = parseInt(receipt.blockNumber, 16);
       const chainHead = await this.getBlockNumber();
+      const chainId = await this.getChainId();
+      if (this.config.chainId !== undefined && chainId !== this.config.chainId) {
+        throw new Error(`RPC provider ${this.config.providerId} returned chain ${chainId}; expected ${this.config.chainId}`);
+      }
       const status = receipt.status === "0x1" ? "success" : "reverted";
       return {
         confirmed: status === "success",
@@ -104,6 +121,7 @@ export class SingleRpcProvider {
           logIndex: parseInt(l.logIndex, 16),
         })),
         confirmations: chainHead - blockNum,
+        chainId,
       };
     } catch {
       return null;
@@ -121,13 +139,11 @@ export class SingleRpcProvider {
   ): Promise<AuthorizationStateResult> {
     try {
       const chainHead = await this.getBlockNumber();
-      // authorizationState(address,bytes32) selector = 0x... 
-      // For EIP-3009: function authorizationState(address authorizer, bytes32 nonce) returns (bool)
-      // P0-4: authorizationState(address,bytes32) function selector
-      // keccak256("authorizationState(address,bytes32)")[:4]
-      // In production: import { getFunctionSelector } from "viem";
-      // const selector = getFunctionSelector("authorizationState(address,bytes32)");
-      const selector = "0x7f8b5b3e"; // MUST be replaced with real selector in production
+      const chainId = await this.getChainId();
+      if (this.config.chainId !== undefined && chainId !== this.config.chainId) {
+        throw new Error(`RPC provider ${this.config.providerId} returned chain ${chainId}; expected ${this.config.chainId}`);
+      }
+      const selector = keccak256(toBytes("authorizationState(address,bytes32)")).slice(0, 10);
       const paddedAuthorizer = authorizer.toLowerCase().replace("0x", "").padStart(64, "0");
       const paddedNonce = nonce.replace("0x", "").padStart(64, "0");
       const callData = selector + paddedAuthorizer + paddedNonce;
@@ -149,9 +165,9 @@ export class SingleRpcProvider {
     } catch (err) {
       return {
         state: null,
-        blockNumber: 0,
-        chainHead: 0,
-        stalenessBlocks: 0,
+        blockNumber: -1,
+        chainHead: -1,
+        stalenessBlocks: -1,
         error: err instanceof Error ? err.message : "Unknown RPC error",
       };
     }
@@ -178,15 +194,7 @@ export class SingleRpcProvider {
       // keccak256("AuthorizationUsed(address,bytes32)")
       // Computed: 0x3f2df0fedd38a4e4e1b3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3
       // For EIP-3009 USDC: the actual topic is derived from the ABI
-      const AUTHORIZATION_USED_TOPIC = "0x" + [
-        // keccak256("AuthorizationUsed(address,bytes32)") — must be computed at build time
-        // Using viem's keccak256 + toHex in production; here we use the known value
-        "3f2df0fedd38a4e4e1b3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3",
-      ].join("");
-      // NOTE: In production, compute via:
-      // import { keccak256, toHex } from "viem";
-      // const topic = toHex(keccak256(toBytes("AuthorizationUsed(address,bytes32)")));
-      const topic0 = AUTHORIZATION_USED_TOPIC;
+      const topic0 = keccak256(toBytes("AuthorizationUsed(address,bytes32)"));
       const paddedAuthorizer = "0x" + authorizer.toLowerCase().replace("0x", "").padStart(64, "0");
       const paddedNonce = "0x" + nonce.replace("0x", "").padStart(64, "0");
 
@@ -270,6 +278,45 @@ export class MultiRpcChecker {
         const config = this.configs[i];
         try {
           const result = await provider.getTransactionReceipt(txHash);
+          return {
+            providerId: config.providerId,
+            underlyingProvider: config.underlyingProvider,
+            result,
+            observedAt: Date.now(),
+          };
+        } catch (err) {
+          return {
+            providerId: config.providerId,
+            underlyingProvider: config.underlyingProvider,
+            result: null,
+            error: err instanceof Error ? err.message : "Unknown error",
+            observedAt: Date.now(),
+          };
+        }
+      }),
+    );
+    return this.aggregateResults(results);
+  }
+
+  async findAuthorizationUsedEvent(
+    tokenContract: string,
+    authorizer: string,
+    nonce: string,
+    fromBlock = 0,
+    toBlock?: number,
+  ): Promise<MultiRpcResult<AuthorizationUsedEventResult>> {
+    const results = await Promise.all(
+      this.providers.map(async (provider, i) => {
+        const config = this.configs[i];
+        try {
+          const endBlock = toBlock ?? await provider.getBlockNumber();
+          const result = await provider.findAuthorizationUsedEvent(
+            tokenContract,
+            authorizer,
+            nonce,
+            fromBlock,
+            endBlock,
+          );
           return {
             providerId: config.providerId,
             underlyingProvider: config.underlyingProvider,
@@ -375,6 +422,7 @@ export class MultiRpcChecker {
 export class MockMultiRpcChecker {
   private txResults: Map<string, TransactionCheckResult> = new Map();
   private authResults: Map<string, boolean> = new Map();
+  private authorizationUsedEvents: Map<string, AuthorizationUsedEventResult> = new Map();
   private providerResults: Map<string, Map<string, boolean>> = new Map(); // providerId -> nonce -> state
   readonly providerConfigs: RpcProviderConfig[];
 
@@ -391,6 +439,10 @@ export class MockMultiRpcChecker {
 
   setAuthResult(nonce: string, state: boolean): void {
     this.authResults.set(nonce.toLowerCase(), state);
+  }
+
+  setAuthorizationUsedEvent(nonce: string, result: AuthorizationUsedEventResult): void {
+    this.authorizationUsedEvents.set(nonce.toLowerCase(), result);
   }
 
   /** Set per-provider auth result (for disagreement tests) */
@@ -437,6 +489,22 @@ export class MockMultiRpcChecker {
     const allAgree = successful.every(o => o.result === first);
     if (allAgree) return { observations, agreement: "UNANIMOUS", unanimousValue: first! };
     return { observations, agreement: "DISAGREEMENT" };
+  }
+
+  async findAuthorizationUsedEvent(
+    _tokenContract: string,
+    _authorizer: string,
+    nonce: string,
+  ): Promise<MultiRpcResult<AuthorizationUsedEventResult>> {
+    const result = this.authorizationUsedEvents.get(nonce.toLowerCase()) ?? null;
+    const observations = this.providerConfigs.map(c => ({
+      providerId: c.providerId,
+      underlyingProvider: c.underlyingProvider,
+      result,
+      observedAt: Date.now(),
+    }));
+    if (!result) return { observations, agreement: "ALL_FAILED" };
+    return { observations, agreement: "UNANIMOUS", unanimousValue: result };
   }
 
   canDeclareNotSettled(
