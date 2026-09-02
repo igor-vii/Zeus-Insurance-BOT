@@ -10,8 +10,11 @@ import {
   uniqueIndex,
   index,
   check,
-  sql,
 } from "drizzle-orm/pg-core";
+// R2.1-FIX-5-REPAIR-3J: Import sql from drizzle-orm root instead of pg-core.
+// Replit runtime verification proved require("drizzle-orm/pg-core").sql === undefined
+// while require("drizzle-orm").sql === function in Jest CJS context.
+import { sql } from "drizzle-orm";
 
 /**
  * §4: Durable Payment Intents — persisted BEFORE /settle network I/O.
