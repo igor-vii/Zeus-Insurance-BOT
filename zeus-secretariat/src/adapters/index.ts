@@ -121,3 +121,24 @@ export {
   CryptoNonceGenerator,
   InMemoryNonceRegistry,
 } from '../core/nonce-generator';
+
+// Phase 2.3: Real Facilitator Settlement
+export {
+  X402FacilitatorClient,
+  MockX402FacilitatorClient,
+  type FacilitatorConfig,
+  type PaymentPayload,
+  type SubmitResult,
+  type SettlementAdapter,
+  type MockFacilitatorBehavior,
+} from "./x402-facilitator-client";
+
+// Phase 2.4: Post-Settlement Execution
+export {
+  HttpSellerExecutionAdapter,
+  MockSellerExecutionAdapter,
+  type SellerExecutionAdapter,
+  type SellerExecutionRequest,
+  type SellerExecutionResult,
+  type MockSellerBehavior,
+} from "./seller-execution-adapter";

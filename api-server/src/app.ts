@@ -109,6 +109,15 @@ startBackgroundSync();
 // Start on-chain event listener (disable with ENABLE_EVENT_LISTENER=false)
 startEventListener();
 
+// Start PostSettlementEngine recovery (process pending execution jobs from previous runs)
+try {
+  const { recoverPostSettlementJobs } = await import("./lib/post-settlement-recovery.js");
+  await recoverPostSettlementJobs();
+  logger.info("PostSettlementEngine: startup recovery complete");
+} catch (e) {
+  logger.warn("PostSettlementEngine: startup recovery skipped", e);
+}
+
 app.use(Sentry.expressErrorHandler());
 
 export default app;
