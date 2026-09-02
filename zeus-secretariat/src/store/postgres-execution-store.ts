@@ -276,11 +276,24 @@ export class PostgresExecutionStore {
     return rows[0].fence_generation as number;
   }
 
+  /**
+   * R2.2 Repair #1: Fenced job status update with terminal monotonicity.
+   *
+   * Stale-worker protection: Requires current fenceGeneration. A worker that
+   * has lost its lease (and been superseded by a newer claim) cannot modify
+   * the job state. The WHERE clause joins on fence_generation to enforce this.
+   *
+   * Terminal monotonicity: Once a job reaches COMPLETED, FAILED, or UNRESOLVABLE,
+   * no further transitions are permitted. The WHERE clause excludes terminal states.
+   *
+   * Returns true if the update was applied, false if rejected.
+   */
   async updateJobStatus(
     jobId: string,
     status: RecoveryJobStatus,
+    fenceGeneration: number,
     extra?: Partial<RecoveryJob>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const setObj: Record<string, unknown> = {
       status,
       updatedAt: new Date(),
@@ -293,10 +306,29 @@ export class PostgresExecutionStore {
       setObj.lockedBy = null;
       setObj.lockedUntil = null;
     }
-    await this.db
-      .update(recoveryJobsTable)
-      .set(setObj)
-      .where(eq(recoveryJobsTable.jobId, jobId));
+
+    // Atomic fenced update with terminal monotonicity guard.
+    // Worker must present current fenceGeneration. Terminal states are irreversible.
+    const casResult = await this.db.execute(sql`
+      UPDATE recovery_jobs
+      SET status = ${status},
+          updated_at = NOW(),
+          last_error = COALESCE(${setObj.lastError ?? null}, last_error),
+          locked_by = CASE
+            WHEN ${status} IN (${"COMPLETED"}, ${"FAILED"}, ${"UNRESOLVABLE"}) THEN NULL
+            ELSE COALESCE(${setObj.lockedBy ?? null}, locked_by)
+          END,
+          locked_until = CASE
+            WHEN ${status} IN (${"COMPLETED"}, ${"FAILED"}, ${"UNRESOLVABLE"}) THEN NULL
+            ELSE COALESCE(${setObj.lockedUntil ?? null}, locked_until)
+          END
+      WHERE job_id = ${jobId}
+        AND fence_generation = ${fenceGeneration}
+        AND status NOT IN (${"COMPLETED"}, ${"FAILED"}, ${"UNRESOLVABLE"})
+    `);
+
+    const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
+    return !!(rows && rows.length > 0);
   }
 
   // =========================================================================
