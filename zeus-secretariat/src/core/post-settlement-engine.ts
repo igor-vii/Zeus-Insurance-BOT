@@ -122,7 +122,7 @@ export interface ExecutionStore {
    * R2.2-R9: Returns fence generation on successful claim, null on failure.
    * Fence generation is atomically incremented with lease acquisition.
    */
-  claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<{ claimed: boolean; fenceGeneration: number | null }>;
+  claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<number | null>;
   updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void>;
 }
 
