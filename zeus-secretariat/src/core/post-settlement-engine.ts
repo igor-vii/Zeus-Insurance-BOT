@@ -199,11 +199,26 @@ export class InMemoryExecutionStore {
     return this.attempts.get(attemptId) ?? null;
   }
 
-  async updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, extra?: Partial<ExecutionAttempt>): Promise<void> {
+  // R2.2 Repair #9: fenceGeneration accepted for interface compatibility.
+  // InMemoryExecutionStore does not enforce fencing (test-only).
+  async updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, _fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean> {
     const attempt = this.attempts.get(attemptId);
-    if (!attempt) throw new Error("ATTEMPT_NOT_FOUND");
+    if (!attempt) return false;
+    // Terminal monotonicity: reject transitions from terminal states
+    const terminalStates = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
+    if (terminalStates.includes(attempt.status)) return false;
     attempt.status = status;
     if (extra) Object.assign(attempt, extra);
+    return true;
+  }
+
+  // R2.2 Repair #9: Mark attempt as in-progress (ATTEMPTED) before seller call.
+  async markAttemptInProgress(attemptId: string, _fenceGeneration: number): Promise<boolean> {
+    const attempt = this.attempts.get(attemptId);
+    if (!attempt || attempt.status !== "PENDING") return false;
+    attempt.status = "ATTEMPTED";
+    attempt.startedAt = Date.now();
+    return true;
   }
 
   async saveJob(job: RecoveryJob): Promise<void> {
