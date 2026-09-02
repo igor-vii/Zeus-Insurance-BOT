@@ -119,7 +119,9 @@ export const reconciliationObservationsTable = pgTable(
   "reconciliation_observations",
   {
     observationId: text("observation_id").primaryKey(),
-    paymentIntentId: text("payment_intent_id").notNull(),
+    paymentIntentId: text("payment_intent_id")
+      .notNull()
+      .references(() => paymentIntentsTable.paymentIntentId, { onDelete: "cascade" }),
     attemptId: text("attempt_id").notNull(),
     rpcProviderId: text("rpc_provider_id").notNull(),
     underlyingProvider: text("underlying_provider").notNull(),

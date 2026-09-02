@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS "recovery_jobs" (
     "priority" integer NOT NULL DEFAULT 0,
     "max_attempts" integer NOT NULL DEFAULT 3,
     "current_attempt" integer NOT NULL DEFAULT 0,
+    "fence_generation" integer NOT NULL DEFAULT 0,
     "locked_by" text,
     "locked_until" timestamp with time zone,
     "last_error" text,
@@ -148,3 +149,6 @@ CREATE TABLE IF NOT EXISTS "recovery_jobs" (
 
 CREATE INDEX IF NOT EXISTS "rj_operation_id_idx" ON "recovery_jobs" ("operation_id");
 CREATE INDEX IF NOT EXISTS "rj_pending_probe_idx" ON "recovery_jobs" ("status", "priority");
+CREATE UNIQUE INDEX IF NOT EXISTS "execution_obligations_operation_id_key"
+    ON "recovery_jobs" ("operation_id")
+    WHERE "job_type" = 'EXECUTION';

@@ -7,6 +7,7 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Execution Attempts — durable record of each seller HTTP call.
@@ -78,5 +79,8 @@ export const recoveryJobsTable = pgTable(
     operationIdIdx: index("recovery_jobs_operation_id_idx").on(table.operationId),
     statusIdx: index("recovery_jobs_status_idx").on(table.status),
     pendingIdx: index("recovery_jobs_pending_idx").on(table.status, table.priority),
+    executionObligationUnique: uniqueIndex("execution_obligations_operation_id_key")
+      .on(table.operationId)
+      .where(sql`job_type = 'EXECUTION'`),
   }),
 );
