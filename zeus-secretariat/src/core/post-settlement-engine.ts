@@ -117,7 +117,7 @@ export interface PostSettlementConfig {
 /** @experimental NOT FOR PRODUCTION - Phase 2.4 prototype only. Production uses PostgreSQL execution_attempts table. */
 export class InMemoryExecutionStore {
   readonly attempts: Map<string, ExecutionAttempt> = new Map();
-  readonly jobs: Map<string, RecoveryJob> = new Map();
+  readonly jobs: Map<string, RecoveryJob & { fenceGeneration?: number }> = new Map();
   private readonly attemptsByOp: Map<string, string[]> = new Map();
 
   async saveAttempt(attempt: ExecutionAttempt): Promise<void> {
@@ -136,22 +136,40 @@ export class InMemoryExecutionStore {
     return this.attempts.get(attemptId) ?? null;
   }
 
-  async updateAttemptStatus(attemptId: string, status: ExecutionStatus, extra?: Partial<ExecutionAttempt>): Promise<void> {
+  async updateAttemptStatus(
+    attemptId: string,
+    jobId: string,
+    expectedFenceGeneration: number,
+    workerId: string,
+    status: ExecutionStatus,
+    extra?: Partial<ExecutionAttempt>
+  ): Promise<boolean> {
     const attempt = this.attempts.get(attemptId);
-    if (!attempt) throw new Error("ATTEMPT_NOT_FOUND");
+    if (!attempt) return false;
+
+    const job = this.jobs.get(jobId);
+    if (!job) return false;
+
+    // Stale worker protection: verify fence generation and ownership
+    if (job.fenceGeneration !== expectedFenceGeneration || job.lockedBy !== workerId) {
+      console.warn(`Stale worker detected: worker ${workerId} with gen ${expectedFenceGeneration} tried to update job ${jobId} (current gen ${job.fenceGeneration})`);
+      return false;
+    }
+
     attempt.status = status;
     if (extra) Object.assign(attempt, extra);
+    return true;
   }
 
   async saveJob(job: RecoveryJob): Promise<void> {
-    this.jobs.set(job.jobId, { ...job });
+    this.jobs.set(job.jobId, { ...job, fenceGeneration: 0 });
   }
 
-  async getJob(jobId: string): Promise<RecoveryJob | null> {
+  async getJob(jobId: string): Promise<(RecoveryJob & { fenceGeneration?: number }) | null> {
     return this.jobs.get(jobId) ?? null;
   }
 
-  async getPendingJobs(): Promise<RecoveryJob[]> {
+  async getPendingJobs(): Promise<(RecoveryJob & { fenceGeneration?: number })[]> {
     return Array.from(this.jobs.values()).filter(
       (j) => j.status === "PENDING" || (j.status === "RUNNING" && j.lockedUntil && j.lockedUntil < Date.now()),
     );
@@ -159,20 +177,27 @@ export class InMemoryExecutionStore {
 
   /**
    * Atomically claim a job (INV-AQ: only one worker gets it).
-   * Returns true if this worker claimed it, false if another worker already has it.
+   * Returns fence generation number on success, null on failure.
    */
-  async claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean> {
+  async claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<number | null> {
     const job = this.jobs.get(jobId);
-    if (!job) return false;
+    if (!job) return null;
     if (job.status !== "PENDING" && !(job.status === "RUNNING" && job.lockedUntil && job.lockedUntil < Date.now())) {
-      return false;
+      return null;
     }
+    
+    // Atomically increment fence generation on claim
+    const currentGen = job.fenceGeneration || 0;
+    const newGen = currentGen + 1;
+    
     job.status = "RUNNING";
     job.lockedBy = workerId;
     job.lockedUntil = Date.now() + lockDurationMs;
     job.currentAttempt += 1;
+    job.fenceGeneration = newGen;
     job.updatedAt = Date.now();
-    return true;
+    
+    return newGen;
   }
 
   async updateJobStatus(jobId: string, status: RecoveryJobStatus, extra?: Partial<RecoveryJob>): Promise<void> {
