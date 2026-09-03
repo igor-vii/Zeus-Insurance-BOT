@@ -332,6 +332,35 @@ export class InMemoryExecutionStore {
     return true;
   }
 
+  // R2.2 Repair #3D: Atomic ATTEMPTED → UNRESOLVABLE resolution for NONE capability.
+  async resolveAttemptUnresolvableIfOwner(
+    jobId: string,
+    attemptId: string,
+    fenceGeneration: number,
+    attemptErrorReason: string,
+    jobLastError: string,
+  ): Promise<boolean> {
+    const job = this.jobs.get(jobId);
+    const attempt = this.attempts.get(attemptId);
+    if (!job || !attempt) return false;
+    // Fence check: reject if generation doesn't match current ownership
+    if (job.currentAttempt !== fenceGeneration) return false;
+    // Must be RUNNING (claimed by current worker)
+    if (job.status !== "RUNNING") return false;
+    // Operation must match
+    if (attempt.operationId !== job.operationId) return false;
+    // Terminal monotonicity: reject if attempt already terminal
+    const terminalStates = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
+    if (terminalStates.includes(attempt.status)) return false;
+    // Atomic transition: both attempt and job → UNRESOLVABLE
+    attempt.status = "UNRESOLVABLE";
+    attempt.errorReason = attemptErrorReason;
+    job.status = "UNRESOLVABLE";
+    job.lastError = jobLastError;
+    job.updatedAt = Date.now();
+    return true;
+  }
+
   // R2.2 Repair #1A: Mark attempt as in-progress with stale-worker protection.
   async markAttemptInProgress(attemptId: string, fenceGeneration: number): Promise<boolean> {
     const attempt = this.attempts.get(attemptId);
