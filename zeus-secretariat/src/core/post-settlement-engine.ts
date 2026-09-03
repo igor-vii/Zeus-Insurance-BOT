@@ -137,6 +137,20 @@ export interface ExecutionStore {
     retrievalJob: RecoveryJob,
     errorReason: string,
   ): Promise<boolean>;
+
+  /**
+   * R2.2 Repair #3D: Atomically resolve ATTEMPTED → UNRESOLVABLE for NONE capability.
+   * Verifies fence ownership, transitions attempt and job to UNRESOLVABLE in one operation.
+   * Returns false if fence is stale — no state changes occur.
+   */
+  resolveAttemptUnresolvableIfOwner(
+    jobId: string,
+    attemptId: string,
+    fenceGeneration: number,
+    attemptErrorReason: string,
+    jobLastError: string,
+  ): Promise<boolean>;
+
   saveJob(job: RecoveryJob): Promise<void>;
   getJob(jobId: string): Promise<RecoveryJob | null>;
   getPendingJobs(): Promise<RecoveryJob[]>;
@@ -600,17 +614,16 @@ export class PostSettlementEngine {
     if (latestAttempt.status === "ATTEMPTED") {
       const recoveryReason = "RECOVERY: attempt was ATTEMPTED at crash recovery — seller call outcome unknown";
 
-      // --- NONE: ATTEMPTED → UNRESOLVABLE directly ---
+      // --- NONE: ATTEMPTED → UNRESOLVABLE atomically (Repair #3D) ---
       if (capability === "NONE") {
-        const attemptUpdated = await this.executionStore.updateAttemptStatus(
-          latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration,
-          { errorReason: recoveryReason },
+        const resolved = await this.executionStore.resolveAttemptUnresolvableIfOwner(
+          jobId,
+          latestAttempt.attemptId,
+          fenceGeneration,
+          recoveryReason,
+          "INV-10: ATTEMPTED at crash recovery with NONE capability — no blind retry",
         );
-        if (!attemptUpdated) return { success: false, finalStatus: "RUNNING" };
-        const jobUpdated = await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
-          lastError: "INV-10: ATTEMPTED at crash recovery with NONE capability — no blind retry",
-        });
-        if (!jobUpdated) return { success: false, finalStatus: "RUNNING" };
+        if (!resolved) return { success: false, finalStatus: "RUNNING" };
         await this.appendEvidence(job.operationId, "EXECUTION_UNRESOLVABLE", {
           reason: recoveryReason,
           attemptId: latestAttempt.attemptId,
