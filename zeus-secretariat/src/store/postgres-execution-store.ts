@@ -364,6 +364,59 @@ export class PostgresExecutionStore {
   }
 
   /**
+   * R2.2 Repair #3D: Atomically resolve ATTEMPTED → UNRESOLVABLE for NONE capability.
+   * Single transaction: verify fence → transition attempt → close job as UNRESOLVABLE.
+   */
+  async resolveAttemptUnresolvableIfOwner(
+    jobId: string,
+    attemptId: string,
+    fenceGeneration: number,
+    attemptErrorReason: string,
+    jobLastError: string,
+  ): Promise<boolean> {
+    try {
+      const result = await this.db.transaction(async (tx) => {
+        // Lock the job row and verify current fence ownership
+        const lockResult = await tx.execute(sql`
+          SELECT job_id FROM recovery_jobs
+          WHERE job_id = ${jobId}
+            AND fence_generation = ${fenceGeneration}
+          FOR UPDATE
+        `);
+        const lockRows = Array.isArray(lockResult) ? lockResult : (lockResult as any).rows;
+        if (!lockRows || lockRows.length === 0) return false;
+
+        // Transition attempt to UNRESOLVABLE (rejects if already terminal)
+        const attemptResult = await tx.execute(sql`
+          UPDATE execution_attempts
+          SET status = ${"UNRESOLVABLE"},
+              error_reason = ${attemptErrorReason}
+          WHERE attempt_id = ${attemptId}
+            AND status NOT IN (${"SUCCESS"}, ${"HTTP_FAILURE"}, ${"DELIVERY_UNKNOWN"}, ${"UNRESOLVABLE"})
+        `);
+        const attemptRows = Array.isArray(attemptResult) ? attemptResult : (attemptResult as any).rows;
+        if (!attemptRows || attemptRows.length === 0) return false;
+
+        // Close job as UNRESOLVABLE
+        await tx.execute(sql`
+          UPDATE recovery_jobs
+          SET status = ${"UNRESOLVABLE"},
+              last_error = ${jobLastError},
+              updated_at = NOW()
+          WHERE job_id = ${jobId}
+        `);
+
+        return true;
+      });
+      return result ?? false;
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr.code === "23505") return false;
+      throw err;
+    }
+  }
+
+  /**
    * R2.2 Repair #9: Transition attempt to ATTEMPTED before seller call.
    * Durably distinguishes "not yet started" from "seller call may be in flight".
    * Uses same fencing + monotonicity guards as updateAttemptStatus.
