@@ -498,3 +498,135 @@ describe("BLOCK 8/1 Repair #3C: Post-Execution DELIVERY_UNKNOWN Fencing", () => 
     expect(updatedJob?.status).toBe("PENDING");
   });
 });
+
+
+// ===========================================================================
+// BLOCK 8/1 Repair #3D: Atomic ATTEMPTED → UNRESOLVABLE (NONE capability)
+// ===========================================================================
+
+describe("BLOCK 8/1 Repair #3D: Atomic NONE Recovery", () => {
+  let store: ExecutionStore;
+  let engine: PostSettlementEngine;
+
+  function makeJob(overrides?: Partial<RecoveryJob>): RecoveryJob {
+    const now = Date.now();
+    return {
+      jobId: `rj-none-${now}-${Math.random().toString(36).slice(2)}`,
+      operationId: `op-none-${now}-${Math.random().toString(36).slice(2)}`,
+      jobType: "EXECUTION",
+      status: "PENDING",
+      priority: 0,
+      maxAttempts: 3,
+      currentAttempt: 0,
+      metadata: { capability: "NONE" },
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+
+  function makeAttempt(operationId: string, overrides?: Partial<ExecutionAttempt>): ExecutionAttempt {
+    const now = Date.now();
+    return {
+      attemptId: `att-none-${now}-${Math.random().toString(36).slice(2)}`,
+      operationId,
+      executionId: operationId,
+      attemptNumber: 1,
+      status: "ATTEMPTED",
+      idempotencyKey: operationId,
+      createdAt: now,
+      startedAt: now,
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    const { InMemoryExecutionStore } = await import("../src/core/post-settlement-engine");
+    store = new InMemoryExecutionStore() as ExecutionStore;
+    engine = new PostSettlementEngine(
+      { append: async () => {} } as any,
+      store,
+      { async execute() { return { kind: "DELIVERY_UNKNOWN" as const, reason: "TIMEOUT" }; } },
+      { workerId: "test-worker", sellerUrl: "https://seller.example.com", lockDurationMs: 30000 },
+    );
+  });
+
+  test("current fence: ATTEMPTED + NONE → both attempt and job become UNRESOLVABLE", async () => {
+    const job = makeJob();
+    await store.saveJob(job);
+    const attempt = makeAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+
+    const result = await engine.processJob(job.jobId);
+
+    expect(result.finalStatus).toBe("UNRESOLVABLE");
+    expect(result.success).toBe(false);
+
+    const updatedAttempt = await store.getAttemptById(attempt.attemptId);
+    expect(updatedAttempt?.status).toBe("UNRESOLVABLE");
+
+    const updatedJob = await store.getJob(job.jobId);
+    expect(updatedJob?.status).toBe("UNRESOLVABLE");
+  });
+
+  test("stale fence: Worker A cannot resolve after Worker B claims", async () => {
+    const job = makeJob();
+    await store.saveJob(job);
+    const attempt = makeAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+
+    // Worker A claims fence 1
+    const fence1 = await store.claimJob(job.jobId, "worker-A", 100);
+    expect(fence1).toBe(1);
+
+    // Lease expires, Worker B claims fence 2
+    const savedJob = await store.getJob(job.jobId);
+    if (savedJob) savedJob.lockedUntil = Date.now() - 1000;
+    const fence2 = await store.claimJob(job.jobId, "worker-B", 30000);
+    expect(fence2).toBe(2);
+
+    // Worker A tries atomic resolve with stale fence → REJECTED
+    const resolved = await store.resolveAttemptUnresolvableIfOwner(
+      job.jobId,
+      attempt.attemptId,
+      fence1!,
+      "stale test",
+      "stale test",
+    );
+    expect(resolved).toBe(false);
+
+    // Verify neither attempt nor job were changed by stale worker
+    const unchangedAttempt = await store.getAttemptById(attempt.attemptId);
+    expect(unchangedAttempt?.status).toBe("ATTEMPTED");
+
+    const unchangedJob = await store.getJob(job.jobId);
+    expect(unchangedJob?.status).toBe("RUNNING"); // Still RUNNING from Worker B's claim
+  });
+
+  test("atomic primitive: resolveAttemptUnresolvableIfOwner succeeds with valid fence", async () => {
+    const job = makeJob();
+    await store.saveJob(job);
+    const attempt = makeAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+
+    const fence = await store.claimJob(job.jobId, "worker-A", 30000);
+    expect(fence).not.toBeNull();
+
+    const resolved = await store.resolveAttemptUnresolvableIfOwner(
+      job.jobId,
+      attempt.attemptId,
+      fence!,
+      "test error",
+      "test last error",
+    );
+    expect(resolved).toBe(true);
+
+    const updatedAttempt = await store.getAttemptById(attempt.attemptId);
+    expect(updatedAttempt?.status).toBe("UNRESOLVABLE");
+    expect(updatedAttempt?.errorReason).toBe("test error");
+
+    const updatedJob = await store.getJob(job.jobId);
+    expect(updatedJob?.status).toBe("UNRESOLVABLE");
+    expect(updatedJob?.lastError).toBe("test last error");
+  });
+});
