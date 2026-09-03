@@ -175,6 +175,195 @@ export class PostgresExecutionStore {
   }
 
   /**
+   * Atomically recover an ATTEMPTED execution when this worker still owns the
+   * current fence. The recovery_jobs row is locked first, followed by the
+   * original execution_attempts row. This lock order must match every other
+   * recovery mutation.
+   */
+  async createRecoveryAttemptIfOwner(
+    jobId: string,
+    originalAttemptId: string,
+    fenceGeneration: number,
+    retryAttempt: ExecutionAttempt,
+    errorReason: string,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const jobResult = await tx.execute(sql`
+        SELECT job_id, operation_id, status, fence_generation
+        FROM recovery_jobs
+        WHERE job_id = ${jobId}
+        FOR UPDATE
+      `);
+      const jobRows = Array.isArray(jobResult) ? jobResult : (jobResult as any).rows;
+      const job = jobRows?.[0] as {
+        operation_id: string;
+        status: string;
+        fence_generation: number;
+      } | undefined;
+      if (
+        !job ||
+        job.status !== "RUNNING" ||
+        Number(job.fence_generation) !== fenceGeneration
+      ) {
+        return false;
+      }
+
+      const attemptResult = await tx.execute(sql`
+        SELECT attempt_id, operation_id, status
+        FROM execution_attempts
+        WHERE attempt_id = ${originalAttemptId}
+        FOR UPDATE
+      `);
+      const attemptRows = Array.isArray(attemptResult) ? attemptResult : (attemptResult as any).rows;
+      const original = attemptRows?.[0] as {
+        operation_id: string;
+        status: string;
+      } | undefined;
+      if (
+        !original ||
+        original.operation_id !== job.operation_id ||
+        (original.status !== "ATTEMPTED" && original.status !== "DELIVERY_UNKNOWN")
+      ) {
+        return false;
+      }
+
+      if (original.status === "ATTEMPTED") {
+        await tx.execute(sql`
+          UPDATE execution_attempts
+          SET status = ${"DELIVERY_UNKNOWN"},
+              error_reason = ${errorReason},
+              completed_at = NOW()
+          WHERE attempt_id = ${originalAttemptId}
+        `);
+      }
+
+      await tx.insert(executionAttemptsTable).values({
+        attemptId: retryAttempt.attemptId,
+        operationId: retryAttempt.operationId,
+        executionId: retryAttempt.executionId,
+        attemptNumber: retryAttempt.attemptNumber,
+        status: retryAttempt.status,
+        requestUrl: retryAttempt.requestUrl ?? null,
+        requestMethod: retryAttempt.requestMethod ?? null,
+        requestBody: retryAttempt.requestBody ?? null,
+        responseStatusCode: retryAttempt.responseStatusCode ?? null,
+        responseBody: retryAttempt.responseBody ?? null,
+        responseHeaders: retryAttempt.responseHeaders ?? null,
+        errorReason: retryAttempt.errorReason ?? null,
+        idempotencyKey: retryAttempt.idempotencyKey ?? null,
+        startedAt: retryAttempt.startedAt ? new Date(retryAttempt.startedAt) : null,
+        completedAt: retryAttempt.completedAt ? new Date(retryAttempt.completedAt) : null,
+        createdAt: new Date(retryAttempt.createdAt),
+      });
+
+      await tx.execute(sql`
+        UPDATE recovery_jobs
+        SET status = ${"PENDING"},
+            locked_by = NULL,
+            locked_until = NULL,
+            last_error = ${errorReason},
+            updated_at = NOW()
+        WHERE job_id = ${jobId}
+          AND status = ${"RUNNING"}
+          AND fence_generation = ${fenceGeneration}
+      `);
+      return true;
+    });
+  }
+
+  /**
+   * Atomically hand an ATTEMPTED execution off to result retrieval while this
+   * worker still owns the current fence.
+   */
+  async createRecoveryJobIfOwner(
+    jobId: string,
+    originalAttemptId: string,
+    fenceGeneration: number,
+    retrievalJob: RecoveryJob,
+    errorReason: string,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const jobResult = await tx.execute(sql`
+        SELECT job_id, operation_id, status, fence_generation
+        FROM recovery_jobs
+        WHERE job_id = ${jobId}
+        FOR UPDATE
+      `);
+      const jobRows = Array.isArray(jobResult) ? jobResult : (jobResult as any).rows;
+      const job = jobRows?.[0] as {
+        operation_id: string;
+        status: string;
+        fence_generation: number;
+      } | undefined;
+      if (
+        !job ||
+        job.status !== "RUNNING" ||
+        Number(job.fence_generation) !== fenceGeneration
+      ) {
+        return false;
+      }
+
+      const attemptResult = await tx.execute(sql`
+        SELECT attempt_id, operation_id, status
+        FROM execution_attempts
+        WHERE attempt_id = ${originalAttemptId}
+        FOR UPDATE
+      `);
+      const attemptRows = Array.isArray(attemptResult) ? attemptResult : (attemptResult as any).rows;
+      const original = attemptRows?.[0] as {
+        operation_id: string;
+        status: string;
+      } | undefined;
+      if (
+        !original ||
+        original.operation_id !== job.operation_id ||
+        (original.status !== "ATTEMPTED" && original.status !== "DELIVERY_UNKNOWN")
+      ) {
+        return false;
+      }
+
+      if (original.status === "ATTEMPTED") {
+        await tx.execute(sql`
+          UPDATE execution_attempts
+          SET status = ${"DELIVERY_UNKNOWN"},
+              error_reason = ${errorReason},
+              completed_at = NOW()
+          WHERE attempt_id = ${originalAttemptId}
+        `);
+      }
+
+      await tx.insert(recoveryJobsTable).values({
+        jobId: retrievalJob.jobId,
+        operationId: retrievalJob.operationId,
+        jobType: retrievalJob.jobType,
+        status: retrievalJob.status,
+        priority: retrievalJob.priority,
+        maxAttempts: retrievalJob.maxAttempts,
+        currentAttempt: retrievalJob.currentAttempt,
+        lockedBy: retrievalJob.lockedBy ?? null,
+        lockedUntil: retrievalJob.lockedUntil ? new Date(retrievalJob.lockedUntil) : null,
+        lastError: retrievalJob.lastError ?? null,
+        metadata: retrievalJob.metadata ?? null,
+        createdAt: new Date(retrievalJob.createdAt),
+        updatedAt: new Date(retrievalJob.updatedAt),
+      });
+
+      await tx.execute(sql`
+        UPDATE recovery_jobs
+        SET status = ${"COMPLETED"},
+            locked_by = NULL,
+            locked_until = NULL,
+            last_error = ${errorReason},
+            updated_at = NOW()
+        WHERE job_id = ${jobId}
+          AND status = ${"RUNNING"}
+          AND fence_generation = ${fenceGeneration}
+      `);
+      return true;
+    });
+  }
+
+  /**
    * R2.2 Repair #9: Transition attempt to ATTEMPTED before seller call.
    * Durably distinguishes "not yet started" from "seller call may be in flight".
    * Uses same fencing + monotonicity guards as updateAttemptStatus.

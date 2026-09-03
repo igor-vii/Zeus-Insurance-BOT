@@ -1,16 +1,17 @@
 /**
- * BLOCK 8/1 Repair #3A — ATTEMPTED Crash Recovery Tests
+ * BLOCK 8/1 Repair #3B — fence-safe ATTEMPTED Crash Recovery Tests
  *
  * Exercises the REAL PostSettlementEngine.processJob() path to prove
  * that ATTEMPTED attempts after crash are correctly resolved through
- * capability-based recovery without re-executing the original attempt.
+ * capability-based recovery without re-executing the original attempt, and
+ * that recovery creation is fenced as one atomic operation.
  */
 
 import { PostSettlementEngine } from "../src/core/post-settlement-engine";
 import type { ExecutionStore, ExecutionAttempt, RecoveryJob, ExecutionCapability } from "../src/core/post-settlement-engine";
 import type { SellerExecutionAdapter, SellerExecutionRequest, SellerExecutionResult } from "../src/adapters/seller-execution-adapter";
 
-describe("BLOCK 8/1 Repair #3A: ATTEMPTED Crash Recovery via processJob()", () => {
+describe("BLOCK 8/1 Repair #3B: ATTEMPTED Crash Recovery via processJob()", () => {
   let store: ExecutionStore;
   let adapterCalls: SellerExecutionRequest[];
   let mockAdapter: SellerExecutionAdapter;
@@ -60,11 +61,96 @@ describe("BLOCK 8/1 Repair #3A: ATTEMPTED Crash Recovery via processJob()", () =
     };
     // Create engine with minimal config
     engine = new PostSettlementEngine(
-      store as any, // paymentStore not used in these tests
+      { append: async () => {} } as any,
       store,
       mockAdapter,
       { workerId: "test-worker", sellerUrl: "https://seller.example.com", lockDurationMs: 30000 },
     );
+  });
+
+  test("T1: stale before first mutation creates no recovery action", async () => {
+    const job = makeJob("EXECUTION_IDEMPOTENT");
+    await store.saveJob(job);
+    const attempt = makeAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+
+    const fenceA = await store.claimJob(job.jobId, "worker-A", 100);
+    const savedJob = await store.getJob(job.jobId);
+    if (savedJob) savedJob.lockedUntil = Date.now() - 1000;
+    const fenceB = await store.claimJob(job.jobId, "worker-B", 30_000);
+    expect(fenceB).toBeGreaterThan(fenceA!);
+
+    const created = await store.createRecoveryAttemptIfOwner(
+      job.jobId,
+      attempt.attemptId,
+      fenceA!,
+      { ...attempt, attemptId: "retry-stale-before", attemptNumber: 2, status: "PENDING" },
+      "stale",
+    );
+
+    expect(created).toBe(false);
+    expect(adapterCalls).toHaveLength(0);
+    expect((await store.getAttemptsByOperation(job.operationId))).toHaveLength(1);
+    expect((await store.getAttemptById(attempt.attemptId))?.status).toBe("ATTEMPTED");
+  });
+
+  test("T2: stale after a successful fenced mutation creates no orphan recovery", async () => {
+    const job = makeJob("EXECUTION_IDEMPOTENT");
+    await store.saveJob(job);
+    const attempt = makeAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+
+    const fenceA = await store.claimJob(job.jobId, "worker-A", 100);
+    const markedUnknown = await store.updateAttemptStatus(
+      attempt.attemptId,
+      "DELIVERY_UNKNOWN",
+      fenceA!,
+      { errorReason: "seller outcome unknown" },
+    );
+    expect(markedUnknown).toBe(true);
+
+    const savedJob = await store.getJob(job.jobId);
+    if (savedJob) savedJob.lockedUntil = Date.now() - 1000;
+    const fenceB = await store.claimJob(job.jobId, "worker-B", 30_000);
+    expect(fenceB).toBeGreaterThan(fenceA!);
+
+    const created = await store.createRecoveryAttemptIfOwner(
+      job.jobId,
+      attempt.attemptId,
+      fenceA!,
+      { ...attempt, attemptId: "retry-stale-after", attemptNumber: 2, status: "PENDING" },
+      "stale after mutation",
+    );
+
+    expect(created).toBe(false);
+    expect(adapterCalls).toHaveLength(0);
+    expect((await store.getAttemptsByOperation(job.operationId))).toHaveLength(1);
+    expect((await store.getPendingJobs()).filter((candidate) => candidate.jobType === "RETRY")).toHaveLength(0);
+  });
+
+  test("T3: concurrent recovery creates only one retry action", async () => {
+    const job = makeJob("EXECUTION_IDEMPOTENT");
+    await store.saveJob(job);
+    const attempt = makeAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+    const fence = await store.claimJob(job.jobId, "worker-A", 30_000);
+
+    const retry = (attemptId: string): ExecutionAttempt => ({
+      ...attempt,
+      attemptId,
+      attemptNumber: 2,
+      status: "PENDING",
+      createdAt: Date.now(),
+    });
+    const results = await Promise.all([
+      store.createRecoveryAttemptIfOwner(job.jobId, attempt.attemptId, fence!, retry("retry-concurrent-a"), "recovery"),
+      store.createRecoveryAttemptIfOwner(job.jobId, attempt.attemptId, fence!, retry("retry-concurrent-b"), "recovery"),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await store.getAttemptsByOperation(job.operationId))).toHaveLength(2);
+    expect((await store.getJob(job.jobId))?.status).toBe("PENDING");
+    expect(adapterCalls).toHaveLength(0);
   });
 
   test("NONE + ATTEMPTED → UNRESOLVABLE, no seller call", async () => {

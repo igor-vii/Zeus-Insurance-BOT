@@ -115,6 +115,28 @@ export interface ExecutionStore {
    * Returns true if update succeeded, false if rejected (stale fence or terminal state).
    */
   updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean>;
+  /**
+   * Atomically mark the original attempted delivery as unknown, create a
+   * retry attempt, and requeue the owning job when the fence is still held.
+   */
+  createRecoveryAttemptIfOwner(
+    jobId: string,
+    originalAttemptId: string,
+    fenceGeneration: number,
+    retryAttempt: ExecutionAttempt,
+    errorReason: string,
+  ): Promise<boolean>;
+  /**
+   * Atomically mark the original attempted delivery as unknown, create a
+   * retrieval job, and complete the owning job when the fence is still held.
+   */
+  createRecoveryJobIfOwner(
+    jobId: string,
+    originalAttemptId: string,
+    fenceGeneration: number,
+    retrievalJob: RecoveryJob,
+    errorReason: string,
+  ): Promise<boolean>;
   saveJob(job: RecoveryJob): Promise<void>;
   getJob(jobId: string): Promise<RecoveryJob | null>;
   getPendingJobs(): Promise<RecoveryJob[]>;
@@ -217,6 +239,82 @@ export class InMemoryExecutionStore {
     if (terminalStates.includes(attempt.status)) return false;
     attempt.status = status;
     if (extra) Object.assign(attempt, extra);
+    return true;
+  }
+
+  /**
+   * In-memory parity for the PostgreSQL attempted-recovery transaction.
+   * There are no awaits between the checks and mutations, so a concurrent
+   * call cannot interleave on the JavaScript event loop.
+   */
+  async createRecoveryAttemptIfOwner(
+    jobId: string,
+    originalAttemptId: string,
+    fenceGeneration: number,
+    retryAttempt: ExecutionAttempt,
+    errorReason: string,
+  ): Promise<boolean> {
+    const job = this.jobs.get(jobId);
+    const original = this.attempts.get(originalAttemptId);
+    if (
+      !job ||
+      job.status !== "RUNNING" ||
+      job.currentAttempt !== fenceGeneration ||
+      !original ||
+      original.operationId !== job.operationId ||
+      (original.status !== "ATTEMPTED" && original.status !== "DELIVERY_UNKNOWN")
+    ) {
+      return false;
+    }
+
+    if (original.status === "ATTEMPTED") {
+      original.status = "DELIVERY_UNKNOWN";
+      original.errorReason = errorReason;
+    }
+    this.attempts.set(retryAttempt.attemptId, { ...retryAttempt });
+    const attemptIds = this.attemptsByOp.get(retryAttempt.operationId) ?? [];
+    if (!attemptIds.includes(retryAttempt.attemptId)) attemptIds.push(retryAttempt.attemptId);
+    this.attemptsByOp.set(retryAttempt.operationId, attemptIds);
+    job.status = "PENDING";
+    job.lockedBy = undefined;
+    job.lockedUntil = undefined;
+    job.updatedAt = Date.now();
+    return true;
+  }
+
+  /**
+   * In-memory parity for the PostgreSQL attempted-retrieval transaction.
+   */
+  async createRecoveryJobIfOwner(
+    jobId: string,
+    originalAttemptId: string,
+    fenceGeneration: number,
+    retrievalJob: RecoveryJob,
+    errorReason: string,
+  ): Promise<boolean> {
+    const job = this.jobs.get(jobId);
+    const original = this.attempts.get(originalAttemptId);
+    if (
+      !job ||
+      job.status !== "RUNNING" ||
+      job.currentAttempt !== fenceGeneration ||
+      !original ||
+      original.operationId !== job.operationId ||
+      (original.status !== "ATTEMPTED" && original.status !== "DELIVERY_UNKNOWN")
+    ) {
+      return false;
+    }
+
+    if (original.status === "ATTEMPTED") {
+      original.status = "DELIVERY_UNKNOWN";
+      original.errorReason = errorReason;
+    }
+    this.jobs.set(retrievalJob.jobId, { ...retrievalJob });
+    job.status = "COMPLETED";
+    job.lastError = errorReason;
+    job.lockedBy = undefined;
+    job.lockedUntil = undefined;
+    job.updatedAt = Date.now();
     return true;
   }
 
@@ -502,15 +600,17 @@ export class PostSettlementEngine {
     if (latestAttempt.status === "ATTEMPTED") {
       const recoveryReason = "RECOVERY: attempt was ATTEMPTED at crash recovery — seller call outcome unknown";
 
-      // --- NONE: ATTEMPTED → UNRESOLVABLE directly (skip DELIVERY_UNKNOWN to avoid terminal→terminal rejection) ---
+      // --- NONE: ATTEMPTED → UNRESOLVABLE directly ---
       if (capability === "NONE") {
-        await this.executionStore.updateAttemptStatus(
+        const attemptUpdated = await this.executionStore.updateAttemptStatus(
           latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration,
           { errorReason: recoveryReason },
         );
-        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+        if (!attemptUpdated) return { success: false, finalStatus: "RUNNING" };
+        const jobUpdated = await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
           lastError: "INV-10: ATTEMPTED at crash recovery with NONE capability — no blind retry",
         });
+        if (!jobUpdated) return { success: false, finalStatus: "RUNNING" };
         await this.appendEvidence(job.operationId, "EXECUTION_UNRESOLVABLE", {
           reason: recoveryReason,
           attemptId: latestAttempt.attemptId,
@@ -520,14 +620,12 @@ export class PostSettlementEngine {
 
       // --- RESULT_RETRIEVAL: Create retrieval job, do NOT re-execute original attempt ---
       if (capability === "RESULT_RETRIEVAL") {
-        // Mark original attempt as DELIVERY_UNKNOWN (non-terminal→terminal is allowed)
-        await this.executionStore.updateAttemptStatus(
-          latestAttempt.attemptId, "DELIVERY_UNKNOWN", fenceGeneration,
-          { errorReason: recoveryReason },
-        );
-        // Create retrieval job (same pattern as post-execution DELIVERY_UNKNOWN handling)
-        const retrievalJobId = `job-retrieval-${Date.now()}`;
-        await this.executionStore.saveJob({
+        const retrievalJobId = `job-retrieval-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const created = await this.executionStore.createRecoveryJobIfOwner(
+          jobId,
+          latestAttempt.attemptId,
+          fenceGeneration,
+          {
           jobId: retrievalJobId,
           operationId: job.operationId,
           jobType: "RETRIEVAL",
@@ -538,10 +636,10 @@ export class PostSettlementEngine {
           metadata: { capability, originalJobId: jobId },
           createdAt: Date.now(),
           updatedAt: Date.now(),
-        });
-        await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration, {
-          lastError: "ATTEMPTED at crash recovery — retrieval job created",
-        });
+          },
+          recoveryReason,
+        );
+        if (!created) return { success: false, finalStatus: "RUNNING" };
         await this.appendEvidence(job.operationId, "RETRIEVAL_CREATED", {
           reason: recoveryReason,
           retrievalJobId,
@@ -552,15 +650,14 @@ export class PostSettlementEngine {
 
       // --- EXECUTION_IDEMPOTENT: Create NEW attempt, do NOT re-execute original ---
       if (capability === "EXECUTION_IDEMPOTENT") {
-        // Mark original attempt as DELIVERY_UNKNOWN
-        await this.executionStore.updateAttemptStatus(
-          latestAttempt.attemptId, "DELIVERY_UNKNOWN", fenceGeneration,
-          { errorReason: recoveryReason },
-        );
         // Create new attempt with SAME idempotency key (INV-9)
         if (job.currentAttempt < job.maxAttempts) {
-          const newAttemptId = `attempt-retry-${Date.now()}`;
-          await this.executionStore.saveAttempt({
+          const newAttemptId = `attempt-retry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const created = await this.executionStore.createRecoveryAttemptIfOwner(
+            jobId,
+            latestAttempt.attemptId,
+            fenceGeneration,
+            {
             attemptId: newAttemptId,
             operationId: job.operationId,
             executionId: latestAttempt.executionId, // SAME stable key
@@ -571,12 +668,10 @@ export class PostSettlementEngine {
             requestBody: latestAttempt.requestBody,
             idempotencyKey: latestAttempt.idempotencyKey, // SAME key
             createdAt: Date.now(),
-          });
-          // Re-queue the job for the new attempt
-          await this.executionStore.updateJobStatus(jobId, "PENDING", fenceGeneration, {
-            lockedBy: undefined,
-            lockedUntil: undefined,
-          });
+            },
+            recoveryReason,
+          );
+          if (!created) return { success: false, finalStatus: "RUNNING" };
           await this.appendEvidence(job.operationId, "EXECUTION_RETRY_CREATED", {
             reason: recoveryReason,
             newAttemptId,
@@ -585,9 +680,17 @@ export class PostSettlementEngine {
           return { success: false, finalStatus: "DELIVERY_UNKNOWN" };
         }
         // Max attempts reached
-        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+        const attemptUpdated = await this.executionStore.updateAttemptStatus(
+          latestAttempt.attemptId,
+          "UNRESOLVABLE",
+          fenceGeneration,
+          { errorReason: recoveryReason },
+        );
+        if (!attemptUpdated) return { success: false, finalStatus: "RUNNING" };
+        const jobUpdated = await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
           lastError: `Max attempts (${job.maxAttempts}) reached — ATTEMPTED at crash recovery`,
         });
+        if (!jobUpdated) return { success: false, finalStatus: "RUNNING" };
         return { success: false, finalStatus: "UNRESOLVABLE" };
       }
 

@@ -1,0 +1,1 @@
+- [Imported workspace dependencies](imported-workspace-dependencies.md) — imported repos may have stale lockfiles and tracked dependency trees; preserve the lockfile and isolate install side effects.

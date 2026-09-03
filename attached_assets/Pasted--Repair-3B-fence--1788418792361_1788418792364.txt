@@ -1,0 +1,361 @@
+Вот готовое ТЗ, без исследования и без упоминания старого коммита:
+
+---
+
+ТЗ: Repair #3B — fence-safe attempted recovery
+
+Базовый commit
+
+df4b3a2220de94e7a3edccf8158a7376e571e1d6
+
+Что нужно сделать
+
+Внести изменения в 3 файла:
+
+1. zeus-secretariat/src/store/postgres-execution-store.ts
+
+Добавить метод createRecoveryAttemptIfOwner:
+
+```typescript
+async createRecoveryAttemptIfOwner(
+  jobId: string,
+  originalAttemptId: string,
+  fenceGeneration: number,
+  retryAttempt: ExecutionAttempt,
+  errorReason: string,
+): Promise<boolean> {
+  return this.db.transaction(async (tx) => {
+    // SELECT recovery_jobs FOR UPDATE
+    // проверить status=RUNNING и fence_generation
+    // SELECT execution_attempts FOR UPDATE
+    // проверить status=ATTEMPTED или DELIVERY_UNKNOWN
+    // UPDATE ATTEMPTED → DELIVERY_UNKNOWN
+    // INSERT retry attempt
+    // UPDATE recovery_jobs → PENDING
+    // вернуть true/false
+  });
+}
+```
+
+Добавить метод createRecoveryJobIfOwner:
+
+```typescript
+async createRecoveryJobIfOwner(
+  jobId: string,
+  originalAttemptId: string,
+  fenceGeneration: number,
+  retrievalJob: RecoveryJob,
+  errorReason: string,
+): Promise<boolean> {
+  return this.db.transaction(async (tx) => {
+    // SELECT recovery_jobs FOR UPDATE
+    // проверить статус и fence
+    // SELECT execution_attempts FOR UPDATE
+    // UPDATE ATTEMPTED → DELIVERY_UNKNOWN
+    // INSERT retrieval job
+    // UPDATE recovery_jobs → COMPLETED
+    // вернуть true/false
+  });
+}
+```
+
+Добавить метод updateAttemptStatus с параметром fenceGeneration (уже есть в интерфейсе).
+
+---
+
+2. zeus-secretariat/src/core/post-settlement-engine.ts
+
+В InMemoryExecutionStore добавить:
+
+· createRecoveryAttemptIfOwner — синхронная parity PostgreSQL версии
+· createRecoveryJobIfOwner — синхронная parity PostgreSQL версии
+· updateAttemptStatus с fence-проверкой
+
+В processJob() изменить recovery-логику:
+
+Для ATTEMPTED статуса:
+
+```typescript
+// Вместо await this.executionStore.updateAttemptStatus(...)
+// использовать атомарные примитивы:
+
+if (capability === "NONE") {
+  const attemptUpdated = await this.executionStore.updateAttemptStatus(
+    latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration,
+    { errorReason: recoveryReason }
+  );
+  if (!attemptUpdated) return { success: false, finalStatus: "RUNNING" };
+  // ... updateJobStatus с проверкой
+}
+
+if (capability === "RESULT_RETRIEVAL") {
+  const created = await this.executionStore.createRecoveryJobIfOwner(
+    jobId,
+    latestAttempt.attemptId,
+    fenceGeneration,
+    retrievalJob,
+    recoveryReason
+  );
+  if (!created) return { success: false, finalStatus: "RUNNING" };
+}
+
+if (capability === "EXECUTION_IDEMPOTENT") {
+  const created = await this.executionStore.createRecoveryAttemptIfOwner(
+    jobId,
+    latestAttempt.attemptId,
+    fenceGeneration,
+    retryAttempt,
+    recoveryReason
+  );
+  if (!created) return { success: false, finalStatus: "RUNNING" };
+}
+```
+
+Удалить старые вызовы:
+
+· saveAttempt() для recovery-созданных попыток
+· saveJob() для retrieval-джобов
+· updateJobStatus() без атомарной проверки
+
+---
+
+3. zeus-secretariat/tests/b8-1-repair3-attempted-recovery.test.ts
+
+Создать тесты:
+
+· T1: Stale до первой мутации — recovery не создаётся
+· T2: Stale после успешной мутации — recovery не создаётся
+· T3: Concurrent recovery — только один успешен
+· T4: Capability matrix — NONE/EXECUTION_IDEMPOTENT/RESULT_RETRIEVAL
+
+---
+
+Команды для проверки
+
+```bash
+pnpm --filter zeus-secretariat typecheck
+pnpm --filter zeus-secretariat test -- b8-1-repair3-attempted-recovery
+pnpm --filter zeus-secretariat test -- b8-r2-repair9-execution-safety
+```
+
+---
+
+Критические моменты
+
+1. Lock order: всегда recovery_jobs → execution_attempts, никогда наоборот
+2. No blind seller re-execution: исходный ATTEMPTED никогда не перезапускается
+3. Idempotency: новые попытки используют тот же executionId и idempotencyKey
+4. Fencing: stale worker с неверным fenceGeneration получает false
+
+---
+
+Файлы, которые НЕ трогать
+
+· Lockfile
+· Другие production файлы
+· Drizzle миграции
+Нашёл и проверил исходный postgres-execution-store.ts. claimJob() действительно делает один атомарный UPDATE ... RETURNING той же строки recovery_jobs, с fence_generation = fence_generation + 1.
+
+Вывод по lock race
+
+Это закрывает именно ту гонку, ради которой мы отвергли #3A:
+
+A: BEGIN A: SELECT recovery_jobs FOR UPDATE, fence=N A: recovery mutation A: recovery INSERT A: requeue/close A: COMMIT B: claimJob() ↓ UPDATE той же recovery_jobs row ↓ ждёт COMMIT A ↓ получает уже новое состояние
+
+То есть B не может вклиниться между проверкой fence и recovery INSERT. Это принципиально важно.
+
+При этом я не смог через публичный GitHub code search надёжно получить все остальные файлы репозитория: GitHub требует авторизацию для code search. Поэтому я не буду выдумывать, что полностью доказал отсутствие обратного lock ordering во всём репозитории.
+
+Но по доступному production store claimJob() и новому #3B primitive механизм согласован.
+
+Поэтому сейчас — точечное ТЗ новому аккаунту
+
+Нам не надо просить нового аккаунта заново проектировать Repair #3B. У нас уже есть кандидат 727025b8; задача нового аккаунта — восстановить его из текста/файлов и провести финальную проверку, а не писать всё с нуля.
+
+И я бы сейчас дал кодеру именно это:
+
+BLOCK 8/1 → SECTION 4 → Repair #3B — восстановление и финальная верификация кандидата
+
+Контекст:
+
+Мы закрываем критическую гонку crash-recovery/stale-worker в Secretariat.
+
+Правильная архитектура Repair #3B уже определена:
+
+базовый commit: df4b3a2220de94e7a3edccf8158a7376e571e1d6
+
+готовый кандидат, который существовал в предыдущем аккаунте: 727025b8
+
+message: fix(secretariat): make attempted recovery fence-safe
+
+ВАЖНО:
+Не проектируй другой вариант и не заменяй решение простыми early-return.
+Главная цель #3B — атомарно связать проверку текущего fence_generation с созданием recovery action.
+
+Требуемый механизм:
+
+PostgreSQL createRecoveryAttemptIfOwner():
+
+одна DB transaction;
+
+SELECT ... FROM recovery_jobs WHERE job_id = ... FOR UPDATE;
+
+проверить status=RUNNING и fence_generation=N;
+
+проверить исходный attempt;
+
+ATTEMPTED → DELIVERY_UNKNOWN;
+
+INSERT retry attempt;
+
+requeue recovery job;
+
+COMMIT.
+
+PostgreSQL createRecoveryJobIfOwner():
+
+одна DB transaction;
+
+SELECT recovery_jobs ... FOR UPDATE;
+
+проверить ownership/fence;
+
+ATTEMPTED → DELIVERY_UNKNOWN;
+
+INSERT retrieval job;
+
+закрыть исходный EXECUTION job;
+
+COMMIT.
+
+claimJob() уже является одним атомарным:
+UPDATE recovery_jobs ... fence_generation = fence_generation + 1 ... RETURNING fence_generation.
+Поэтому row lock на recovery_jobs должен сериализовать claim и recovery creation.
+
+InMemory должен иметь поведенческую parity:
+ownership check + все соответствующие mutations должны выполняться синхронно, без await между ними.
+
+Production processJob() не должен после нового atomic primitive дополнительно выполнять старые saveAttempt() / saveJob() для того же recovery action.
+Никаких двойных recovery inserts.
+
+ПРОВЕРИТЬ:
+
+A. postgres-execution-store.ts
+
+claimJob()
+
+createRecoveryAttemptIfOwner()
+
+createRecoveryJobIfOwner()
+
+отсутствие старого unfenced INSERT в этих recovery paths.
+
+B. post-settlement-engine.ts
+
+NONE
+
+RESULT_RETRIEVAL
+
+EXECUTION_IDEMPOTENT
+
+ATTEMPTED recovery
+
+DELIVERY_UNKNOWN recovery
+
+отсутствие blind seller re-execution исходного ATTEMPTED attempt.
+
+C. Lock ordering:
+найди все production места, где одновременно блокируются/изменяются recovery_jobs и execution_attempts.
+Нужно убедиться, что нет production path с обратным порядком:
+execution_attempts → recovery_jobs
+против:
+recovery_jobs → execution_attempts,
+который может создать PostgreSQL deadlock.
+Если такого path нет — зафиксировать это как PASS.
+Если есть — НЕ исправлять самостоятельно, а остановиться и сообщить точное место.
+
+D. Тесты обязательно должны содержать/проверять:
+
+T1 — stale before first mutation:
+Worker A fence N становится stale до recovery mutation.
+Ожидание: recovery action не создаётся, seller = 0.
+
+T2 — stale AFTER successful fenced mutation:
+Worker A fence N:
+
+fenced ATTEMPTED → DELIVERY_UNKNOWN успешно;
+
+затем A должен потерять lease;
+
+Worker B получает fence N+1;
+
+A пытается создать recovery.
+Ожидание:
+
+A не создаёт retry/retrieval;
+
+нет orphan attempt;
+
+нет duplicate recovery job;
+
+seller = 0.
+
+T3 — concurrent recovery:
+два worker/processJob на одном job.
+Ожидание: только один recovery action.
+
+T4 — capability matrix:
+
+NONE → UNRESOLVABLE
+
+RESULT_RETRIEVAL → retrieval job
+
+EXECUTION_IDEMPOTENT → новый attempt с тем же executionId/idempotencyKey
+
+исходный ATTEMPTED никогда повторно не исполняется.
+
+T5 — существующие fencing regressions.
+
+КОМАНДЫ:
+
+pnpm --filter zeus-secretariat typecheck
+
+pnpm --filter zeus-secretariat test -- b8-1-repair3-attempted-recovery
+
+pnpm --filter zeus-secretariat test -- b8-r2-repair9-execution-safety
+
+pnpm --filter zeus-secretariat test -- b8-1-repair1a-inmemory-fencing
+
+Если PostgreSQL-тесты невозможно выполнить из-за отсутствующей schema (recovery_jobs и т.п.), НЕ подменять это InMemory-тестом.
+Отметить PostgreSQL как UNVERIFIED и отдельно указать причину.
+
+ВАЖНО ПО ТЕКУЩЕМУ СОСТОЯНИЮ:
+
+
+Не менять архитектуру.
+Не делать cleanup/refactor.
+Не трогать lockfile.
+Не менять unrelated production code.
+
+ФИНАЛ:
+
+Если всё соответствует требованиям:
+
+один commit;
+
+exact commit hash;
+
+список изменённых файлов;
+
+typecheck;
+
+каждый тест;
+
+PostgreSQL PASS или UNVERIFIED с причиной;
+
+отдельный результат lock-order audit;
+
+отдельный результат T2 stale-after-successful-mutation.
+
+Если обнаружен дефект — НЕ маскировать его тестом и НЕ делать широкий repair. Сообщить точное место и остановиться.
+После каждого шага пуш
