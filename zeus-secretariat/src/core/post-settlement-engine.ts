@@ -767,51 +767,63 @@ export class PostSettlementEngine {
         }
 
         if (capability === "RESULT_RETRIEVAL") {
-          // Create a retrieval job instead of retrying execution
-          const retrievalJobId = `job-retrieval-${Date.now()}`;
-          await this.executionStore.saveJob({
-            jobId: retrievalJobId,
-            operationId: job.operationId,
-            jobType: "RETRIEVAL",
-            status: "PENDING",
-            priority: 1,
-            maxAttempts: 3,
-            currentAttempt: 0,
-            metadata: { capability, originalJobId: jobId },
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          });
-
-          await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration, {
-            lastError: "DELIVERY_UNKNOWN — retrieval job created",
-          });
-
+          // R2.2 Repair #3C: Atomic fenced retrieval job creation.
+          // Replaces unfenced saveJob() + separate updateJobStatus() to prevent
+          // stale workers from creating recovery jobs after losing their fence.
+          const retrievalJobId = `job-retrieval-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const created = await this.executionStore.createRecoveryJobIfOwner(
+            jobId,
+            latestAttempt.attemptId,
+            fenceGeneration,
+            {
+              jobId: retrievalJobId,
+              operationId: job.operationId,
+              jobType: "RETRIEVAL",
+              status: "PENDING",
+              priority: 1,
+              maxAttempts: 3,
+              currentAttempt: 0,
+              metadata: { capability, originalJobId: jobId },
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+            "DELIVERY_UNKNOWN — retrieval job created",
+          );
+          if (!created) {
+            // Fence rejected — another worker owns this job now
+            return { success: false, finalStatus: "RUNNING" };
+          }
           return { success: false, result, finalStatus: "DELIVERY_UNKNOWN" };
         }
 
         // EXECUTION_IDEMPOTENT: safe to retry
         if (job.currentAttempt < job.maxAttempts) {
-          // Create new attempt with SAME idempotency key (INV-9)
-          const newAttemptId = `attempt-retry-${Date.now()}`;
-          await this.executionStore.saveAttempt({
-            attemptId: newAttemptId,
-            operationId: job.operationId,
-            executionId: latestAttempt.executionId, // SAME stable key
-            attemptNumber: latestAttempt.attemptNumber + 1,
-            status: "PENDING",
-            requestUrl: latestAttempt.requestUrl,
-            requestMethod: latestAttempt.requestMethod,
-            requestBody: latestAttempt.requestBody,
-            idempotencyKey: latestAttempt.idempotencyKey, // SAME key
-            createdAt: Date.now(),
-          });
-
-          // Re-queue the job
-          await this.executionStore.updateJobStatus(jobId, "PENDING", fenceGeneration, {
-            lockedBy: undefined,
-            lockedUntil: undefined,
-          });
-
+          // R2.2 Repair #3C: Atomic fenced retry attempt creation.
+          // Replaces unfenced saveAttempt() + separate updateJobStatus() to prevent
+          // stale workers from creating retry attempts after losing their fence.
+          const newAttemptId = `attempt-retry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const created = await this.executionStore.createRecoveryAttemptIfOwner(
+            jobId,
+            latestAttempt.attemptId,
+            fenceGeneration,
+            {
+              attemptId: newAttemptId,
+              operationId: job.operationId,
+              executionId: latestAttempt.executionId, // SAME stable key
+              attemptNumber: latestAttempt.attemptNumber + 1,
+              status: "PENDING",
+              requestUrl: latestAttempt.requestUrl,
+              requestMethod: latestAttempt.requestMethod,
+              requestBody: latestAttempt.requestBody,
+              idempotencyKey: latestAttempt.idempotencyKey, // SAME key
+              createdAt: Date.now(),
+            },
+            "DELIVERY_UNKNOWN — retry attempt created",
+          );
+          if (!created) {
+            // Fence rejected — another worker owns this job now
+            return { success: false, finalStatus: "RUNNING" };
+          }
           return { success: false, result, finalStatus: "DELIVERY_UNKNOWN" };
         }
 
