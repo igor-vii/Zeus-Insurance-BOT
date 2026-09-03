@@ -160,51 +160,82 @@ describeIfDb("Repair #3D-A: PostgreSQL resolveAttemptUnresolvableIfOwner", () =>
     await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${jobId}`);
   });
 
-  test("4. Atomic rollback: no partial state on failure", async () => {
+  test("4. Atomic rollback: no partial state when job UPDATE fails after attempt UPDATE succeeds", async () => {
     const now = Date.now();
-    const opId = `op-3da-atom-${now}`;
-    const jobId = `rj-3da-atom-${now}`;
-    const attId = `att-3da-atom-${now}`;
+    const opId = `op-3da-rb-${now}`;
+    const jobId = `rj-3da-rb-${now}`;
+    const attId = `att-3da-rb-${now}`;
+    const triggerName = `block_job_update_${now}`;
+    const funcName = `block_job_update_fn_${now}`;
 
-    // Setup: job with fence_generation = 1
+    // Setup: create ATTEMPTED attempt and RUNNING job with valid fence
     await db.execute(sql`
       INSERT INTO recovery_jobs (job_id, operation_id, job_type, status, priority, max_attempts, current_attempt, fence_generation, metadata, created_at, updated_at)
       VALUES (${jobId}, ${opId}, ${"EXECUTION"}, ${"RUNNING"}, 0, 3, 1, 1, '{}'::jsonb, NOW(), NOW())
     `);
-
-    // Setup: attempt already in terminal state SUCCESS
-    // This will cause the UPDATE to affect 0 rows → transaction returns false
-    // The key test: even though the lock succeeded, the attempt update fails,
-    // so the job must NOT be changed either (atomic rollback).
     await db.execute(sql`
       INSERT INTO execution_attempts (attempt_id, operation_id, execution_id, attempt_number, status, idempotency_key, started_at, created_at)
-      VALUES (${attId}, ${opId}, ${opId}, 1, ${"SUCCESS"}, ${opId}, NOW(), NOW())
+      VALUES (${attId}, ${opId}, ${opId}, 1, ${"ATTEMPTED"}, ${opId}, NOW(), NOW())
     `);
 
-    const store = new PES(db);
+    // Create a trigger that throws an error on ANY UPDATE to recovery_jobs
+    // This simulates a controlled failure AFTER the attempt UPDATE has already succeeded
+    // within the same transaction, forcing a real PostgreSQL ROLLBACK.
+    try {
+      await db.execute(sql.raw(`
+        CREATE OR REPLACE FUNCTION ${funcName}() RETURNS TRIGGER AS $$
+        BEGIN
+          RAISE EXCEPTION 'ROLLBACK_TEST_TRIGGER';
+        END;
+        $$ LANGUAGE plpgsql;
+      `));
+      await db.execute(sql.raw(`
+        CREATE TRIGGER ${triggerName}
+        BEFORE UPDATE ON recovery_jobs
+        FOR EACH ROW EXECUTE FUNCTION ${funcName}();
+      `));
 
-    // Attempt is already SUCCESS (terminal) → UPDATE affects 0 rows → returns false
-    const resolved = await store.resolveAttemptUnresolvableIfOwner(
-      jobId, attId, 1, "atomic-error", "atomic-job-error"
-    );
-    expect(resolved).toBe(false);
+      const store = new PES(db);
 
-    // CRITICAL: Job must remain RUNNING despite successful lock
-    // If the transaction were not atomic, the job UPDATE would have committed
-    const jobCheck = resultRows(await db.execute(sql`
-      SELECT status, last_error FROM recovery_jobs WHERE job_id = ${jobId}
-    `));
-    expect(jobCheck[0]?.status).toBe("RUNNING");
-    expect(jobCheck[0]?.last_error).toBeNull();
+      // Call primitive: attempt UPDATE should succeed, but job UPDATE triggers exception
+      // The production code catches non-23505 errors and re-throws them
+      let caughtError = false;
+      try {
+        await store.resolveAttemptUnresolvableIfOwner(
+          jobId, attId, 1, "rb-test-error", "rb-test-job-error"
+        );
+      } catch (e: any) {
+        if (e.message === "ROLLBACK_TEST_TRIGGER") {
+          caughtError = true;
+        } else {
+          throw e; // Re-throw unexpected errors
+        }
+      }
+      expect(caughtError).toBe(true);
 
-    // Attempt must remain SUCCESS (unchanged)
-    const attCheck = resultRows(await db.execute(sql`
-      SELECT status FROM execution_attempts WHERE attempt_id = ${attId}
-    `));
-    expect(attCheck[0]?.status).toBe("SUCCESS");
+      // CRITICAL VERIFICATION: Both attempt and job must be unchanged
+      // because PostgreSQL rolled back the entire transaction.
 
-    // Cleanup
-    await db.execute(sql`DELETE FROM execution_attempts WHERE attempt_id = ${attId}`);
-    await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${jobId}`);
+      // Attempt must still be ATTEMPTED (not UNRESOLVABLE)
+      const attCheck = resultRows(await db.execute(sql`
+        SELECT status, error_reason FROM execution_attempts WHERE attempt_id = ${attId}
+      `));
+      expect(attCheck[0]?.status).toBe("ATTEMPTED");
+      expect(attCheck[0]?.error_reason).toBeNull();
+
+      // Job must still be RUNNING (not UNRESOLVABLE)
+      const jobCheck = resultRows(await db.execute(sql`
+        SELECT status, last_error FROM recovery_jobs WHERE job_id = ${jobId}
+      `));
+      expect(jobCheck[0]?.status).toBe("RUNNING");
+      expect(jobCheck[0]?.last_error).toBeNull();
+
+    } finally {
+      // ALWAYS clean up trigger and function, even if test assertions fail
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${triggerName} ON recovery_jobs`)).catch(() => {});
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${funcName}()`)).catch(() => {});
+      await db.execute(sql`DELETE FROM execution_attempts WHERE attempt_id = ${attId}`).catch(() => {});
+      await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${jobId}`).catch(() => {});
+    }
   });
 });
