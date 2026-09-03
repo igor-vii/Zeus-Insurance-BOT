@@ -205,7 +205,10 @@ describeIfDb("Repair #3D-A: PostgreSQL resolveAttemptUnresolvableIfOwner", () =>
           jobId, attId, 1, "rb-test-error", "rb-test-job-error"
         );
       } catch (e: any) {
-        if (e.message === "ROLLBACK_TEST_TRIGGER") {
+        // Drizzle wraps PG errors: e.message may be "Failed query: ..." 
+        // with the original PG message nested inside. Check the full error chain.
+        const errorText = JSON.stringify(e) + " " + (e.message || "") + " " + (e.cause?.message || "");
+        if (errorText.includes("ROLLBACK_TEST_TRIGGER")) {
           caughtError = true;
         } else {
           throw e; // Re-throw unexpected errors
