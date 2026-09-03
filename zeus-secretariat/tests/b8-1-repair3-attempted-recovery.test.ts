@@ -292,3 +292,209 @@ describe("BLOCK 8/1 Repair #3B: ATTEMPTED Crash Recovery via processJob()", () =
     expect(unchanged?.status).toBe("ATTEMPTED");
   });
 });
+
+
+// ===========================================================================
+// BLOCK 8/1 Repair #3C: Post-Execution DELIVERY_UNKNOWN Stale Worker Tests
+// ===========================================================================
+
+describe("BLOCK 8/1 Repair #3C: Post-Execution DELIVERY_UNKNOWN Fencing", () => {
+  let store: ExecutionStore;
+  let adapterCalls: SellerExecutionRequest[];
+  let mockAdapter: SellerExecutionAdapter;
+  let engine: PostSettlementEngine;
+
+  function makeJob(capability: ExecutionCapability, overrides?: Partial<RecoveryJob>): RecoveryJob {
+    const now = Date.now();
+    return {
+      jobId: `rj-post-${now}-${Math.random().toString(36).slice(2)}`,
+      operationId: `op-post-${now}-${Math.random().toString(36).slice(2)}`,
+      jobType: "EXECUTION",
+      status: "PENDING",
+      priority: 0,
+      maxAttempts: 3,
+      currentAttempt: 0,
+      metadata: { capability },
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+
+  function makePendingAttempt(operationId: string, overrides?: Partial<ExecutionAttempt>): ExecutionAttempt {
+    const now = Date.now();
+    return {
+      attemptId: `att-post-${now}-${Math.random().toString(36).slice(2)}`,
+      operationId,
+      executionId: operationId,
+      attemptNumber: 1,
+      status: "PENDING",
+      idempotencyKey: operationId,
+      requestUrl: "https://seller.example.com/execute",
+      requestMethod: "POST",
+      createdAt: now,
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    const { InMemoryExecutionStore } = await import("../src/core/post-settlement-engine");
+    store = new InMemoryExecutionStore() as ExecutionStore;
+    adapterCalls = [];
+    mockAdapter = {
+      async execute(req: SellerExecutionRequest): Promise<SellerExecutionResult> {
+        adapterCalls.push(req);
+        // Simulate DELIVERY_UNKNOWN outcome (timeout/connection reset)
+        return { kind: "DELIVERY_UNKNOWN", reason: "TIMEOUT" };
+      },
+    };
+    engine = new PostSettlementEngine(
+      { append: async () => {} } as any,
+      store,
+      mockAdapter,
+      { workerId: "test-worker", sellerUrl: "https://seller.example.com", lockDurationMs: 30000 },
+    );
+  });
+
+  test("RESULT_RETRIEVAL: stale worker cannot create retrieval job after fence loss", async () => {
+    const job = makeJob("RESULT_RETRIEVAL");
+    await store.saveJob(job);
+    const attempt = makePendingAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+
+    // Worker A claims fence 1
+    const fence1 = await store.claimJob(job.jobId, "worker-A", 100);
+    expect(fence1).toBe(1);
+
+    // Lease expires, Worker B claims fence 2
+    const savedJob = await store.getJob(job.jobId);
+    if (savedJob) savedJob.lockedUntil = Date.now() - 1000;
+    const fence2 = await store.claimJob(job.jobId, "worker-B", 30000);
+    expect(fence2).toBe(2);
+
+    // Worker A tries to create retrieval job with stale fence → REJECTED
+    const created = await store.createRecoveryJobIfOwner(
+      job.jobId,
+      attempt.attemptId,
+      fence1!,
+      {
+        jobId: "retrieval-stale",
+        operationId: job.operationId,
+        jobType: "RETRIEVAL",
+        status: "PENDING",
+        priority: 1,
+        maxAttempts: 3,
+        currentAttempt: 0,
+        metadata: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      "stale test",
+    );
+    expect(created).toBe(false);
+
+    // Verify no retrieval job was created by stale worker
+    const pendingJobs = await store.getPendingJobs();
+    const staleRetrieval = pendingJobs.find((j) => j.jobId === "retrieval-stale");
+    expect(staleRetrieval).toBeUndefined();
+  });
+
+  test("EXECUTION_IDEMPOTENT: stale worker cannot create retry attempt after fence loss", async () => {
+    const opId = `op-idemp-post-${Date.now()}`;
+    const job = makeJob("EXECUTION_IDEMPOTENT", { operationId: opId });
+    await store.saveJob(job);
+    const attempt = makePendingAttempt(opId);
+    await store.saveAttempt(attempt);
+
+    // Worker A claims fence 1
+    const fence1 = await store.claimJob(job.jobId, "worker-A", 100);
+    expect(fence1).toBe(1);
+
+    // Lease expires, Worker B claims fence 2
+    const savedJob = await store.getJob(job.jobId);
+    if (savedJob) savedJob.lockedUntil = Date.now() - 1000;
+    const fence2 = await store.claimJob(job.jobId, "worker-B", 30000);
+    expect(fence2).toBe(2);
+
+    // Worker A tries to create retry attempt with stale fence → REJECTED
+    const created = await store.createRecoveryAttemptIfOwner(
+      job.jobId,
+      attempt.attemptId,
+      fence1!,
+      {
+        attemptId: "retry-stale",
+        operationId: opId,
+        executionId: opId,
+        attemptNumber: 2,
+        status: "PENDING",
+        idempotencyKey: opId,
+        createdAt: Date.now(),
+      },
+      "stale test",
+    );
+    expect(created).toBe(false);
+
+    // Verify no retry attempt was created by stale worker
+    const allAttempts = await store.getAttemptsByOperation(opId);
+    const staleRetry = allAttempts.find((a) => a.attemptId === "retry-stale");
+    expect(staleRetry).toBeUndefined();
+  });
+
+  test("Post-execution DELIVERY_UNKNOWN + RESULT_RETRIEVAL uses atomic primitive via processJob", async () => {
+    const job = makeJob("RESULT_RETRIEVAL");
+    await store.saveJob(job);
+    const attempt = makePendingAttempt(job.operationId);
+    await store.saveAttempt(attempt);
+
+    // processJob will: claim → execute (returns DELIVERY_UNKNOWN) → createRecoveryJobIfOwner
+    const result = await engine.processJob(job.jobId);
+
+    expect(result.finalStatus).toBe("DELIVERY_UNKNOWN");
+    expect(adapterCalls.length).toBe(1); // Exactly one seller call
+
+    // Original attempt should be DELIVERY_UNKNOWN
+    const updatedAttempt = await store.getAttemptById(attempt.attemptId);
+    expect(updatedAttempt?.status).toBe("DELIVERY_UNKNOWN");
+
+    // Retrieval job should exist
+    const pendingJobs = await store.getPendingJobs();
+    const retrievalJob = pendingJobs.find((j) => j.jobType === "RETRIEVAL");
+    expect(retrievalJob).toBeDefined();
+    expect(retrievalJob?.operationId).toBe(job.operationId);
+
+    // Original job should be COMPLETED
+    const updatedJob = await store.getJob(job.jobId);
+    expect(updatedJob?.status).toBe("COMPLETED");
+  });
+
+  test("Post-execution DELIVERY_UNKNOWN + EXECUTION_IDEMPOTENT uses atomic primitive via processJob", async () => {
+    const opId = `op-idemp-proc-${Date.now()}`;
+    const job = makeJob("EXECUTION_IDEMPOTENT", { operationId: opId });
+    await store.saveJob(job);
+    const attempt = makePendingAttempt(opId);
+    await store.saveAttempt(attempt);
+
+    const result = await engine.processJob(job.jobId);
+
+    expect(result.finalStatus).toBe("DELIVERY_UNKNOWN");
+    expect(adapterCalls.length).toBe(1);
+
+    // Original attempt should be DELIVERY_UNKNOWN
+    const original = await store.getAttemptById(attempt.attemptId);
+    expect(original?.status).toBe("DELIVERY_UNKNOWN");
+
+    // New retry attempt should exist with correct identity
+    const allAttempts = await store.getAttemptsByOperation(opId);
+    expect(allAttempts.length).toBe(2);
+    const retry = allAttempts.find((a) => a.attemptId !== attempt.attemptId);
+    expect(retry).toBeDefined();
+    expect(retry?.attemptNumber).toBe(2);
+    expect(retry?.idempotencyKey).toBe(opId);
+    expect(retry?.executionId).toBe(opId);
+    expect(retry?.status).toBe("PENDING");
+
+    // Job requeued
+    const updatedJob = await store.getJob(job.jobId);
+    expect(updatedJob?.status).toBe("PENDING");
+  });
+});
