@@ -367,6 +367,10 @@ export class PostgresExecutionStore {
    * R2.2 Repair #3D: Atomically resolve ATTEMPTED → UNRESOLVABLE for NONE capability.
    * Single transaction: verify fence → transition attempt → close job as UNRESOLVABLE.
    */
+  /**
+   * R2.2 Repair #3D-corrected: Atomically resolve ATTEMPTED → UNRESOLVABLE.
+   * Uses rowCount for UPDATE verification and binds attempt to job via operation_id.
+   */
   async resolveAttemptUnresolvableIfOwner(
     jobId: string,
     attemptId: string,
@@ -376,9 +380,9 @@ export class PostgresExecutionStore {
   ): Promise<boolean> {
     try {
       const result = await this.db.transaction(async (tx) => {
-        // Lock the job row and verify current fence ownership
+        // Step 1: Lock the job row and verify current fence ownership
         const lockResult = await tx.execute(sql`
-          SELECT job_id FROM recovery_jobs
+          SELECT job_id, operation_id FROM recovery_jobs
           WHERE job_id = ${jobId}
             AND fence_generation = ${fenceGeneration}
           FOR UPDATE
@@ -386,18 +390,24 @@ export class PostgresExecutionStore {
         const lockRows = Array.isArray(lockResult) ? lockResult : (lockResult as any).rows;
         if (!lockRows || lockRows.length === 0) return false;
 
-        // Transition attempt to UNRESOLVABLE (rejects if already terminal)
+        const jobOperationId = lockRows[0].operation_id;
+
+        // Step 2: Transition attempt to UNRESOLVABLE with operation_id binding.
+        // The WHERE clause ensures the attempt belongs to the same operation as the job.
+        // Uses RETURNING to verify exactly one row was affected (rowCount equivalent).
         const attemptResult = await tx.execute(sql`
           UPDATE execution_attempts
           SET status = ${"UNRESOLVABLE"},
               error_reason = ${attemptErrorReason}
           WHERE attempt_id = ${attemptId}
+            AND operation_id = ${jobOperationId}
             AND status NOT IN (${"SUCCESS"}, ${"HTTP_FAILURE"}, ${"DELIVERY_UNKNOWN"}, ${"UNRESOLVABLE"})
+          RETURNING attempt_id
         `);
         const attemptRows = Array.isArray(attemptResult) ? attemptResult : (attemptResult as any).rows;
-        if (!attemptRows || attemptRows.length === 0) return false;
+        if (!attemptRows || attemptRows.length !== 1) return false;
 
-        // Close job as UNRESOLVABLE
+        // Step 3: Close job as UNRESOLVABLE
         await tx.execute(sql`
           UPDATE recovery_jobs
           SET status = ${"UNRESOLVABLE"},
