@@ -118,3 +118,13 @@ pnpm-lock.yaml requires manual sync after package changes. CI should enforce con
 ## Document Maintenance
 
 Update when: new domain module added, fundamental decision changes, gap resolved, monetary boundaries restructured.
+
+---
+
+## 11. Platform Modularity Principle
+
+Zeus is a modular platform, not a hierarchical application. No domain module is the parent of another domain module by default. Secretariat is one domain/infrastructure module within Zeus, not the root of Zeus.
+
+Future Control Plane may provide a unified operational interface to the platform, but must not absorb domain ownership from the modules it manages.
+
+**Hypothesis:** Integration/Dispatch is a platform-level capability, not a Secretariat submodule, unless future evidence proves otherwise.
