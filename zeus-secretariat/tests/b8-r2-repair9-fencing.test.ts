@@ -31,7 +31,7 @@ describeIfDb("R2.2 Repair #9: Fencing & Terminal Monotonicity", () => {
     db = dbMod.db;
     const drz = await import("drizzle-orm");
     sql = drz.sql;
-    const mod = await import("../src/store/postgres-execution-store");
+    const mod = await import("@workspace/db");
     PES = mod.PostgresExecutionStore;
   });
 

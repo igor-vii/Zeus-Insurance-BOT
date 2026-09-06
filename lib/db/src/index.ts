@@ -12,3 +12,7 @@ export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 export const db = drizzle(pool, { schema });
 
 export * from "./schema/index.js";
+export { PostgresEvidenceStore } from "./secretariat/postgres-store.js";
+export { PostgresExecutionStore } from "./secretariat/postgres-execution-store.js";
+export { createSharedStores } from "./secretariat/factory.js";
+export type { SharedStores } from "./secretariat/factory.js";

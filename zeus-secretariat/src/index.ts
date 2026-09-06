@@ -45,9 +45,6 @@ export * from './adapters';
 export { PostSettlementEngine, InMemoryExecutionStore } from './core/post-settlement-engine';
 export type { ExecutionAttempt, RecoveryJob, RecoveryJobType, RecoveryJobStatus, PostSettlementConfig, ExecutionStore, ExecutionObligationStatus, AtomicSettlementHandoff } from './core/post-settlement-engine';
 
-// PostgreSQL execution store (production persistence for execution/recovery)
-export { PostgresExecutionStore } from './store/postgres-execution-store';
-
 // Seller execution adapter (HTTP implementation)
 export { HttpSellerExecutionAdapter, MockSellerExecutionAdapter } from './adapters/seller-execution-adapter';
 export type { SellerExecutionAdapter, SellerExecutionRequest, SellerExecutionResult } from './adapters/seller-execution-adapter';
@@ -63,8 +60,4 @@ export type { ReconciliationWorkerConfig } from './core/reconciliation-worker';
 
 // Multi-RPC checker (required by ReconciliationEngine)
 export { MultiRpcChecker } from './core/multi-rpc-checker';
-
-// Shared store factory (R1: production composition primitive)
-export { createSharedStores } from './store/factory';
-export type { SharedStores } from './store/factory';
 

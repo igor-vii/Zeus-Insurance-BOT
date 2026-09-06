@@ -18,7 +18,7 @@ describeIfDb("BLOCK 8/1 Repair #1: Stale Worker Fencing (PostgreSQL)", () => {
     db = dbMod.db;
     const drz = await import("drizzle-orm");
     sql = drz.sql;
-    const mod = await import("../src/store/postgres-execution-store");
+    const mod = await import("@workspace/db");
     PES = mod.PostgresExecutionStore;
   });
 

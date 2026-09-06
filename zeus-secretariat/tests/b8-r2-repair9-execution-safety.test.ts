@@ -266,7 +266,7 @@ describeIfDb("R2.2-R9: PostgreSQL Fencing Integration", () => {
   beforeAll(async () => {
     const dbMod = await import("@workspace/db");
     db = dbMod.db;
-    const mod = await import("../src/store/postgres-execution-store");
+    const mod = await import("@workspace/db");
     PES = mod.PostgresExecutionStore;
   });
 

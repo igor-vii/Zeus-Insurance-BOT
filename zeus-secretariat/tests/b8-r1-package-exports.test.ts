@@ -23,19 +23,19 @@ describe("BLOCK 8 R1: Public Package Exports", () => {
   });
 
   test("R1.4: PostgresEvidenceStore is exported", async () => {
-    const mod = await import("../src/index");
+    const mod = await import("@workspace/db");
     expect(mod.PostgresEvidenceStore).toBeDefined();
     expect(typeof mod.PostgresEvidenceStore).toBe("function");
   });
 
   test("R1.5: PostgresExecutionStore is exported", async () => {
-    const mod = await import("../src/index");
+    const mod = await import("@workspace/db");
     expect(mod.PostgresExecutionStore).toBeDefined();
     expect(typeof mod.PostgresExecutionStore).toBe("function");
   });
 
   test("R1.6: createSharedStores factory is exported", async () => {
-    const mod = await import("../src/index");
+    const mod = await import("@workspace/db");
     expect(mod.createSharedStores).toBeDefined();
     expect(typeof mod.createSharedStores).toBe("function");
   });
@@ -56,7 +56,7 @@ describe("BLOCK 8 R1: Public Package Exports", () => {
 // Test 2-4: Shared store factory behavior
 describe("BLOCK 8 R1: Shared Store Factory", () => {
   test("R1.9: createSharedStores returns evidenceStore and executionStore", async () => {
-    const { createSharedStores } = await import("../src/store/factory");
+    const { createSharedStores } = await import("@workspace/db");
     // Cast to any for unit test — real DB integration tested in durable-storage.test.ts
     const mockDb = {} as any;
     const stores = createSharedStores(mockDb);
@@ -65,13 +65,13 @@ describe("BLOCK 8 R1: Shared Store Factory", () => {
   });
 
   test("R1.10: createSharedStores throws without db parameter", async () => {
-    const { createSharedStores } = await import("../src/store/factory");
+    const { createSharedStores } = await import("@workspace/db");
     expect(() => createSharedStores(null as any)).toThrow(/requires a db instance/);
     expect(() => createSharedStores(undefined as any)).toThrow(/requires a db instance/);
   });
 
   test("R1.11: returned stores are reusable instances (identity)", async () => {
-    const { createSharedStores } = await import("../src/store/factory");
+    const { createSharedStores } = await import("@workspace/db");
     const mockDb = {} as any;
     const stores = createSharedStores(mockDb);
     // Same reference when accessed multiple times

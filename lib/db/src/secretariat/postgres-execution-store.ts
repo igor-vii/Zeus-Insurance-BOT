@@ -23,7 +23,7 @@ import type {
   ExecutionObligationStatus,
   RecoveryJob,
   RecoveryJobStatus,
-} from "../core/post-settlement-engine";
+} from "zeus-secretariat";
 
 // ---------------------------------------------------------------------------
 // Row types matching Drizzle schema output

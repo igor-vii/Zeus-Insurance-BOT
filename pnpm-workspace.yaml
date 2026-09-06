@@ -43,6 +43,7 @@ packages:
   - frontend
   - lib/*
   - lib/integrations/*
+  - zeus-secretariat
   - scripts
   - sdk
   - watcher

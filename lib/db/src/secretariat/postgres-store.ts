@@ -19,8 +19,8 @@ import type {
   DurableEvidenceStore, DurablePaymentIntent, SettlementState,
   EvidenceRecord, Operation, OperationStatus, NonceRecord, NonceStatus,
   ReconciliationObservation, SettledEvidenceBundle, NotSettledEvidenceBundle,
-} from "../core/types";
-import { allowNewPayment } from "../core/types";
+} from "zeus-secretariat";
+import { allowNewPayment } from "zeus-secretariat";
 
 interface PaymentIntentRow {
   paymentIntentId: string; operationId: string; requestId: string | null; clientId: string | null;

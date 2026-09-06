@@ -25,16 +25,13 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@workspace/db": "workspace:*",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.21",
+    "drizzle-orm": "catalog:",
     "jest": "^29.7.0",
     "ts-jest": "^29.4.1",
     "typescript": "^5.8.3",
     "viem": "^2.55.19"
-  },
-  "dependencies": {
-    "@workspace/db": "workspace:*",
-    "drizzle-orm": "catalog:",
-    "pg": "^8.22.0"
   }
 }

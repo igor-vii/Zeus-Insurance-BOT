@@ -24,6 +24,7 @@
     "drizzle-orm": "catalog:",
     "drizzle-zod": "^0.8.3",
     "pg": "^8.22.0",
+    "zeus-secretariat": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

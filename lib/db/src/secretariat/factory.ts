@@ -12,8 +12,8 @@
  */
 
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { PostgresEvidenceStore } from './postgres-store';
-import { PostgresExecutionStore } from './postgres-execution-store';
+import { PostgresEvidenceStore } from "./postgres-store.js";
+import { PostgresExecutionStore } from "./postgres-execution-store.js";
 
 /**
  * Shared store instances for production composition.

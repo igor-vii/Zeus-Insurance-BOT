@@ -15,7 +15,7 @@
  * For CI without DB, they are skipped gracefully.
  */
 
-import { PostgresEvidenceStore } from "../src/store/postgres-store";
+import { PostgresEvidenceStore } from "@workspace/db";
 import type { DurablePaymentIntent } from "../src/core/types";
 import { db } from "@workspace/db";
 

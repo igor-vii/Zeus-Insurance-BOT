@@ -41,7 +41,7 @@ describe("R2.1-FIX-5: Typed Contract", () => {
 
 describe("R2.1-FIX-5: Implementation Contract", () => {
   test("FIX-5-3: PostgresExecutionStore has settleAndCreateExecutionObligation method", async () => {
-    const mod = await import("../src/store/postgres-execution-store");
+    const mod = await import("@workspace/db");
     const storePrototype = mod.PostgresExecutionStore.prototype;
     expect(typeof storePrototype.settleAndCreateExecutionObligation).toBe("function");
   });
@@ -68,7 +68,7 @@ describe("R2.1-FIX-5: Production Atomic Boundary", () => {
     const fs = await import("fs");
     const path = await import("path");
     const src = fs.readFileSync(
-      path.join(__dirname, "../src/store/postgres-execution-store.ts"), "utf-8",
+      path.join(__dirname, "../../lib/db/src/secretariat/postgres-execution-store.ts"), "utf-8",
     );
     const txStart = src.indexOf("this.db.transaction(async (tx)");
     expect(txStart).toBeGreaterThan(-1);
@@ -104,7 +104,7 @@ describeIfDb("R2.1-FIX-5: PostgreSQL Integration", () => {
   beforeAll(async () => {
     const dbMod = await import("@workspace/db");
     db = dbMod.db;
-    const mod = await import("../src/store/postgres-execution-store");
+    const mod = await import("@workspace/db");
     PES = mod.PostgresExecutionStore;
   });
 

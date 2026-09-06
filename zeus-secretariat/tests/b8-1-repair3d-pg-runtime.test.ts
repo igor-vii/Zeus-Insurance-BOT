@@ -19,7 +19,7 @@ describeIfDb("Repair #3D-A: PostgreSQL resolveAttemptUnresolvableIfOwner", () =>
   beforeAll(async () => {
     const dbMod = await import("@workspace/db");
     db = dbMod.db;
-    const mod = await import("../src/store/postgres-execution-store");
+    const mod = await import("@workspace/db");
     PES = mod.PostgresExecutionStore;
   });
 
