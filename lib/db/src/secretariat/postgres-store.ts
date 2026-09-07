@@ -188,6 +188,11 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return rows.length === 0 ? null : this.rowToIntent(rows[0] as PaymentIntentRow);
   }
 
+  async getPaymentIntentByRequestId(requestId: string): Promise<DurablePaymentIntent | null> {
+    const rows = await this.db.select().from(paymentIntentsTable).where(eq(paymentIntentsTable.requestId, requestId)).limit(1);
+    return rows.length === 0 ? null : this.rowToIntent(rows[0] as PaymentIntentRow);
+  }
+
   async updatePaymentIntentAuthorization(
     id: string,
     fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,

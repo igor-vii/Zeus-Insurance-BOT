@@ -34,6 +34,7 @@ export {
 
 // State machine
 export * from './core/state-machine';
+export * from './core/eip3009-verifier';
 
 // Evidence store
 export * from './store';

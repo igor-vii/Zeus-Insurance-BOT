@@ -854,6 +854,7 @@ export interface DurableEvidenceStore {
   getOperationsByStatus(status: OperationStatus): Promise<Operation[]>;
   createPaymentIntent(intent: DurablePaymentIntent): Promise<void>;
   getPaymentIntentByOperationId(operationId: string): Promise<DurablePaymentIntent | null>;
+  getPaymentIntentByRequestId?(requestId: string): Promise<DurablePaymentIntent | null>;
   updatePaymentIntentAuthorization?: (
     paymentIntentId: string,
     fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,
