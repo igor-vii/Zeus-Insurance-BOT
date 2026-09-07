@@ -11,10 +11,13 @@ const describeIfDb = process.env["DATABASE_URL"] ? describe : describe.skip;
 
 describeIfDb("Repair C1: Operation request semantics persistence (production store)", () => {
   let store: any;
+  let db: any;
 
   beforeAll(async () => {
-    // Import from @workspace/db — this is the PRODUCTION store
-    const { PostgresEvidenceStore, db } = await import("@workspace/db");
+    // Import from @workspace/db — this is the PRODUCTION store and DB instance
+    const dbModule = await import("@workspace/db");
+    const { PostgresEvidenceStore } = dbModule;
+    db = dbModule.db;
     store = new PostgresEvidenceStore(db);
   });
 
@@ -74,7 +77,7 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
     await store.saveOperation(op);
 
     // Create completely fresh store — no shared state
-    const { PostgresEvidenceStore, db } = await import("@workspace/db");
+    const { PostgresEvidenceStore } = await import("@workspace/db");
     const freshStore = new PostgresEvidenceStore(db);
 
     const restored = await freshStore.getOperationByRequestId(op.requestId!);
@@ -113,15 +116,17 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
    * (legacy execution guard missing) — NOT part of C1 scope.
    */
   test("Case 6: legacy row with NULL fields returns fallback values (documented behavior)", async () => {
-    const { db } = await import("@workspace/db");
-    const { sql } = await import("drizzle-orm");
-
     const legacyOpId = `op-legacy-${Date.now()}`;
     const legacyReqId = `req-legacy-${Date.now()}`;
     const legacyClientId = `client-legacy-${Date.now()}`;
+    const legacyPiId = `pi-legacy-${Date.now()}`;
+    const zeroAddr = "0x0000000000000000000000000000000000000000";
+    const zeroNonce = "0x" + "0".repeat(64);
+    const zeroHash = "0x" + "0".repeat(64);
 
-    // Insert DPI with NULL target/method/payment_policy (pre-C1 row)
-    await db.execute(sql`
+    // Insert DPI with NULL target/method/payment_policy using raw SQL via shared db
+    // No direct drizzle-orm import needed — uses db.execute() from @workspace/db
+    await db.execute(`
       INSERT INTO payment_intents (
         payment_intent_id, operation_id, request_id, client_id,
         authorizer, pay_to, value, asset, network,
@@ -130,12 +135,12 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
         settlement_state, version, created_at, updated_at,
         target, method, payment_policy
       ) VALUES (
-        ${`pi-legacy-${Date.now()}`}, ${legacyOpId}, ${legacyReqId}, ${legacyClientId},
-        ${"0x0000000000000000000000000000000000000000"}, ${"0x0000000000000000000000000000000000000001"},
-        ${"0"}, ${"USDC"}, ${"base"},
-        ${"0x" + "0".repeat(64)}, 0, 9999999999,
-        ${"{}"}, ${"0x" + "0".repeat(64)},
-        ${"AUTHORIZED"}, 0, NOW(), NOW(),
+        '${legacyPiId}', '${legacyOpId}', '${legacyReqId}', '${legacyClientId}',
+        '${zeroAddr}', '${zeroAddr.replace(/0$/, '1')}',
+        0, 'USDC', 'base',
+        '${zeroNonce}', 0, 9999999999,
+        '{}', '${zeroHash}',
+        'AUTHORIZED', 0, NOW(), NOW(),
         NULL, NULL, NULL
       )
       ON CONFLICT DO NOTHING
@@ -153,6 +158,6 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
     }
 
     // Cleanup
-    await db.execute(sql`DELETE FROM payment_intents WHERE operation_id = ${legacyOpId}`).catch(() => {});
+    await db.execute(`DELETE FROM payment_intents WHERE operation_id = '${legacyOpId}'`).catch(() => {});
   });
 });
