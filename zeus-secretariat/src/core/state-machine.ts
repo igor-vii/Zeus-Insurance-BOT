@@ -187,6 +187,33 @@ export type CreateRequestResult =
       result: ExecutionResult;
     };
 
+type StageAPreparation =
+  | {
+      status: 'AWAITING_SIGNATURE';
+      operation: Operation;
+      paymentRequired: PaymentRequirement;
+      paymentIntent: DurablePaymentIntent;
+    }
+  | {
+      status: 'PAYMENT_REQUIRED';
+      operation: Operation;
+      paymentRequired: PaymentRequirement;
+    }
+  | {
+      status: 'COMPLETED' | 'REJECTED' | 'EXISTING';
+      operation: Operation;
+      result: ExecutionResult;
+    };
+
+interface StageAOptions {
+  /**
+   * Legacy execute() historically creates its AUTHORIZED DPI inside
+   * authorizePayment(). Keep that compatibility path while the canonical
+   * non-custodial and V2 paths persist PENDING_SIGNATURE here.
+   */
+  persistPendingIntent?: boolean;
+}
+
 export class Secretariat {
   private readonly config: SecretariatConfig;
   private readonly capabilityResolver: SellerCapabilityResolver;
@@ -202,71 +229,35 @@ export class Secretariat {
 
   async execute(request: ExecuteRequest): Promise<ExecutionResult> {
     const requestId = request.requestId ?? generateRequestId();
+    const canonicalV2 = Boolean(this.config.settlementAdapter);
+    let stageARequest = request;
 
-    // B8-001: Durable idempotency — lookup existing operation before creating new one.
-    // The DB unique constraint on (client_id, request_id) is the final arbiter for races.
-    if (request.clientId) {
-      const store = this.config.evidenceStore as EvidenceStore & Partial<{
-        getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
-      }>;
-      if (typeof store.getOperationByClientAndRequestId === "function") {
-        const existing = await store.getOperationByClientAndRequestId(request.clientId, requestId);
-        if (existing) {
-          // Return existing operation result — do not create duplicate
-          return this.buildResult(existing);
-        }
-      }
+    // The Stage-A primitive never consults a signer. The existing signer-based
+    // execute path supplies its binding before entering the primitive so the
+    // primitive can persist the same DPI that authorization will later use.
+    if (canonicalV2 && !stageARequest.authorizer && this.config.signer?.getAddress) {
+      stageARequest = {
+        ...request,
+        authorizer: await this.config.signer.getAddress(),
+      };
     }
 
-    const operationId = generateOperationId();
-
-    // Create initial operation
-    const operation: Operation = this.createOperation(operationId, requestId, request);
-
-    // Persist initial state.
-    // If a concurrent request created the same (clientId, requestId) between our lookup
-    // and this insert, the DB unique constraint will reject this insert.
-    // We catch that and resolve to the already-created operation.
-    try {
-      await this.persistOperation(operation);
-    } catch (err: unknown) {
-      const pgErr = err as { code?: string };
-      if (pgErr.code === "23505" && request.clientId) {
-        // Unique constraint violation — another worker won the race.
-        // Resolve to the existing canonical operation.
-        const store = this.config.evidenceStore as EvidenceStore & Partial<{
-          getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
-        }>;
-        if (typeof store.getOperationByClientAndRequestId === "function") {
-          const resolved = await store.getOperationByClientAndRequestId(request.clientId, requestId);
-          if (resolved) {
-            return this.buildResult(resolved);
-          }
-        }
-      }
-      // Re-throw if not a uniqueness race or resolution failed
-      throw err;
+    const stageA = await this.prepareStageA(stageARequest, {
+      persistPendingIntent: canonicalV2,
+    });
+    if (stageA.status === 'COMPLETED' || stageA.status === 'REJECTED' || stageA.status === 'EXISTING') {
+      return stageA.result;
     }
 
+    const operation = stageA.operation;
+
     try {
-      // Step 1: Discovery
-      await this.discoveryPhase(operation);
-
-      // Step 2: Check if payment required
-      if (operation.currentState === 'PAYMENT_REQUIRED') {
-        // Step 3: Policy validation
-        const policyValid = await this.validatePolicy(operation);
-        if (!policyValid) {
-          return await this.failOperation(operation, 'POLICY_REJECTED', 'Payment policy validation failed');
-        }
-
-        // Step 4: Payment authorization
+      if (stageA.status === 'AWAITING_SIGNATURE' || stageA.status === 'PAYMENT_REQUIRED') {
+        // Stage A has completed its durable boundary. The existing execute()
+        // continuation is intentionally unchanged: authorize, submit, observe.
         await this.authorizePayment(operation);
-
-        // Step 5: Payment submission
+        await this.persistOperation(operation);
         await this.submitPayment(operation);
-
-        // Step 6: Settlement observation
         await this.observeSettlement(operation);
       }
 
@@ -283,7 +274,6 @@ export class Secretariat {
         await this.deliver(operation);
       }
 
-      // Return final result
       return this.buildResult(operation);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -298,46 +288,17 @@ export class Secretariat {
    * DPI, and stops before a signer, signature, or facilitator call is used.
    */
   async createRequest(request: ExecuteRequest): Promise<CreateRequestResult> {
-    const requestId = request.requestId ?? generateRequestId();
-    const existing = await this.findExistingOperation(request.clientId, requestId);
-    if (existing) {
-      if (existing.currentState === 'AWAITING_SIGNATURE') {
-        const dpi = await this.getDurableIntent(existing.operationId);
-        const requirement = await this.getPaymentRequirementFromEvidence(existing)
-          ?? (dpi ? this.requirementFromIntent(dpi) : null);
-        if (dpi && requirement) return this.buildAwaitingSignatureResult(existing, dpi, requirement);
-      }
-      return { status: 'COMPLETED', result: this.buildResult(existing) };
+    const stageA = await this.prepareStageA(request);
+    if (stageA.status === 'AWAITING_SIGNATURE') {
+      return this.buildAwaitingSignatureResult(stageA.operation, stageA.paymentIntent, stageA.paymentRequired);
     }
-
-    const operation = this.createOperation(generateOperationId(), requestId, request);
-    await this.persistOperation(operation);
-
-    try {
-      await this.discoveryPhase(operation);
-      if (operation.currentState !== 'PAYMENT_REQUIRED') {
-        await this.persistOperation(operation);
-        return { status: 'COMPLETED', result: this.buildResult(operation) };
-      }
-
-      const policyValid = await this.validatePolicy(operation);
-      if (!policyValid) {
-        const result = await this.failOperation(operation, 'POLICY_REJECTED', 'Payment policy validation failed');
-        return { status: 'REJECTED', result };
-      }
-
-      const requirement = await this.getPaymentRequirementFromEvidence(operation);
-      if (!requirement) throw new Error('No payment requirement found after discovery');
-      const dpi = await this.createPendingPaymentIntent(operation, request, requirement);
-      return this.buildAwaitingSignatureResult(operation, dpi, requirement);
-    } catch (error) {
-      const result = await this.failOperation(
-        operation,
-        'FAILED',
-        error instanceof Error ? error.message : String(error),
-      );
-      return { status: 'REJECTED', result };
+    if (stageA.status === 'REJECTED') return { status: 'REJECTED', result: stageA.result };
+    if (stageA.status === 'PAYMENT_REQUIRED') {
+      // The default Stage-A primitive persists a pending intent. Keep this
+      // defensive branch explicit if a caller opts into the legacy continuation.
+      return { status: 'COMPLETED', result: this.buildResult(stageA.operation) };
     }
+    return { status: 'COMPLETED', result: stageA.result };
   }
 
   /**
@@ -651,24 +612,29 @@ export class Secretariat {
     const signerWithAddress = configuredSigner as PaymentSigner & {
       getAddress?: () => Promise<string>;
     };
+    const existingIntent = canonicalV2 && typeof durableStore.getPaymentIntentByOperationId === 'function'
+      ? await durableStore.getPaymentIntentByOperationId(operation.operationId)
+      : null;
 
     // The nonce is part of the immutable signing context, not something
     // invented after the signature has already been requested.
-    const context: SigningContext = {
-      operationId: operation.operationId,
-      requirement,
-      nonce: new CryptoNonceGenerator().generate(),
-    };
-
     const authorizer = canonicalV2
       ? requireNonEmpty(await signerWithAddress.getAddress?.(), "authorizer")
       : await signerWithAddress.getAddress?.();
     const payTo = requireNonEmpty(requirement.payee, "payTo");
-    const validAfter = Math.floor(now() / 1000);
-    const validBefore = toEpochSeconds(requirement.deadline, now());
+    if (existingIntent && existingIntent.authorizer !== authorizer) {
+      throw new Error(`Payment intent binding mismatch for operation ${operation.operationId}`);
+    }
+    const validAfter = existingIntent?.validAfter ?? Math.floor(now() / 1000);
+    const validBefore = existingIntent?.validBefore ?? toEpochSeconds(requirement.deadline, now());
     if (validBefore <= validAfter) {
       throw new Error("Invalid payment authorization: validBefore must be after validAfter");
     }
+    const context: SigningContext = {
+      operationId: operation.operationId,
+      requirement,
+      nonce: existingIntent?.nonce ?? new CryptoNonceGenerator().generate(),
+    };
 
     // B8.2-B.1: the canonical DPI is created before asking the signer for a
     // signature. The pending payload is replaced atomically once signing
@@ -680,9 +646,6 @@ export class Secretariat {
       if (typeof durableStore.createPaymentIntent !== "function") {
         throw new Error("Canonical V2 payment flow requires durable payment intent persistence");
       }
-      const existingIntent = typeof durableStore.getPaymentIntentByOperationId === "function"
-        ? await durableStore.getPaymentIntentByOperationId(operation.operationId)
-        : null;
       if (existingIntent) {
         if (
           existingIntent.authorizer !== canonicalAuthorizer ||
@@ -821,6 +784,12 @@ export class Secretariat {
           paymentPayload: serializedPayload,
           paymentPayloadHash: keccak256(toBytes(serializedPayload)),
         });
+        if (
+          preCreatedIntent.settlementState === "PENDING_SIGNATURE" &&
+          typeof durableStore.updatePaymentIntentStatus === "function"
+        ) {
+          await durableStore.updatePaymentIntentStatus(preCreatedIntent.paymentIntentId, "AUTHORIZED");
+        }
       }
     }
 
@@ -1522,6 +1491,109 @@ export class Secretariat {
   // ==========================================================================
   // HELPERS
   // ==========================================================================
+
+  /**
+   * Canonical Stage-A preparation boundary.
+   *
+   * This is the only place that performs request idempotency, operation
+   * creation/reconstruction, durable operation persistence, discovery, policy
+   * validation, and (for the non-custodial/V2 path) pending DPI creation.
+   *
+   * It deliberately stops at PENDING_SIGNATURE. No signer, signature,
+   * facilitator submission, settlement observation, or seller execution is
+   * reachable from this primitive.
+   */
+  private async prepareStageA(
+    request: ExecuteRequest,
+    options: StageAOptions = { persistPendingIntent: true },
+  ): Promise<StageAPreparation> {
+    const requestId = request.requestId ?? generateRequestId();
+    const existing = await this.findExistingOperation(request.clientId, requestId);
+    if (existing) {
+      if (existing.currentState === 'AWAITING_SIGNATURE') {
+        const dpi = await this.getDurableIntent(existing.operationId);
+        const requirement = await this.getPaymentRequirementFromEvidence(existing)
+          ?? (dpi ? this.requirementFromIntent(dpi) : null);
+        if (dpi && requirement) {
+          return {
+            status: 'AWAITING_SIGNATURE',
+            operation: existing,
+            paymentRequired: requirement,
+            paymentIntent: dpi,
+          };
+        }
+      }
+      return {
+        status: 'EXISTING',
+        operation: existing,
+        result: this.buildResult(existing),
+      };
+    }
+
+    const operation = this.createOperation(generateOperationId(), requestId, request);
+
+    try {
+      // The DB unique constraint remains the final arbiter for concurrent
+      // logical requests. Resolve a winner instead of creating a second flow.
+      try {
+        await this.persistOperation(operation);
+      } catch (error: unknown) {
+        const pgError = error as { code?: string };
+        if (pgError.code === '23505' && request.clientId) {
+          const resolved = await this.findExistingOperation(request.clientId, requestId);
+          if (resolved) {
+            return {
+              status: 'EXISTING',
+              operation: resolved,
+              result: this.buildResult(resolved),
+            };
+          }
+        }
+        throw error;
+      }
+
+      await this.discoveryPhase(operation);
+      if (operation.currentState !== 'PAYMENT_REQUIRED') {
+        await this.persistOperation(operation);
+        return {
+          status: 'COMPLETED',
+          operation,
+          result: this.buildResult(operation),
+        };
+      }
+
+      const policyValid = await this.validatePolicy(operation);
+      if (!policyValid) {
+        const result = await this.failOperation(operation, 'POLICY_REJECTED', 'Payment policy validation failed');
+        return { status: 'REJECTED', operation, result };
+      }
+
+      const paymentRequired = await this.getPaymentRequirementFromEvidence(operation);
+      if (!paymentRequired) throw new Error('No payment requirement found after discovery');
+
+      if (options.persistPendingIntent === false) {
+        // Compatibility continuation for the pre-existing legacy signer path.
+        // execute() will authorize this operation immediately, while all
+        // Stage-A discovery and policy work still has this single owner.
+        return { status: 'PAYMENT_REQUIRED', operation, paymentRequired };
+      }
+
+      const paymentIntent = await this.createPendingPaymentIntent(operation, request, paymentRequired);
+      return {
+        status: 'AWAITING_SIGNATURE',
+        operation,
+        paymentRequired,
+        paymentIntent,
+      };
+    } catch (error) {
+      const result = await this.failOperation(
+        operation,
+        'FAILED',
+        error instanceof Error ? error.message : String(error),
+      );
+      return { status: 'REJECTED', operation, result };
+    }
+  }
 
   private async findExistingOperation(
     clientId: string | undefined,
