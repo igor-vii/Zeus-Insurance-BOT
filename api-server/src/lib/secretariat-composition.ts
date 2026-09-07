@@ -14,6 +14,7 @@
 import { db } from "@workspace/db";
 import {
   createSharedStores,
+  Eip3009PaymentVerifier,
   MultiRpcChecker,
   ReconciliationEngine,
   ReconciliationWorker,
@@ -24,6 +25,8 @@ import {
   DEFAULT_RECONCILIATION_SCHEDULE,
   DEFAULT_FINALITY_POLICY,
 } from "zeus-secretariat";
+import type { Eip3009Domain } from "zeus-secretariat";
+import type { Address } from "viem";
 import { createLocalEoaSignerFromEnv } from "zeus-secretariat/adapters/local-eoa-signer";
 import { loadSecretariatProductionConfig } from "./secretariat-config";
 import { logger } from "./logger";
@@ -43,6 +46,7 @@ export interface SecretariatComposition {
   readonly sellerAdapter: InstanceType<typeof HttpSellerExecutionAdapter>;
   readonly postSettlementEngine: InstanceType<typeof PostSettlementEngine>;
   readonly secretariat: InstanceType<typeof Secretariat>;
+  readonly paymentVerifier: InstanceType<typeof Eip3009PaymentVerifier>;
   readonly reconciliationWorker: InstanceType<typeof ReconciliationWorker>;
 
   /** Run startup recovery (call BEFORE startWorker). */
@@ -53,6 +57,41 @@ export interface SecretariatComposition {
 
   /** Graceful shutdown. Idempotent — safe to call multiple times. */
   shutdown(): Promise<void>;
+}
+
+function chainIdForNetwork(network: string): number {
+  switch (network.toLowerCase()) {
+    case "base":
+    case "base-mainnet":
+      return 8453;
+    case "base-sepolia":
+      return 84532;
+    case "x-layer":
+    case "xlayer":
+    case "x-layer-mainnet":
+      return 196;
+    case "bot-chain":
+      return 677;
+    default:
+      throw new Error(`EIP-3009 domain is not configured for network ${network}`);
+  }
+}
+
+function resolvePaymentDomain(intent: {
+  network: string;
+  asset: string;
+}): Eip3009Domain {
+  const verifyingContract = intent.asset;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(verifyingContract)) {
+    throw new Error("Persisted payment asset is not a valid EVM address");
+  }
+
+  return {
+    name: process.env["ZEUS_EIP3009_DOMAIN_NAME"]?.trim() || "USD Coin",
+    version: process.env["ZEUS_EIP3009_DOMAIN_VERSION"]?.trim() || "2",
+    chainId: chainIdForNetwork(intent.network),
+    verifyingContract: verifyingContract as Address,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +110,13 @@ export function createSecretariatComposition(): SecretariatComposition {
 
   // 2. Shared stores (single DB pool via @workspace/db)
   const stores = createSharedStores(db);
+
+  // Read-only client-signature verification. The domain is derived from the
+  // persisted DPI binding, never from the submitted payment payload.
+  const paymentVerifier = new Eip3009PaymentVerifier({
+    store: stores.evidenceStore,
+    domain: resolvePaymentDomain,
+  });
 
   // 3. Multi-RPC checker (§14, §15: ≥2 independent providers)
   const rpcChecker = new MultiRpcChecker(
@@ -195,6 +241,7 @@ export function createSecretariatComposition(): SecretariatComposition {
     sellerAdapter,
     postSettlementEngine,
     secretariat,
+    paymentVerifier,
     reconciliationWorker,
     recover,
     startWorker,

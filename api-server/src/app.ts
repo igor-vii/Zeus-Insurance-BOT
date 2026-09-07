@@ -123,7 +123,7 @@ try {
 
   // Public Stage-A Secretariat API. The router uses this exact production
   // instance; it must not create a second composition or duplicate Stage-A.
-  app.use("/v1", createRequestsRouter(composition.secretariat));
+  app.use("/v1", createRequestsRouter(composition.secretariat, composition.paymentVerifier));
 
   logger.info("[app] Secretariat composition root initialized");
 } catch (err) {

@@ -2,8 +2,10 @@ import { Router, type Response } from "express";
 import { z } from "zod";
 import type {
   CreateRequestResult,
+  Eip3009PaymentVerifier,
   ExecuteRequest,
   Operation,
+  PaymentPayload,
   PaymentRequirement,
 } from "zeus-secretariat";
 import type { SecretariatComposition } from "../lib/secretariat-composition.js";
@@ -203,6 +205,7 @@ function toPublicRequestStatus(
  */
 export function createRequestsRouter(
   secretariat: SecretariatComposition["secretariat"],
+  paymentVerifier?: Pick<InstanceType<typeof Eip3009PaymentVerifier>, "verify">,
 ): Router {
   const router = Router();
 
@@ -280,6 +283,108 @@ export function createRequestsRouter(
         "REQUEST_NOT_FOUND",
         "The request was not found",
       );
+      return;
+    }
+
+    response.status(200).json(toPublicRequestStatus(operation));
+  });
+
+  router.post("/requests/:requestId/payment", async (request, response) => {
+    if (!paymentVerifier) {
+      sendError(
+        response,
+        503,
+        "PAYMENT_VERIFICATION_UNAVAILABLE",
+        "Payment verification is not configured",
+      );
+      return;
+    }
+
+    let verification;
+    try {
+      verification = await paymentVerifier.verify(
+        request.params.requestId,
+        request.body,
+      );
+    } catch (error) {
+      logger.error({ err: error }, "Signed payment verification failed");
+      sendError(
+        response,
+        500,
+        "PAYMENT_VERIFICATION_FAILED",
+        "The signed payment could not be verified",
+      );
+      return;
+    }
+
+    if (verification.status === "INVALID") {
+      if (verification.code === "REQUEST_NOT_FOUND") {
+        sendError(response, 404, "REQUEST_NOT_FOUND", "The request was not found");
+        return;
+      }
+      if (verification.code === "PERSISTED_INTENT_LOOKUP_UNAVAILABLE") {
+        sendError(
+          response,
+          503,
+          "PAYMENT_VERIFICATION_UNAVAILABLE",
+          "Payment verification is not configured correctly",
+        );
+        return;
+      }
+
+      response.status(422).json({
+        error: {
+          code: verification.code,
+          message: verification.message,
+          ...(verification.field ? { field: verification.field } : {}),
+        },
+      });
+      return;
+    }
+
+    try {
+      // Verification is complete before this canonical continuation is
+      // entered. This endpoint does not persist or submit payment itself.
+      await secretariat.submitSignedPayment(
+        request.params.requestId,
+        request.body as PaymentPayload,
+      );
+    } catch (error) {
+      logger.error({ err: error }, "Signed payment continuation failed");
+      const continuationCode =
+        error instanceof Error &&
+        error.message.startsWith("PAYMENT_PAYLOAD_RETRY_MISMATCH")
+          ? "PAYMENT_PAYLOAD_RETRY_MISMATCH"
+          : "PAYMENT_CONTINUATION_FAILED";
+      sendError(
+        response,
+        409,
+        continuationCode,
+        continuationCode === "PAYMENT_PAYLOAD_RETRY_MISMATCH"
+          ? "The payment payload does not match the previously accepted payload"
+          : "The verified payment could not continue",
+      );
+      return;
+    }
+
+    let operation: Operation | null;
+    try {
+      operation = await secretariat.getOperationByRequestId(
+        request.params.requestId,
+      );
+    } catch (error) {
+      logger.error({ err: error }, "Payment status lookup failed");
+      sendError(
+        response,
+        500,
+        "SECRETARIAT_STATUS_LOOKUP_FAILED",
+        "The payment status could not be loaded",
+      );
+      return;
+    }
+
+    if (!operation) {
+      sendError(response, 404, "REQUEST_NOT_FOUND", "The request was not found");
       return;
     }
 
