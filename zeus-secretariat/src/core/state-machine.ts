@@ -352,13 +352,28 @@ export class Secretariat {
   ): Promise<ExecutionResult> {
     const operation = await this.findExistingOperation(undefined, requestId);
     if (!operation) throw new Error(`REQUEST_NOT_FOUND: ${requestId}`);
-    if (operation.currentState !== 'AWAITING_SIGNATURE') {
-      throw new Error(`REQUEST_NOT_AWAITING_SIGNATURE: ${operation.currentState}`);
-    }
 
     const dpi = await this.getDurableIntent(operation.operationId);
-    if (!dpi || dpi.settlementState !== 'PENDING_SIGNATURE') {
+    if (!dpi) {
       throw new Error('PAYMENT_INTENT_NOT_PENDING_SIGNATURE');
+    }
+    if (dpi.settlementState !== 'PENDING_SIGNATURE') {
+      const serializedPayload = JSON.stringify(externallySignedPaymentPayload);
+      const paymentPayloadHash = keccak256(toBytes(serializedPayload));
+
+      // Stage B retries are idempotent only for the exact payload already
+      // accepted for this request. Do this check before the state guard because
+      // the first successful submission necessarily advances the operation.
+      if (dpi.paymentPayloadHash === paymentPayloadHash) {
+        return this.buildResult(operation);
+      }
+
+      throw new Error(
+        `PAYMENT_PAYLOAD_RETRY_MISMATCH: ${operation.currentState}`,
+      );
+    }
+    if (operation.currentState !== 'AWAITING_SIGNATURE') {
+      throw new Error(`REQUEST_NOT_AWAITING_SIGNATURE: ${operation.currentState}`);
     }
 
     const requirement = await this.getPaymentRequirementFromEvidence(operation)
