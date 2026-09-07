@@ -253,7 +253,18 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     const i = await this.getPaymentIntentByOperationId(opId);
     return i ? { operationId: opId, currentState: i.settlementState as any, paymentState: i.settlementState as any } as any : null;
   }
-  async saveOperation(_op: Operation): Promise<void> {}
+  // Repair C1: Persist operation request semantics into payment_intents.
+  // target, method, paymentPolicy are stored alongside the DPI so they survive restart.
+  async saveOperation(op: Operation): Promise<void> {
+    await this.db
+      .update(paymentIntentsTable)
+      .set({
+        target: op.target ?? null,
+        method: op.method ?? null,
+        paymentPolicy: op.paymentPolicy ?? null,
+      })
+      .where(eq(paymentIntentsTable.operationId, op.operationId));
+  }
   // B8-001: Durable idempotency lookup.
   // Queries payment_intents (not a separate operations table) because that is where
   // client_id and request_id are persisted. Reconstructs a minimal Operation from the intent.
@@ -274,9 +285,9 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       operationId: row.operationId,
       requestId: row.requestId ?? "",
       clientId: row.clientId ?? undefined,
-      target: "",
-      method: "",
-      paymentPolicy: {} as any,
+      target: row.target ?? "",
+      method: row.method ?? "",
+      paymentPolicy: (row.paymentPolicy as any) ?? {},
       paymentState: row.settlementState as any,
       executionState: "NOT_STARTED" as any,
       deliveryState: "NOT_STARTED",
@@ -303,9 +314,9 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       operationId: row.operationId,
       requestId: row.requestId ?? requestId,
       clientId: row.clientId ?? undefined,
-      target: "",
-      method: "",
-      paymentPolicy: {} as any,
+      target: row.target ?? "",
+      method: row.method ?? "",
+      paymentPolicy: (row.paymentPolicy as any) ?? {},
       paymentState: row.settlementState as any,
       executionState: "NOT_STARTED",
       deliveryState: "NOT_STARTED",
