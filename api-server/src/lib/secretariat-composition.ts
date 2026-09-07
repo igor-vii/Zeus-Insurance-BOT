@@ -102,8 +102,11 @@ export function createSecretariatComposition(): SecretariatComposition {
     stores.evidenceStore,
   );
 
-  // 6. Payment signer (custodial LOCAL_EOA — see TRACE #8-E)
-  const signer = createLocalEoaSignerFromEnv(config.signer.privateKeyEnvVar);
+  // 6. Explicit custodial test signer only. The default path is non-custodial:
+  // the client signs externally and calls Secretariat.submitSignedPayment().
+  const signer = config.signer.mode === "custodial_test"
+    ? createLocalEoaSignerFromEnv(config.signer.privateKeyEnvVar)
+    : undefined;
 
   // 7. Seller execution adapter
   const sellerAdapter = new HttpSellerExecutionAdapter(config.sellerTimeoutMs);

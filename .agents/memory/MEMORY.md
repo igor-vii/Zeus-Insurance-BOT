@@ -1,1 +1,2 @@
 - [Imported workspace dependencies](imported-workspace-dependencies.md) — imported repos may have stale lockfiles and tracked dependency trees; preserve the lockfile and isolate install side effects.
+- [Non-custodial payment boundary](non-custodial-payment-boundary.md) — production payment requests stop before signing and remain passive until an externally signed payload is submitted.

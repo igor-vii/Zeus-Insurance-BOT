@@ -16,6 +16,7 @@ export type OperationStatus =
   | 'CREATED'
   | 'DISCOVERING'
   | 'PAYMENT_REQUIRED'
+  | 'AWAITING_SIGNATURE'
   | 'AUTHORIZED'
   | 'PAYMENT_SUBMITTED'
   | 'SETTLEMENT_PENDING'
@@ -590,6 +591,12 @@ export interface ExecuteRequest {
    * Must represent the actual authenticated caller — never generated internally.
    */
   clientId?: string;
+
+  /**
+   * Address that will externally sign a non-custodial payment payload.
+   * Stage A persists this binding and never derives it from a server signer.
+   */
+  authorizer?: string;
 }
 
 // ============================================================================
@@ -603,6 +610,7 @@ export interface ExecuteRequest {
  * FAILED is NOT a valid settlement state — use RECONCILING instead.
  */
 export type SettlementState =
+  | "PENDING_SIGNATURE"
   | "AUTHORIZED"
   | "SUBMITTING"
   | "SUBMITTED"
@@ -622,6 +630,7 @@ export function allowNewPayment(state: SettlementState): boolean {
 
 /** All states that BLOCK new payment creation. */
 export const PAYMENT_BLOCKED_STATES: readonly SettlementState[] = [
+  "PENDING_SIGNATURE",
   "AUTHORIZED",
   "SUBMITTING",
   "SUBMITTED",
@@ -635,6 +644,7 @@ export const PAYMENT_BLOCKED_STATES: readonly SettlementState[] = [
  * §2: API/UI labels for settlement states.
  */
 export type PaymentDisplayState =
+  | "PAYMENT_PENDING_SIGNATURE"
   | "PAYMENT_AUTHORIZED"
   | "PAYMENT_SUBMITTING"
   | "PAYMENT_SUBMITTED"
@@ -646,6 +656,7 @@ export type PaymentDisplayState =
 
 export function toDisplayState(state: SettlementState): PaymentDisplayState {
   const map: Record<SettlementState, PaymentDisplayState> = {
+    PENDING_SIGNATURE: "PAYMENT_PENDING_SIGNATURE",
     AUTHORIZED: "PAYMENT_AUTHORIZED",
     SUBMITTING: "PAYMENT_SUBMITTING",
     SUBMITTED: "PAYMENT_SUBMITTED",
@@ -899,6 +910,7 @@ export interface DurableEvidenceStore {
 
   // B8-001: Durable idempotency lookup
   getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
+  getOperationByRequestId?(requestId: string): Promise<Operation | null>;
 
   // B.3-B2-FIX: Reconciliation job lifecycle (lease-safe atomic operations)
   createReconciliationJob(paymentIntentId: string, nextProbeAt: Date): Promise<string>;

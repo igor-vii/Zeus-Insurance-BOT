@@ -27,16 +27,10 @@ export interface ReconciliationConfig {
 }
 
 export interface SignerConfig {
-  /** Current mode: only "LOCAL_EOA" is implemented (custodial). */
-  readonly mode: "LOCAL_EOA";
+  /** Default is non-custodial; LOCAL_EOA is explicit test-only infrastructure. */
+  readonly mode: "non_custodial" | "custodial_test";
   /** Env var name containing the private key. */
   readonly privateKeyEnvVar: string;
-  /**
-   * WARNING: LOCAL_EOA is a custodial development/test signer.
-   * Non-custodial external-signature signer is NOT YET IMPLEMENTED.
-   * See TRACE #8-E for architectural analysis.
-   */
-  readonly nonCustodialReady: false;
 }
 
 export interface SecretariatProductionConfig {
@@ -68,6 +62,16 @@ function requireEnv(name: string): string {
 function optionalEnv(name: string, fallback: string): string {
   const value = process.env[name];
   return value && value.trim() !== "" ? value.trim() : fallback;
+}
+
+function parseSignerMode(): SignerConfig["mode"] {
+  const mode = optionalEnv("ZEUS_SIGNER_MODE", "non_custodial");
+  if (mode !== "non_custodial" && mode !== "custodial_test") {
+    throw new Error(
+      `Secretariat config: ZEUS_SIGNER_MODE must be "non_custodial" or "custodial_test", got "${mode}"`,
+    );
+  }
+  return mode;
 }
 
 function parsePositiveInt(value: string, name: string): number {
@@ -188,9 +192,8 @@ export function loadSecretariatProductionConfig(): SecretariatProductionConfig {
 
     // Signer — documents current custodial limitation
     signer: {
-      mode: "LOCAL_EOA" as const,
+      mode: parseSignerMode(),
       privateKeyEnvVar: optionalEnv("ZEUS_SIGNER_PRIVATE_KEY_ENV", "ZEUS_SIGNER_PRIVATE_KEY"),
-      nonCustodialReady: false as const,
     },
   };
 }

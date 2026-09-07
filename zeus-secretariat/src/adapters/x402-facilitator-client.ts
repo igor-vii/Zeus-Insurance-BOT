@@ -172,7 +172,7 @@ export class X402FacilitatorClient implements SettlementAdapter {
     // §3: Economic safety — check persisted state
     if (!allowNewPayment(dbIntent.settlementState) && dbIntent.settlementState !== "AUTHORIZED") {
       // Already past AUTHORIZED — cannot re-submit
-      if (["SUBMITTING", "SUBMITTED", "SETTLEMENT_PENDING", "RECONCILING", "SETTLED", "UNRESOLVED_MANUAL"].includes(dbIntent.settlementState)) {
+      if (["PENDING_SIGNATURE", "SUBMITTING", "SUBMITTED", "SETTLEMENT_PENDING", "RECONCILING", "SETTLED", "UNRESOLVED_MANUAL"].includes(dbIntent.settlementState)) {
         return {
           status: "REJECTED",
           reason: `DB_STATE_GUARD: persisted state is ${dbIntent.settlementState}, cannot re-submit`,

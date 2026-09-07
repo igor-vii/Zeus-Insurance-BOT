@@ -22,7 +22,7 @@ function clearSecretariatEnv() {
     "ZEUS_FACILITATOR_TIMEOUT_MS", "ZEUS_SELLER_URL", "ZEUS_SELLER_TIMEOUT_MS",
     "ZEUS_SELLER_METHOD", "ZEUS_EXECUTION_LOCK_MS", "ZEUS_MAX_EXECUTION_ATTEMPTS",
     "ZEUS_RECON_POLL_MS", "ZEUS_RECON_LEASE_MS", "ZEUS_RECON_ERROR_BACKOFF_MS",
-    "ZEUS_RECON_BATCH_SIZE", "ZEUS_SIGNER_PRIVATE_KEY_ENV",
+    "ZEUS_RECON_BATCH_SIZE", "ZEUS_SIGNER_PRIVATE_KEY_ENV", "ZEUS_SIGNER_MODE",
   ];
   for (const k of keys) delete process.env[k];
 }
@@ -48,8 +48,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
     expect(config.facilitatorBaseUrl).toBe("https://x402.example.com");
     expect(config.sellerUrl).toBe("https://seller.example.com");
     expect(config.reconciliation.pollIntervalMs).toBe(5000);
-    expect(config.signer.mode).toBe("LOCAL_EOA");
-    expect(config.signer.nonCustodialReady).toBe(false);
+    expect(config.signer.mode).toBe("non_custodial");
   });
 
   // R2.0-2: Missing RPC configuration fails explicitly
@@ -121,18 +120,24 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
     expect(() => loadSecretariatProductionConfig()).toThrow(/ZEUS_SELLER_URL/);
   });
 
-  // R2.0-8: Signer config exposes custodial limitation
-  test("R2.0-8: signer config documents custodial limitation", async () => {
+  // R2.0-8: Non-custodial mode is the production default
+  test("R2.0-8: signer config defaults to non-custodial mode", async () => {
     setValidEnv();
     const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
     const config = loadSecretariatProductionConfig();
-    expect(config.signer.mode).toBe("LOCAL_EOA");
-    expect(config.signer.nonCustodialReady).toBe(false);
+    expect(config.signer.mode).toBe("non_custodial");
     expect(config.signer.privateKeyEnvVar).toBe("ZEUS_SIGNER_PRIVATE_KEY");
   });
 
-  // R2.0-9: Config module does not create runtime services
-  test("R2.0-9: config loading creates no DB/RPC/runtime services", async () => {
+  test("R2.0-9: custodial signer requires an explicit test mode", async () => {
+    setValidEnv();
+    process.env["ZEUS_SIGNER_MODE"] = "custodial_test";
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    expect(loadSecretariatProductionConfig().signer.mode).toBe("custodial_test");
+  });
+
+  // R2.0-10: Config module does not create runtime services
+  test("R2.0-10: config loading creates no DB/RPC/runtime services", async () => {
     setValidEnv();
     const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
     const config = loadSecretariatProductionConfig();

@@ -280,13 +280,41 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       paymentState: row.settlementState as any,
       executionState: "NOT_STARTED" as any,
       deliveryState: "NOT_STARTED",
-      currentState: row.settlementState as any,
+      currentState: row.settlementState === "PENDING_SIGNATURE"
+        ? "AWAITING_SIGNATURE"
+        : row.settlementState as any,
       timestamps: {
         createdAt: row.createdAt.getTime(),
         updatedAt: row.updatedAt.getTime(),
       },
       evidence: [],
     } as Operation;
+  }
+
+  async getOperationByRequestId(requestId: string): Promise<Operation | null> {
+    const rows = await this.db
+      .select()
+      .from(paymentIntentsTable)
+      .where(eq(paymentIntentsTable.requestId, requestId))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      operationId: row.operationId,
+      requestId: row.requestId ?? requestId,
+      clientId: row.clientId ?? undefined,
+      target: "",
+      method: "",
+      paymentPolicy: {} as any,
+      paymentState: row.settlementState as any,
+      executionState: "NOT_STARTED",
+      deliveryState: "NOT_STARTED",
+      currentState: row.settlementState === "PENDING_SIGNATURE"
+        ? "AWAITING_SIGNATURE"
+        : row.settlementState as any,
+      timestamps: { createdAt: row.createdAt.getTime(), updatedAt: row.updatedAt.getTime() },
+      evidence: [],
+    };
   }
 
   async getOperationsByStatus(status: OperationStatus): Promise<Operation[]> {

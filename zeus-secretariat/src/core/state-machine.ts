@@ -98,7 +98,8 @@ function toEpochSeconds(deadlineMs: number | undefined, currentMs: number): numb
 const VALID_TRANSITIONS: Record<OperationStatus, OperationStatus[]> = {
   CREATED: ['DISCOVERING', 'FAILED'],
   DISCOVERING: ['PAYMENT_REQUIRED', 'SUCCESS', 'FAILED'],
-  PAYMENT_REQUIRED: ['AUTHORIZED', 'POLICY_REJECTED', 'FAILED'],
+  PAYMENT_REQUIRED: ['AWAITING_SIGNATURE', 'AUTHORIZED', 'POLICY_REJECTED', 'FAILED'],
+  AWAITING_SIGNATURE: ['AUTHORIZED', 'FAILED'],
   AUTHORIZED: ['PAYMENT_SUBMITTED', 'FAILED'],
   PAYMENT_SUBMITTED: ['SETTLEMENT_PENDING', 'SETTLEMENT_UNKNOWN', 'SETTLED', 'SETTLEMENT_FAILED'],
   SETTLEMENT_PENDING: ['SETTLED', 'SETTLEMENT_UNKNOWN', 'SETTLEMENT_FAILED'],
@@ -154,7 +155,7 @@ function isValidTransition(from: OperationStatus, to: OperationStatus): boolean 
 
 export interface SecretariatConfig {
   evidenceStore: EvidenceStore & Partial<DurableEvidenceStore>;
-  signer: PaymentSigner;
+  signer?: PaymentSigner;
   adapters: Map<string, PaymentAdapter>;
   capabilitySources?: CapabilitySource[];
   /** Canonical V2 settlement adapter. Required for production payment submission. */
@@ -168,6 +169,23 @@ export interface SecretariatConfig {
    */
   atomicSettlementHandoff: AtomicSettlementHandoff;
 }
+
+export type CreateRequestResult =
+  | {
+      status: 'AWAITING_PAYMENT_SIGNATURE';
+      requestId: string;
+      operationId: string;
+      paymentRequired: PaymentRequirement;
+      paymentIntent: Pick<
+        DurablePaymentIntent,
+        'paymentIntentId' | 'authorizer' | 'payTo' | 'value' | 'asset' | 'network' |
+        'nonce' | 'validAfter' | 'validBefore' | 'settlementState'
+      >;
+    }
+  | {
+      status: 'COMPLETED' | 'REJECTED';
+      result: ExecutionResult;
+    };
 
 export class Secretariat {
   private readonly config: SecretariatConfig;
@@ -271,6 +289,142 @@ export class Secretariat {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return await this.failOperation(operation, 'FAILED', errorMessage);
     }
+  }
+
+  /**
+   * Stage A of the non-custodial payment boundary.
+   *
+   * This path discovers and validates the request, persists the operation and
+   * DPI, and stops before a signer, signature, or facilitator call is used.
+   */
+  async createRequest(request: ExecuteRequest): Promise<CreateRequestResult> {
+    const requestId = request.requestId ?? generateRequestId();
+    const existing = await this.findExistingOperation(request.clientId, requestId);
+    if (existing) {
+      if (existing.currentState === 'AWAITING_SIGNATURE') {
+        const dpi = await this.getDurableIntent(existing.operationId);
+        const requirement = await this.getPaymentRequirementFromEvidence(existing)
+          ?? (dpi ? this.requirementFromIntent(dpi) : null);
+        if (dpi && requirement) return this.buildAwaitingSignatureResult(existing, dpi, requirement);
+      }
+      return { status: 'COMPLETED', result: this.buildResult(existing) };
+    }
+
+    const operation = this.createOperation(generateOperationId(), requestId, request);
+    await this.persistOperation(operation);
+
+    try {
+      await this.discoveryPhase(operation);
+      if (operation.currentState !== 'PAYMENT_REQUIRED') {
+        await this.persistOperation(operation);
+        return { status: 'COMPLETED', result: this.buildResult(operation) };
+      }
+
+      const policyValid = await this.validatePolicy(operation);
+      if (!policyValid) {
+        const result = await this.failOperation(operation, 'POLICY_REJECTED', 'Payment policy validation failed');
+        return { status: 'REJECTED', result };
+      }
+
+      const requirement = await this.getPaymentRequirementFromEvidence(operation);
+      if (!requirement) throw new Error('No payment requirement found after discovery');
+      const dpi = await this.createPendingPaymentIntent(operation, request, requirement);
+      return this.buildAwaitingSignatureResult(operation, dpi, requirement);
+    } catch (error) {
+      const result = await this.failOperation(
+        operation,
+        'FAILED',
+        error instanceof Error ? error.message : String(error),
+      );
+      return { status: 'REJECTED', result };
+    }
+  }
+
+  /**
+   * Stage B of the non-custodial payment boundary.
+   *
+   * The supplied payload is checked against the persisted DPI before the
+   * existing facilitator/reconciliation flow is resumed.
+   */
+  async submitSignedPayment(
+    requestId: string,
+    externallySignedPaymentPayload: PaymentPayload,
+  ): Promise<ExecutionResult> {
+    const operation = await this.findExistingOperation(undefined, requestId);
+    if (!operation) throw new Error(`REQUEST_NOT_FOUND: ${requestId}`);
+    if (operation.currentState !== 'AWAITING_SIGNATURE') {
+      throw new Error(`REQUEST_NOT_AWAITING_SIGNATURE: ${operation.currentState}`);
+    }
+
+    const dpi = await this.getDurableIntent(operation.operationId);
+    if (!dpi || dpi.settlementState !== 'PENDING_SIGNATURE') {
+      throw new Error('PAYMENT_INTENT_NOT_PENDING_SIGNATURE');
+    }
+
+    const requirement = await this.getPaymentRequirementFromEvidence(operation)
+      ?? this.requirementFromIntent(dpi);
+    if (!requirement) throw new Error('PAYMENT_REQUIREMENT_NOT_FOUND');
+    this.validateExternalPaymentPayload(externallySignedPaymentPayload, dpi, requirement);
+
+    const serializedPayload = JSON.stringify(externallySignedPaymentPayload);
+    const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    if (
+      typeof durableStore.updatePaymentIntentAuthorization !== 'function' ||
+      typeof durableStore.updatePaymentIntentStatus !== 'function'
+    ) {
+      throw new Error('Non-custodial flow requires payment intent authorization persistence');
+    }
+    await durableStore.updatePaymentIntentAuthorization(dpi.paymentIntentId, {
+      paymentPayload: serializedPayload,
+      paymentPayloadHash: keccak256(toBytes(serializedPayload)),
+    });
+    await durableStore.updatePaymentIntentStatus(dpi.paymentIntentId, 'AUTHORIZED');
+    if (typeof durableStore.markNonceSigned === 'function') {
+      await durableStore.markNonceSigned(dpi.nonce);
+    }
+
+    const authorization: PaymentAuthorization = {
+      signature: externallySignedPaymentPayload.payload.signature,
+      scheme: externallySignedPaymentPayload.accepted.scheme,
+      timestamp: now(),
+      context: {
+        operationId: operation.operationId,
+        requirement,
+        nonce: dpi.nonce,
+      },
+      authorizer: dpi.authorizer,
+      payTo: dpi.payTo,
+      value: dpi.value,
+      validAfter: dpi.validAfter,
+      validBefore: dpi.validBefore,
+    };
+    const paymentIntent: PaymentIntent = {
+      operationId: operation.operationId,
+      requirement,
+      amount: dpi.value,
+      asset: dpi.asset,
+      network: dpi.network,
+      authorization,
+      createdAt: dpi.createdAt,
+      status: 'AUTHORIZED',
+    };
+
+    this.transitionState(operation, 'AUTHORIZED');
+    operation.paymentState = 'AUTHORIZED';
+    this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_AUTHORIZED', {
+      intent: paymentIntent,
+      source: 'EXTERNAL_SIGNED_PAYMENT_PAYLOAD',
+    });
+    await this.persistOperation(operation);
+
+    await this.submitPayment(operation);
+    await this.observeSettlement(operation);
+    const finalState = String(operation.currentState) as OperationStatus;
+    if (finalState === 'SETTLED' || finalState === 'EXECUTION_PENDING') {
+      await this.persistSettlementAndExecutionObligation(operation);
+    }
+    await this.persistOperation(operation);
+    return this.buildResult(operation);
   }
 
   // ==========================================================================
@@ -466,6 +620,11 @@ export class Secretariat {
     this.transitionState(operation, 'AUTHORIZED');
     operation.timestamps.authorizedAt = now();
 
+    const configuredSigner = this.config.signer;
+    if (!configuredSigner) {
+      throw new Error('NON_CUSTODIAL_SIGNATURE_REQUIRED: use submitSignedPayment()');
+    }
+
     const requirement = await this.getPaymentRequirementFromEvidence(operation);
     if (!requirement) {
       throw new Error('No payment requirement found for authorization');
@@ -474,7 +633,7 @@ export class Secretariat {
     const canonicalV2 = Boolean(this.config.settlementAdapter);
     const adapter = canonicalV2 ? this.config.adapters.get(requirement.network) : this.getAdapterForNetwork(requirement.network);
     const durableStore = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
-    const signerWithAddress = this.config.signer as PaymentSigner & {
+    const signerWithAddress = configuredSigner as PaymentSigner & {
       getAddress?: () => Promise<string>;
     };
 
@@ -561,7 +720,7 @@ export class Secretariat {
 
     let authorization: PaymentAuthorization;
     if (canonicalV2 && adapter) {
-      authorization = await adapter.createAuthorization(requirement, this.config.signer, context);
+       authorization = await adapter.createAuthorization(requirement, configuredSigner, context);
     } else if (canonicalV2) {
       const strictSigner = this.config.signer as unknown as {
         signPayment(request: PaymentAuthorizationRequest): Promise<PaymentSignatureResult>;
@@ -597,7 +756,7 @@ export class Secretariat {
       if (!adapter) {
         throw new Error(`No payment adapter found for network: ${requirement.network}`);
       }
-      authorization = await adapter.createAuthorization(requirement, this.config.signer, context);
+       authorization = await adapter.createAuthorization(requirement, configuredSigner, context);
     }
 
     requireNonEmpty(authorization.signature, "signature");
@@ -1348,6 +1507,154 @@ export class Secretariat {
   // ==========================================================================
   // HELPERS
   // ==========================================================================
+
+  private async findExistingOperation(
+    clientId: string | undefined,
+    requestId: string,
+  ): Promise<Operation | null> {
+    const store = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    if (clientId && typeof store.getOperationByClientAndRequestId === 'function') {
+      const operation = await store.getOperationByClientAndRequestId(clientId, requestId);
+      if (operation) return operation;
+    }
+    if (typeof store.getOperationByRequestId === 'function') {
+      return store.getOperationByRequestId(requestId);
+    }
+    return null;
+  }
+
+  private async getDurableIntent(operationId: string): Promise<DurablePaymentIntent | null> {
+    const store = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    if (typeof store.getPaymentIntentByOperationId !== 'function') return null;
+    return store.getPaymentIntentByOperationId(operationId);
+  }
+
+  private async createPendingPaymentIntent(
+    operation: Operation,
+    request: ExecuteRequest,
+    requirement: PaymentRequirement,
+  ): Promise<DurablePaymentIntent> {
+    const authorizer = requireNonEmpty(request.authorizer, 'authorizer');
+    const validAfter = Math.floor(now() / 1000);
+    const validBefore = toEpochSeconds(requirement.deadline, now());
+    if (validBefore <= validAfter) {
+      throw new Error('Invalid payment authorization: validBefore must be after validAfter');
+    }
+
+    // Generate exactly once in Stage A and persist it with the DPI.
+    const nonce = new CryptoNonceGenerator().generate();
+    const pendingPayload = JSON.stringify({
+      status: 'PENDING_SIGNATURE',
+      operationId: operation.operationId,
+      authorizer,
+      payTo: requirement.payee,
+      value: requirement.amount,
+      asset: requirement.asset,
+      network: requirement.network,
+      nonce,
+      validAfter,
+      validBefore,
+    });
+    const intent: DurablePaymentIntent = {
+      paymentIntentId: generatePaymentIntentId(),
+      operationId: operation.operationId,
+      requestId: operation.requestId,
+      clientId: operation.clientId,
+      authorizer,
+      payTo: requirement.payee,
+      value: requirement.amount,
+      asset: requirement.asset,
+      network: requirement.network,
+      nonce,
+      validAfter,
+      validBefore,
+      paymentPayload: pendingPayload,
+      paymentPayloadHash: keccak256(toBytes(pendingPayload)),
+      settlementState: 'PENDING_SIGNATURE',
+      createdAt: now(),
+      updatedAt: now(),
+    };
+
+    const store = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
+    if (typeof store.createPaymentIntent !== 'function') {
+      throw new Error('Non-custodial flow requires durable payment intent persistence');
+    }
+    if (typeof store.createIntentWithNonce === 'function') {
+      await store.createIntentWithNonce(intent, authorizer);
+    } else {
+      await store.createPaymentIntent(intent);
+    }
+
+    this.transitionState(operation, 'AWAITING_SIGNATURE');
+    operation.timestamps.paymentRequiredAt = operation.timestamps.paymentRequiredAt ?? now();
+    await this.persistOperation(operation);
+    return intent;
+  }
+
+  private buildAwaitingSignatureResult(
+    operation: Operation,
+    intent: DurablePaymentIntent,
+    requirement: PaymentRequirement,
+  ): CreateRequestResult {
+    return {
+      status: 'AWAITING_PAYMENT_SIGNATURE',
+      requestId: operation.requestId,
+      operationId: operation.operationId,
+      paymentRequired: requirement,
+      paymentIntent: {
+        paymentIntentId: intent.paymentIntentId,
+        authorizer: intent.authorizer,
+        payTo: intent.payTo,
+        value: intent.value,
+        asset: intent.asset,
+        network: intent.network,
+        nonce: intent.nonce,
+        validAfter: intent.validAfter,
+        validBefore: intent.validBefore,
+        settlementState: intent.settlementState,
+      },
+    };
+  }
+
+  private requirementFromIntent(intent: DurablePaymentIntent): PaymentRequirement {
+    return {
+      amount: intent.value,
+      asset: intent.asset,
+      network: intent.network,
+      payee: intent.payTo,
+      deadline: intent.validBefore * 1000,
+    };
+  }
+
+  private validateExternalPaymentPayload(
+    payload: PaymentPayload,
+    intent: DurablePaymentIntent,
+    requirement: PaymentRequirement,
+  ): void {
+    const authorization = payload?.payload?.authorization;
+    if (payload?.x402Version !== 2 || !authorization || !payload.payload.signature) {
+      throw new Error('INVALID_PAYMENT_PAYLOAD');
+    }
+    const equal = (left: string | number, right: string | number) => String(left).toLowerCase() === String(right).toLowerCase();
+    if (
+      !equal(payload.accepted.network, intent.network) ||
+      !equal(payload.accepted.asset, intent.asset) ||
+      !equal(payload.accepted.amount, intent.value) ||
+      !equal(payload.accepted.payTo, intent.payTo) ||
+      !equal(authorization.from, intent.authorizer) ||
+      !equal(authorization.to, intent.payTo) ||
+      !equal(authorization.value, intent.value) ||
+      !equal(authorization.nonce, intent.nonce) ||
+      Number(authorization.validAfter) !== intent.validAfter ||
+      Number(authorization.validBefore) !== intent.validBefore ||
+      !equal(requirement.network, intent.network) ||
+      !equal(requirement.asset, intent.asset) ||
+      !equal(requirement.amount, intent.value) ||
+      !equal(requirement.payee, intent.payTo)
+    ) {
+      throw new Error('PAYMENT_PAYLOAD_BINDING_MISMATCH');
+    }
+  }
 
   private getAdapterForNetwork(network: string): PaymentAdapter {
     const adapter = this.config.adapters.get(network);

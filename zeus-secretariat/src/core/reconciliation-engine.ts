@@ -139,6 +139,15 @@ export class ReconciliationEngine {
       return { status: "UNRESOLVED_MANUAL", reason: "Payment intent not found" };
     }
 
+    // Pre-signature intents are intentionally passive. They have no external
+    // authorization to reconcile and must not be treated as submitted payment.
+    if (intent.settlementState === "PENDING_SIGNATURE") {
+      return {
+        status: "RECONCILING",
+        reason: "PENDING_SIGNATURE: awaiting externally signed payment payload",
+      };
+    }
+
     // Terminal states — do not re-reconcile
     if (intent.settlementState === "SETTLED" || intent.settlementState === "NOT_SETTLED" || intent.settlementState === "UNRESOLVED_MANUAL") {
       return { status: intent.settlementState as any, reason: "Already terminal" } as any;

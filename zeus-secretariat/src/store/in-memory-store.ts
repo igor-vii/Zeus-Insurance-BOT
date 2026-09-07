@@ -26,6 +26,13 @@ export class InMemoryEvidenceStore implements EvidenceStore {
     return this.operations.get(operationId) ?? null;
   }
 
+  async getOperationByRequestId(requestId: string): Promise<Operation | null> {
+    for (const operation of this.operations.values()) {
+      if (operation.requestId === requestId) return operation;
+    }
+    return null;
+  }
+
   async saveOperation(operation: Operation): Promise<void> {
     this.operations.set(operation.operationId, operation);
   }

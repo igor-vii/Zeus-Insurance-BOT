@@ -25,6 +25,7 @@ import type {
   PaymentSubmissionResult,
 } from '../src/core/types';
 import { Secretariat } from '../src/core/state-machine';
+import type { PaymentPayload } from '../src/adapters/x402-facilitator-client';
 
 // ---------------------------------------------------------------------------
 // Mock fetch — returns valid 402 with x402 challenge body
@@ -64,7 +65,7 @@ afterEach(() => {
 // In-Memory Durable Store for testing
 // ---------------------------------------------------------------------------
 
-class TestDurableStore implements DurableEvidenceStore {
+class TestDurableStore {
   private intents: Map<string, DurablePaymentIntent> = new Map();
   private operations: Map<string, Operation> = new Map();
   private evidence: Map<string, EvidenceRecord[]> = new Map();
@@ -99,9 +100,31 @@ class TestDurableStore implements DurableEvidenceStore {
     return cloned;
   }
 
-  async updatePaymentIntentStatus(): Promise<void> {}
+  async updatePaymentIntentStatus(
+    paymentIntentId: string,
+    state: any,
+    fields?: Partial<DurablePaymentIntent>,
+  ): Promise<void> {
+    const intent = this.intents.get(paymentIntentId);
+    if (!intent) throw new Error("INTENT_NOT_FOUND");
+    this.intents.set(paymentIntentId, {
+      ...intent,
+      ...fields,
+      settlementState: state,
+      updatedAt: Date.now(),
+    });
+  }
+  async updatePaymentIntentAuthorization(
+    paymentIntentId: string,
+    fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,
+  ): Promise<void> {
+    const intent = this.intents.get(paymentIntentId);
+    if (!intent) throw new Error("INTENT_NOT_FOUND");
+    this.intents.set(paymentIntentId, { ...intent, ...fields, updatedAt: Date.now() });
+  }
   async reserveNonce(): Promise<void> {}
   async getNonce(): Promise<any> { return null; }
+  async markNonceSigned(): Promise<void> {}
   async append(record: EvidenceRecord): Promise<void> {
     const records = this.evidence.get(record.operationId) ?? [];
     records.push(record);
@@ -125,6 +148,12 @@ class TestDurableStore implements DurableEvidenceStore {
   async getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null> {
     for (const op of this.operations.values()) {
       if (op.clientId === clientId && op.requestId === requestId) return { ...op };
+    }
+    return null;
+  }
+  async getOperationByRequestId(requestId: string): Promise<Operation | null> {
+    for (const op of this.operations.values()) {
+      if (op.requestId === requestId) return { ...op };
     }
     return null;
   }
@@ -172,7 +201,7 @@ const mockSigner: PaymentSigner = {
   async signPayment() {
     throw new Error("Not used in legacy path");
   },
-};
+} as any;
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -209,10 +238,10 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
     const adapters = new Map<string, PaymentAdapter>();
     adapters.set("base-sepolia", adapter);
     secretariat = new Secretariat({
-      evidenceStore: store,
+      evidenceStore: store as any,
       signer: mockSigner,
       adapters,
-    });
+    } as any);
   });
 
   test("B1.1: DPI created after authorization", async () => {
@@ -244,9 +273,9 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
     };
 
     const origSubmit = adapter.submit.bind(adapter);
-    adapter.submit = async (...args: any[]) => {
+    adapter.submit = async () => {
       callOrder.push("submit");
-      return origSubmit(...args);
+      return origSubmit();
     };
 
     try { await secretariat.execute(makeRequest({ requestId: "req-b1-3" })); } catch {}
@@ -273,10 +302,10 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
     const adapters2 = new Map<string, PaymentAdapter>();
     adapters2.set("base-sepolia", new TestPaymentAdapter());
     const secretariat2 = new Secretariat({
-      evidenceStore: restartedStore,
+      evidenceStore: restartedStore as any,
       signer: mockSigner,
       adapters: adapters2,
-    });
+    } as any);
 
     // Find the operation from Runtime A
     let foundOpId: string | null = null;
@@ -313,5 +342,118 @@ describe("BLOCK 8.2-B.1: DurablePaymentIntent Creation & Persistence", () => {
 
     // createPaymentIntent should NOT have been called again
     expect(store.createPaymentIntentCallCount).toBe(firstCallCount);
+  });
+
+  test("B1.6: Stage A persists a pending signature boundary without a signer", async () => {
+    const nonCustodial = new Secretariat({
+      evidenceStore: store as any,
+      signer: undefined,
+      adapters: new Map([["base-sepolia", adapter]]),
+    } as any);
+
+    const result = await nonCustodial.createRequest(makeRequest({
+      requestId: "req-stage-a",
+      authorizer: "0xTestPayer",
+    }));
+
+    expect(result.status).toBe("AWAITING_PAYMENT_SIGNATURE");
+    if (result.status !== "AWAITING_PAYMENT_SIGNATURE") return;
+    expect(result.paymentIntent.settlementState).toBe("PENDING_SIGNATURE");
+    expect(result.paymentIntent.authorizer).toBe("0xTestPayer");
+    expect(store.createPaymentIntentCallCount).toBe(1);
+    expect((await store.getPaymentIntentByOperationId(result.operationId))!.paymentPayload)
+      .toContain("PENDING_SIGNATURE");
+  });
+
+  test("B1.7: Stage A is idempotent and preserves the original nonce", async () => {
+    const nonCustodial = new Secretariat({
+      evidenceStore: store as any,
+      signer: undefined,
+      adapters: new Map([["base-sepolia", adapter]]),
+    } as any);
+    const request = makeRequest({
+      requestId: "req-stage-a-idempotent",
+      authorizer: "0xTestPayer",
+    });
+
+    const first = await nonCustodial.createRequest(request);
+    const second = await nonCustodial.createRequest(request);
+    expect(first.status).toBe("AWAITING_PAYMENT_SIGNATURE");
+    expect(second.status).toBe("AWAITING_PAYMENT_SIGNATURE");
+    if (first.status !== "AWAITING_PAYMENT_SIGNATURE" ||
+        second.status !== "AWAITING_PAYMENT_SIGNATURE") return;
+    expect(second.operationId).toBe(first.operationId);
+    expect(second.paymentIntent.nonce).toBe(first.paymentIntent.nonce);
+    expect(store.createPaymentIntentCallCount).toBe(1);
+  });
+
+  test("B1.8: duplicate Stage A remains recoverable after a restart", async () => {
+    const nonCustodial = new Secretariat({
+      evidenceStore: store as any,
+      signer: undefined,
+      adapters: new Map([["base-sepolia", adapter]]),
+    } as any);
+    const request = makeRequest({
+      requestId: "req-stage-a-restart",
+      authorizer: "0xTestPayer",
+    });
+    const first = await nonCustodial.createRequest(request);
+    expect(first.status).toBe("AWAITING_PAYMENT_SIGNATURE");
+    if (first.status !== "AWAITING_PAYMENT_SIGNATURE") return;
+
+    const restartedStore = store.cloneForRestart();
+    const restarted = new Secretariat({
+      evidenceStore: restartedStore,
+      signer: undefined,
+      adapters: new Map([["base-sepolia", new TestPaymentAdapter()]]),
+    } as any);
+    const recovered = await restarted.createRequest(request);
+    expect(recovered.status).toBe("AWAITING_PAYMENT_SIGNATURE");
+    if (recovered.status !== "AWAITING_PAYMENT_SIGNATURE") return;
+    expect(recovered.operationId).toBe(first.operationId);
+    expect(recovered.paymentIntent.paymentIntentId).toBe(first.paymentIntent.paymentIntentId);
+  });
+
+  test("B1.9: Stage B rejects a payload that is not bound to the persisted DPI", async () => {
+    const nonCustodial = new Secretariat({
+      evidenceStore: store as any,
+      signer: undefined,
+      adapters: new Map([["base-sepolia", adapter]]),
+    } as any);
+    const request = makeRequest({
+      requestId: "req-stage-b-binding",
+      authorizer: "0xTestPayer",
+    });
+    const created = await nonCustodial.createRequest(request);
+    expect(created.status).toBe("AWAITING_PAYMENT_SIGNATURE");
+    if (created.status !== "AWAITING_PAYMENT_SIGNATURE") return;
+
+    const invalidPayload = {
+      x402Version: 2,
+      accepted: {
+        scheme: "exact",
+        network: "base-sepolia",
+        amount: "999999",
+        asset: "0xUSDC",
+        payTo: "0xSellerAddress",
+        maxTimeoutSeconds: 300,
+      },
+      payload: {
+        signature: "0xexternal-signature",
+        authorization: {
+          from: "0xTestPayer",
+          to: "0xSellerAddress",
+          value: "999999",
+          validAfter: String(created.paymentIntent.validAfter),
+          validBefore: String(created.paymentIntent.validBefore),
+          nonce: created.paymentIntent.nonce,
+        },
+      },
+    } satisfies PaymentPayload;
+
+    await expect(nonCustodial.submitSignedPayment(request.requestId!, invalidPayload))
+      .rejects.toThrow("PAYMENT_PAYLOAD_BINDING_MISMATCH");
+    expect((await store.getPaymentIntentByOperationId(created.operationId))!.settlementState)
+      .toBe("PENDING_SIGNATURE");
   });
 });
