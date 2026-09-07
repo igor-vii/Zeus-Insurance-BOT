@@ -1805,6 +1805,13 @@ export class Secretariat {
     return await this.config.evidenceStore.getOperation(operationId);
   }
 
+  async getOperationByRequestId(requestId: string): Promise<Operation | null> {
+    if (typeof this.config.evidenceStore.getOperationByRequestId !== 'function') {
+      return null;
+    }
+    return await this.config.evidenceStore.getOperationByRequestId(requestId);
+  }
+
   async getEvidence(operationId: string): Promise<EvidenceRecord[]> {
     return await this.config.evidenceStore.getEvidence(operationId);
   }

@@ -1,6 +1,11 @@
 import { Router, type Response } from "express";
 import { z } from "zod";
-import type { CreateRequestResult, ExecuteRequest } from "zeus-secretariat";
+import type {
+  CreateRequestResult,
+  ExecuteRequest,
+  Operation,
+  PaymentRequirement,
+} from "zeus-secretariat";
 import type { SecretariatComposition } from "../lib/secretariat-composition.js";
 import { logger } from "../lib/logger.js";
 
@@ -21,6 +26,24 @@ const createRequestSchema = z.object({
   policy: paymentPolicySchema,
 });
 
+export type PublicRequestStatus =
+  | "AWAITING_PAYMENT_SIGNATURE"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED"
+  | "UNRESOLVABLE"
+  | "UNKNOWN";
+
+export interface PublicRequestStatusResponse {
+  requestId: string;
+  status: PublicRequestStatus;
+  paymentRequired?: PaymentRequirement;
+  settlementTxHash?: string;
+  outcome?: unknown;
+  resolvedAt?: number;
+  evidenceCount?: number;
+}
+
 function sendError(
   response: Response,
   status: number,
@@ -33,6 +56,141 @@ function sendError(
       message,
     },
   });
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function paymentRequirementFromOperation(
+  operation: Operation,
+): PaymentRequirement | undefined {
+  const evidence = operation.evidence.find(
+    (record: {
+      phase: string;
+      event: string;
+      payload: unknown;
+    }) =>
+      record.phase === "DISCOVERY" &&
+      record.event === "PAYMENT_REQUIREMENT_RECEIVED",
+  );
+  const payload = asRecord(evidence?.payload);
+  const requirement = payload?.requirement;
+  return asRecord(requirement) as PaymentRequirement | undefined;
+}
+
+function settlementTxHashFromOperation(operation: Operation): string | undefined {
+  const directHash = operation.settlementProof?.transactionHash;
+  if (typeof directHash === "string") return directHash;
+
+  const confirmed = operation.evidence.find(
+    (record: {
+      phase: string;
+      event: string;
+      payload: unknown;
+    }) =>
+      record.phase === "SETTLEMENT" &&
+      record.event === "SETTLEMENT_CONFIRMED",
+  );
+  const confirmedPayload = asRecord(confirmed?.payload);
+  const evidenceBundle = asRecord(confirmedPayload?.evidenceBundle);
+  const authorizationUsed = asRecord(evidenceBundle?.authorizationUsed);
+  if (typeof authorizationUsed?.transactionHash === "string") {
+    return authorizationUsed.transactionHash;
+  }
+
+  const submitted = operation.evidence.find(
+    (record: {
+      phase: string;
+      event: string;
+      payload: unknown;
+    }) =>
+      record.phase === "PAYMENT" &&
+      record.event === "PAYMENT_SUBMITTED",
+  );
+  const submittedPayload = asRecord(submitted?.payload);
+  return typeof submittedPayload?.transactionHash === "string"
+    ? submittedPayload.transactionHash
+    : undefined;
+}
+
+function publicStatusForOperation(operation: Operation): PublicRequestStatus {
+  const state = String(operation.currentState);
+
+  if (state === "AWAITING_SIGNATURE" || state === "PENDING_SIGNATURE") {
+    return "AWAITING_PAYMENT_SIGNATURE";
+  }
+
+  if (
+    state === "SUCCESS" ||
+    state === "DELIVERED" ||
+    state === "EXECUTION_CONFIRMED" ||
+    state === "RECOVERED"
+  ) {
+    return "COMPLETED";
+  }
+
+  if (
+    state === "FAILED" ||
+    state === "POLICY_REJECTED" ||
+    state === "SETTLEMENT_FAILED" ||
+    state === "NOT_SETTLED"
+  ) {
+    return "FAILED";
+  }
+
+  if (
+    state === "UNRESOLVABLE" ||
+    state === "UNRESOLVED_MANUAL" ||
+    state === "INCIDENT"
+  ) {
+    return "UNRESOLVABLE";
+  }
+
+  if (
+    state === "EXECUTION_UNKNOWN" ||
+    state === "DELIVERY_UNKNOWN" ||
+    operation.executionState === "UNKNOWN" ||
+    operation.deliveryState === "UNKNOWN"
+  ) {
+    return "UNKNOWN";
+  }
+
+  return "PROCESSING";
+}
+
+function toPublicRequestStatus(
+  operation: Operation,
+): PublicRequestStatusResponse {
+  const status = publicStatusForOperation(operation);
+  const response: PublicRequestStatusResponse = {
+    requestId: operation.requestId,
+    status,
+  };
+
+  const paymentRequired = paymentRequirementFromOperation(operation);
+  if (paymentRequired) response.paymentRequired = paymentRequired;
+
+  const settlementTxHash = settlementTxHashFromOperation(operation);
+  if (settlementTxHash) response.settlementTxHash = settlementTxHash;
+
+  if (operation.resultData !== undefined) {
+    response.outcome = operation.resultData;
+  }
+
+  if (status === "COMPLETED" || status === "FAILED" || status === "UNRESOLVABLE") {
+    const resolvedAt =
+      operation.timestamps.completedAt ?? operation.timestamps.failedAt;
+    if (resolvedAt !== undefined) response.resolvedAt = resolvedAt;
+  }
+
+  if (Array.isArray(operation.evidence)) {
+    response.evidenceCount = operation.evidence.length;
+  }
+
+  return response;
 }
 
 /**
@@ -96,6 +254,36 @@ export function createRequestsRouter(
       "REQUEST_ALREADY_COMPLETED",
       "The request has already completed without a payment signature",
     );
+  });
+
+  router.get("/requests/:requestId", async (request, response) => {
+    let operation: Operation | null;
+    try {
+      operation = await secretariat.getOperationByRequestId(
+        request.params.requestId,
+      );
+    } catch (error) {
+      logger.error({ err: error }, "Secretariat request status lookup failed");
+      sendError(
+        response,
+        500,
+        "SECRETARIAT_STATUS_LOOKUP_FAILED",
+        "The request status could not be loaded",
+      );
+      return;
+    }
+
+    if (!operation) {
+      sendError(
+        response,
+        404,
+        "REQUEST_NOT_FOUND",
+        "The request was not found",
+      );
+      return;
+    }
+
+    response.status(200).json(toPublicRequestStatus(operation));
   });
 
   return router;
