@@ -298,7 +298,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
         createdAt: row.createdAt.getTime(),
         updatedAt: row.updatedAt.getTime(),
       },
-      evidence: [],
+      evidence: (row.reconciliationObservations as any) ?? [],
     } as Operation;
   }
 
@@ -324,7 +324,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
         ? "AWAITING_SIGNATURE"
         : row.settlementState as any,
       timestamps: { createdAt: row.createdAt.getTime(), updatedAt: row.updatedAt.getTime() },
-      evidence: [],
+      evidence: (row.reconciliationObservations as any) ?? [],
     };
   }
 
