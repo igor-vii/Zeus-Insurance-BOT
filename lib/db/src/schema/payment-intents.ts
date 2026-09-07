@@ -30,6 +30,11 @@ export const paymentIntentsTable = pgTable(
     requestId: text("request_id"),
     clientId: text("client_id"),
 
+    // Request semantics (Repair C1: durable operation reconstruction)
+    target: text("target"),
+    method: text("method"),
+    paymentPolicy: jsonb("payment_policy"),
+
     // Authorization fields (§4)
     authorizer: text("authorizer").notNull(),
     payTo: text("pay_to").notNull(),
