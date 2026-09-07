@@ -376,14 +376,29 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   // This keeps claim-time probe_count increments reserved for real reconciliation.
   async completePendingReconciliationJob(jobId: string): Promise<boolean> {
     const result = await this.db.execute(sql`
+      WITH candidate_job AS MATERIALIZED (
+        SELECT job_id, payment_intent_id
+        FROM reconciliation_jobs
+        WHERE job_id = ${jobId}
+          AND (
+            status = ${"PENDING"}
+            OR (status = ${"RUNNING"} AND locked_until IS NOT NULL AND locked_until < NOW())
+          )
+        FOR UPDATE
+      ),
+      eligible_intent AS MATERIALIZED (
+        SELECT candidate_job.job_id, candidate_job.payment_intent_id
+        FROM candidate_job
+        INNER JOIN payment_intents
+          ON payment_intents.payment_intent_id = candidate_job.payment_intent_id
+        WHERE payment_intents.settlement_state = ${"PENDING_SIGNATURE"}
+        FOR UPDATE OF payment_intents
+      )
       UPDATE reconciliation_jobs
       SET status = ${"COMPLETED"}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
-      WHERE job_id = ${jobId}
-        AND (
-          status = ${"PENDING"}
-          OR (status = ${"RUNNING"} AND locked_until IS NOT NULL AND locked_until < NOW())
-        )
-      RETURNING job_id
+      FROM eligible_intent
+      WHERE reconciliation_jobs.job_id = eligible_intent.job_id
+      RETURNING reconciliation_jobs.job_id
     `);
     return Array.isArray(result) && result.length > 0;
   }
