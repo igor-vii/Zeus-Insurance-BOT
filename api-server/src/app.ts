@@ -10,6 +10,7 @@ import { startEventListener } from "./lib/event-listener";
 import { ZEUS_TREASURY, x402Routes } from "./config/x402.js";
 import { connectMCPServer } from "./mcp-server/index.js";
 import llmsTxtRouter from "./routes/llms-txt.js";
+import { createRequestsRouter } from "./routes/requests.js";
 // DISABLED in production — test endpoint security risk
 // import testRouter from "./routes/test.js";
 import rateLimit from "express-rate-limit";
@@ -119,6 +120,10 @@ try {
 
   // Export shutdown for signal handlers in index.ts
   secretariatShutdown = composition.shutdown;
+
+  // Public Stage-A Secretariat API. The router uses this exact production
+  // instance; it must not create a second composition or duplicate Stage-A.
+  app.use("/v1", createRequestsRouter(composition.secretariat));
 
   logger.info("[app] Secretariat composition root initialized");
 } catch (err) {
