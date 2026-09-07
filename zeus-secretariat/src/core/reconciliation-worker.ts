@@ -150,6 +150,15 @@ export class ReconciliationWorker {
   // -------------------------------------------------------------------------
 
   private async processJob(jobId: string, paymentIntentId: string): Promise<void> {
+    // PENDING_SIGNATURE is a passive pre-signature boundary, not a
+    // reconciliation attempt. Check it before claim because claim increments
+    // the durable probe counter.
+    const preflightDpi = await this.loadDpi(paymentIntentId);
+    if (preflightDpi?.settlementState === "PENDING_SIGNATURE") {
+      await this.safeCompletePendingSignatureJob(jobId);
+      return;
+    }
+
     // Step 1: Atomic claim
     const claimed = await this.store.claimReconciliationJob(
       jobId, this.workerId, this.config.leaseDurationMs,
@@ -272,6 +281,35 @@ export class ReconciliationWorker {
     if (!ok) {
       console.warn(`[ReconciliationWorker] Lost ownership completing job ${jobId}`);
     }
+  }
+
+  private async safeCompletePendingSignatureJob(jobId: string): Promise<void> {
+    const extStore = this.store as DurableEvidenceStore & Partial<{
+      completePendingReconciliationJob(id: string): Promise<boolean>;
+      updateReconciliationJob(
+        id: string,
+        updates: { status?: string; nextProbeAt?: Date; lastError?: string; probeCount?: number },
+      ): Promise<void>;
+    }>;
+
+    if (typeof extStore.completePendingReconciliationJob === "function") {
+      const ok = await extStore.completePendingReconciliationJob(jobId);
+      if (!ok) {
+        console.warn(`[ReconciliationWorker] Pending-signature job ${jobId} was not completed`);
+      }
+      return;
+    }
+
+    // Compatibility fallback for stores that expose the existing lifecycle
+    // update primitive but not the atomic pending-signature helper yet.
+    if (typeof extStore.updateReconciliationJob === "function") {
+      await extStore.updateReconciliationJob(jobId, { status: "COMPLETED" });
+      return;
+    }
+
+    console.warn(
+      `[ReconciliationWorker] Cannot retire pending-signature job ${jobId}: store lacks a completion primitive`,
+    );
   }
 
   private async safeReschedule(jobId: string, nextProbeAt: Date): Promise<void> {

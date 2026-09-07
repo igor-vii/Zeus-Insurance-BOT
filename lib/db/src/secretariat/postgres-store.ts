@@ -372,6 +372,22 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return (Array.isArray(rows) ? rows : []).map((r: any) => ({ jobId: r.job_id, paymentIntentId: r.payment_intent_id, probeCount: r.probe_count }));
   }
 
+  // PENDING_SIGNATURE is passive and must be retired without claiming the job.
+  // This keeps claim-time probe_count increments reserved for real reconciliation.
+  async completePendingReconciliationJob(jobId: string): Promise<boolean> {
+    const result = await this.db.execute(sql`
+      UPDATE reconciliation_jobs
+      SET status = ${"COMPLETED"}, locked_by = NULL, locked_until = NULL, updated_at = NOW()
+      WHERE job_id = ${jobId}
+        AND (
+          status = ${"PENDING"}
+          OR (status = ${"RUNNING"} AND locked_until IS NOT NULL AND locked_until < NOW())
+        )
+      RETURNING job_id
+    `);
+    return Array.isArray(result) && result.length > 0;
+  }
+
   async updateReconciliationJob(jobId: string, updates: { status?: string; nextProbeAt?: Date; lastError?: string; probeCount?: number }): Promise<void> {
     const setObj: Record<string, unknown> = { updatedAt: new Date() };
     if (updates.status) setObj.status = updates.status;
