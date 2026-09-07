@@ -3,6 +3,9 @@
  *
  * Tests the PRODUCTION PostgresEvidenceStore from @workspace/db,
  * NOT a local copy. This is the same store used by api-server composition.
+ *
+ * Production contract: saveOperation() performs UPDATE on an existing
+ * payment_intents row. The DPI row must be created first (mirrors Stage A).
  */
 
 import type { Operation } from "../src/core/types";
@@ -40,8 +43,38 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
     };
   }
 
+  /**
+   * Create a minimal payment_intents row for the given Operation.
+   * Mirrors the production Stage A contract: DPI must exist before
+   * saveOperation() can enrich it with target/method/paymentPolicy.
+   * Uses the same SQL pattern proven working in Case 6.
+   */
+  async function insertTestDpi(op: Operation): Promise<void> {
+    const zeroAddr = "0x0000000000000000000000000000000000000000";
+    const zeroNonce = "0x" + "0".repeat(64);
+    const zeroHash = "0x" + "0".repeat(64);
+    await db.execute(`
+      INSERT INTO payment_intents (
+        payment_intent_id, operation_id, request_id, client_id,
+        authorizer, pay_to, value, asset, network,
+        nonce, valid_after, valid_before,
+        payment_payload, payment_payload_hash,
+        settlement_state, version, created_at, updated_at
+      ) VALUES (
+        'pi-${op.operationId}', '${op.operationId}', '${op.requestId}', '${op.clientId}',
+        '${zeroAddr}', '${zeroAddr.slice(0, -1)}1',
+        '0', 'USDC', 'base',
+        '${zeroNonce}', 0, 9999999999,
+        '{}', '${zeroHash}',
+        'PENDING_SIGNATURE', 0, NOW(), NOW()
+      )
+      ON CONFLICT DO NOTHING
+    `);
+  }
+
   test("Case 1: target round-trip through production store", async () => {
     const op = makeOperation({ target: "https://merchant.example.com/pay" });
+    await insertTestDpi(op);
     await store.saveOperation(op);
 
     const restored = await store.getOperationByRequestId(op.requestId!);
@@ -51,6 +84,7 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
 
   test("Case 2: method round-trip through production store", async () => {
     const op = makeOperation({ method: "PUT" });
+    await insertTestDpi(op);
     await store.saveOperation(op);
 
     const restored = await store.getOperationByRequestId(op.requestId!);
@@ -61,6 +95,7 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
   test("Case 3: paymentPolicy round-trip through production store", async () => {
     const policy = { tier: "premium", limit: "500.00", currency: "USDC" };
     const op = makeOperation({ paymentPolicy: policy });
+    await insertTestDpi(op);
     await store.saveOperation(op);
 
     const restored = await store.getOperationByRequestId(op.requestId!);
@@ -74,6 +109,7 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
       method: "PATCH",
       paymentPolicy: { retryLimit: 5 },
     });
+    await insertTestDpi(op);
     await store.saveOperation(op);
 
     // Create completely fresh store — no shared state
@@ -93,6 +129,7 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
       method: "DELETE",
       paymentPolicy: { scope: "refund" },
     });
+    await insertTestDpi(op);
     await store.saveOperation(op);
 
     const restored = await store.getOperationByClientAndRequestId(op.clientId!, op.requestId!);
@@ -103,7 +140,7 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
   });
 
   /**
-   * TASK 3: Legacy row semantics.
+   * Legacy row semantics.
    *
    * Pre-C1 rows have NULL target/method/payment_policy.
    * Reconstruction returns "" / "" / {} as fallback.
@@ -125,7 +162,6 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
     const zeroHash = "0x" + "0".repeat(64);
 
     // Insert DPI with NULL target/method/payment_policy using raw SQL via shared db
-    // No direct drizzle-orm import needed — uses db.execute() from @workspace/db
     await db.execute(`
       INSERT INTO payment_intents (
         payment_intent_id, operation_id, request_id, client_id,
@@ -136,8 +172,8 @@ describeIfDb("Repair C1: Operation request semantics persistence (production sto
         target, method, payment_policy
       ) VALUES (
         '${legacyPiId}', '${legacyOpId}', '${legacyReqId}', '${legacyClientId}',
-        '${zeroAddr}', '${zeroAddr.replace(/0$/, '1')}',
-        0, 'USDC', 'base',
+        '${zeroAddr}', '${zeroAddr.slice(0, -1)}1',
+        '0', 'USDC', 'base',
         '${zeroNonce}', 0, 9999999999,
         '{}', '${zeroHash}',
         'AUTHORIZED', 0, NOW(), NOW(),
