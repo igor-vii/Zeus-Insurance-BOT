@@ -61,19 +61,6 @@ export type RecoveryJobStatus =
   | "FAILED"
   | "UNRESOLVABLE";
 
-export interface RecoveryJob {
-  readonly jobId: string;
-  readonly operationId: string;
-  readonly jobType: RecoveryJobType;
-  readonly status: RecoveryJobStatus;
-  readonly priority: number;
-  readonly maxAttempts: number;
-  readonly currentAttempt: number;
-  readonly metadata?: unknown;
-  readonly createdAt: number;
-  readonly updatedAt: number;
-}
-
 export interface ExecutionAttempt {
   readonly attemptId: string;
   readonly operationId: string;
