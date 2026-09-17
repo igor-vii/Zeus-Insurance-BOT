@@ -10,6 +10,7 @@ export declare class InMemoryEvidenceStore implements EvidenceStore {
     private readonly evidence;
     append(record: EvidenceRecord): Promise<void>;
     getOperation(operationId: string): Promise<Operation | null>;
+    getOperationByRequestId(requestId: string): Promise<Operation | null>;
     saveOperation(operation: Operation): Promise<void>;
     getEvidence(operationId: string): Promise<EvidenceRecord[]>;
     getOperationsByStatus(status: OperationStatus): Promise<Operation[]>;

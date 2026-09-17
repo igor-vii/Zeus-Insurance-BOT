@@ -4,6 +4,16 @@
   "description": "Zeus Secretariat V0 - Independent execution layer with state machine, payment intent lifecycle, settlement observation, execution observation, recovery policy, and durable evidence",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./adapters/local-eoa-signer": {
+      "types": "./dist/adapters/local-eoa-signer.d.ts",
+      "default": "./dist/adapters/local-eoa-signer.js"
+    }
+  },
   "directories": {
     "test": "tests"
   },

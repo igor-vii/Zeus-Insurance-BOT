@@ -1,13 +1,10 @@
-"use strict";
 /**
  * Zeus Secretariat V0 - In-Memory Evidence Store (MVP Implementation)
  *
  * For production, replace with PostgreSQL/SQLite implementation.
  * This is a minimal implementation for testing and development.
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.InMemoryEvidenceStore = void 0;
-class InMemoryEvidenceStore {
+export class InMemoryEvidenceStore {
     operations = new Map();
     evidence = new Map();
     async append(record) {
@@ -17,6 +14,13 @@ class InMemoryEvidenceStore {
     }
     async getOperation(operationId) {
         return this.operations.get(operationId) ?? null;
+    }
+    async getOperationByRequestId(requestId) {
+        for (const operation of this.operations.values()) {
+            if (operation.requestId === requestId)
+                return operation;
+        }
+        return null;
     }
     async saveOperation(operation) {
         this.operations.set(operation.operationId, operation);
@@ -47,5 +51,4 @@ class InMemoryEvidenceStore {
         return Array.from(this.operations.values());
     }
 }
-exports.InMemoryEvidenceStore = InMemoryEvidenceStore;
 //# sourceMappingURL=in-memory-store.js.map

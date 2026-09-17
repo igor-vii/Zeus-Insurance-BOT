@@ -1,1 +1,103 @@
-Nothing should be ignored based on the provided file changes. The modified file 'zeus-secretariat/src/adapters/local-eoa-signer.ts' is a TypeScript source file that should not be added to .gitignore. Since there are no build artifacts, dependencies, or temporary files in the changes, no additional ignore rules are needed.
+```
+# Build artifacts
+*.tsbuildinfo
+dist/
+build/
+target/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+.eggs/
+
+# Java/Gradle
+*.class
+*.jar
+*.war
+*.ear
+.classpath
+.project
+.gradle/
+build/
+
+# C/C++
+*.o
+*.a
+*.obj
+*.out
+*.dll
+*.so
+*.dylib
+
+# Go
+*.exe
+*.test
+
+# MyPy
+.mypy_cache/
+
+# PyTest
+.pytest_cache/
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```
