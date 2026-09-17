@@ -9,7 +9,8 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx/esm --test tests/mcp-server.test.ts tests/pricing.test.ts",
-    "test:pricing": "node --import tsx/esm --test tests/pricing.test.ts"
+    "test:pricing": "node --import tsx/esm --test tests/pricing.test.ts",
+    "dev:local": "node scripts/run-local.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
