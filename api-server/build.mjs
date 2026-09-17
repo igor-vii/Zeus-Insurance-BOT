@@ -102,7 +102,6 @@ async function buildAll() {
       "electron",
       "zeus-secretariat",
       "@workspace/db",
-      "@workspace/api-zod",
     ],
     sourcemap: "linked",
     plugins: [

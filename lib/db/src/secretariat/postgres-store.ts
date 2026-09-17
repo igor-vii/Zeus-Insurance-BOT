@@ -7,7 +7,7 @@
  * P0-6: Batch reconciliation with correct state column
  */
 
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   paymentIntentsTable,
@@ -217,7 +217,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   async getNonTerminalIntents(): Promise<DurablePaymentIntent[]> {
     const states = ["SUBMITTING", "SUBMITTED", "SETTLEMENT_PENDING", "RECONCILING"];
     const rows = await this.db.select().from(paymentIntentsTable)
-      .where(sql`${paymentIntentsTable.settlementState} = ANY(${states})`);
+      .where(inArray(paymentIntentsTable.settlementState, states));
     return rows.map((r: any) => this.rowToIntent(r as PaymentIntentRow));
   }
 
