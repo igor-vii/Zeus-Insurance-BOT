@@ -27,13 +27,13 @@ import type {
   RpcObservationForNotSettled,
   ReconciliationScheduleConfig,
   FinalityPolicy,
-} from "./types";
+} from "./types.js";
 import {
   allowNewPayment,
   DEFAULT_RECONCILIATION_SCHEDULE,
   DEFAULT_FINALITY_POLICY,
-} from "./types";
-import type { MultiRpcChecker, TransactionCheckResult } from "./multi-rpc-checker";
+} from "./types.js";
+import type { MultiRpcChecker, TransactionCheckResult } from "./multi-rpc-checker.js";
 import { keccak256, toBytes } from "viem";
 
 // ---------------------------------------------------------------------------

@@ -68,12 +68,12 @@ export class MockPaymentAdapter {
     }
 }
 // Export signers
-export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer';
-export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer';
-export { PaymentSigningError, NonceAlreadyUsedError, SignerBindingError, InvalidAuthorizationError, SignatureUnknownError, PolicyNotValidatedError, } from '../core/payment-errors';
-export { CryptoNonceGenerator, InMemoryNonceRegistry, } from '../core/nonce-generator';
+export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer.js';
+export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer.js';
+export { PaymentSigningError, NonceAlreadyUsedError, SignerBindingError, InvalidAuthorizationError, SignatureUnknownError, PolicyNotValidatedError, } from '../core/payment-errors.js';
+export { CryptoNonceGenerator, InMemoryNonceRegistry, } from '../core/nonce-generator.js';
 // Phase 2.3: Real Facilitator Settlement
-export { X402FacilitatorClient, MockX402FacilitatorClient, encodePaymentSignature, } from "./x402-facilitator-client";
+export { X402FacilitatorClient, MockX402FacilitatorClient, encodePaymentSignature, } from "./x402-facilitator-client.js";
 // Phase 2.4: Post-Settlement Execution
-export { HttpSellerExecutionAdapter, MockSellerExecutionAdapter, } from "./seller-execution-adapter";
+export { HttpSellerExecutionAdapter, MockSellerExecutionAdapter, } from "./seller-execution-adapter.js";
 //# sourceMappingURL=index.js.map

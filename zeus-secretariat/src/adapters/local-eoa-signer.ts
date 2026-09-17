@@ -13,11 +13,11 @@
  * - Private key should only be provided via environment variable
  */
 
-import { PaymentSigner } from '../core/payment-signer';
+import { PaymentSigner } from '../core/payment-signer.js';
 import {
   PaymentAuthorizationRequest,
   PaymentSignatureResult,
-} from '../core/payment-types';
+} from '../core/payment-types.js';
 import {
   createWalletClient,
   http,

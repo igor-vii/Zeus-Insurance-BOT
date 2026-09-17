@@ -3,8 +3,8 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import type { DurablePaymentIntent } from "./types";
-import type { PaymentPayload } from "../adapters/x402-facilitator-client";
+import type { DurablePaymentIntent } from "./types.js";
+import type { PaymentPayload } from "../adapters/x402-facilitator-client.js";
 
 /**
  * EIP-3009 TransferWithAuthorization typed-data definition.

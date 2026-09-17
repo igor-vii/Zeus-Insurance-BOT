@@ -4,7 +4,7 @@
  * For production, replace with PostgreSQL/SQLite implementation.
  * This is a minimal implementation for testing and development.
  */
-import { EvidenceStore, EvidenceRecord, Operation, OperationStatus } from '../core/types';
+import { EvidenceStore, EvidenceRecord, Operation, OperationStatus } from '../core/types.js';
 export declare class InMemoryEvidenceStore implements EvidenceStore {
     private readonly operations;
     private readonly evidence;

@@ -4,10 +4,10 @@
  * Core invariant: After payment is submitted, we CANNOT blindly retry.
  * We must first determine settlement status before any recovery action.
  */
-import { CryptoNonceGenerator } from './nonce-generator';
+import { CryptoNonceGenerator } from './nonce-generator.js';
 import { keccak256, toBytes } from 'viem';
-import { X402Parser } from './x402-parser';
-import { SellerCapabilityResolver } from './capability-resolver';
+import { X402Parser } from './x402-parser.js';
+import { SellerCapabilityResolver } from './capability-resolver.js';
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================

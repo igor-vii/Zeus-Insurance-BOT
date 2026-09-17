@@ -18,12 +18,12 @@ import type {
   DurablePaymentIntent,
   EvidenceRecord,
   ExecutionStatus,
-} from "./types";
+} from "./types.js";
 import type {
   SellerExecutionAdapter,
   SellerExecutionRequest,
   SellerExecutionResult,
-} from "../adapters/seller-execution-adapter";
+} from "../adapters/seller-execution-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Types

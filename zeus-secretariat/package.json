@@ -1,6 +1,7 @@
 {
   "name": "zeus-secretariat",
   "version": "0.1.0",
+  "type": "module",
   "description": "Zeus Secretariat V0 - Independent execution layer with state machine, payment intent lifecycle, settlement observation, execution observation, recovery policy, and durable evidence",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

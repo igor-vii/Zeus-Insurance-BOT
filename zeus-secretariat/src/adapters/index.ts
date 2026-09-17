@@ -96,11 +96,11 @@ export class MockPaymentAdapter {
 }
 
 // Export signers
-export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer';
-export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer';
+export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer.js';
+export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer.js';
 
 // Export core signer interfaces and types
-export type { PaymentSigner } from '../core/payment-signer';
+export type { PaymentSigner } from '../core/payment-signer.js';
 export type {
   PaymentAuthorizationRequest,
   PaymentSignatureResult,
@@ -108,7 +108,7 @@ export type {
   PaymentAuthorizationState,
   NonceGenerator,
   NonceRegistry,
-} from '../core/payment-types';
+} from '../core/payment-types.js';
 export {
   PaymentSigningError,
   NonceAlreadyUsedError,
@@ -116,11 +116,11 @@ export {
   InvalidAuthorizationError,
   SignatureUnknownError,
   PolicyNotValidatedError,
-} from '../core/payment-errors';
+} from '../core/payment-errors.js';
 export {
   CryptoNonceGenerator,
   InMemoryNonceRegistry,
-} from '../core/nonce-generator';
+} from '../core/nonce-generator.js';
 
 // Phase 2.3: Real Facilitator Settlement
 export {
@@ -132,7 +132,7 @@ export {
   type SubmitResult,
   type SettlementAdapter,
   type MockFacilitatorBehavior,
-} from "./x402-facilitator-client";
+} from "./x402-facilitator-client.js";
 
 // Phase 2.4: Post-Settlement Execution
 export {
@@ -142,4 +142,4 @@ export {
   type SellerExecutionRequest,
   type SellerExecutionResult,
   type MockSellerBehavior,
-} from "./seller-execution-adapter";
+} from "./seller-execution-adapter.js";

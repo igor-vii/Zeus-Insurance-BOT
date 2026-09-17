@@ -10,7 +10,7 @@ import {
   EvidenceRecord,
   Operation,
   OperationStatus,
-} from '../core/types';
+} from '../core/types.js';
 
 export class InMemoryEvidenceStore implements EvidenceStore {
   private readonly operations: Map<string, Operation> = new Map();

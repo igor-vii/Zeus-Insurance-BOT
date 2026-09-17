@@ -7,8 +7,8 @@
  * Lifecycle: poll → discover → claim → load DPI → reconcile → map outcome → release lease
  */
 
-import type { DurableEvidenceStore, DurablePaymentIntent } from './types';
-import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliation-engine';
+import type { DurableEvidenceStore, DurablePaymentIntent } from './types.js';
+import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliation-engine.js';
 
 // ---------------------------------------------------------------------------
 // Configuration

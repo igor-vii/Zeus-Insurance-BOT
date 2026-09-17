@@ -7,15 +7,15 @@
  * - Binding mismatch scenarios
  */
 
-import { PaymentSigner } from '../core/payment-signer';
+import { PaymentSigner } from '../core/payment-signer.js';
 import {
   PaymentAuthorizationRequest,
   PaymentSignatureResult,
-} from '../core/payment-types';
+} from '../core/payment-types.js';
 import {
   SignerBindingError,
   PaymentSigningError,
-} from '../core/payment-errors';
+} from '../core/payment-errors.js';
 
 export interface MockSignerConfig {
   /**

@@ -4,11 +4,11 @@
  * Core invariant: After payment is submitted, we CANNOT blindly retry.
  * We must first determine settlement status before any recovery action.
  */
-import { Operation, EvidenceRecord, ExecuteRequest, ExecutionResult, EvidenceStore, DurableEvidenceStore, DurablePaymentIntent, PaymentSigner, PaymentAdapter, PaymentRequirement } from './types';
-import type { SettlementAdapter, PaymentPayload } from '../adapters/x402-facilitator-client';
-import type { ReconciliationEngine } from './reconciliation-engine';
-import type { AtomicSettlementHandoff } from './post-settlement-engine';
-import { CapabilitySource } from './capability-resolver';
+import { Operation, EvidenceRecord, ExecuteRequest, ExecutionResult, EvidenceStore, DurableEvidenceStore, DurablePaymentIntent, PaymentSigner, PaymentAdapter, PaymentRequirement } from './types.js';
+import type { SettlementAdapter, PaymentPayload } from '../adapters/x402-facilitator-client.js';
+import type { ReconciliationEngine } from './reconciliation-engine.js';
+import type { AtomicSettlementHandoff } from './post-settlement-engine.js';
+import { CapabilitySource } from './capability-resolver.js';
 /**
  * P0-7: ARCHITECTURAL BOUNDARY — SINGLE AUTHORITATIVE EXECUTION PATH
  *

@@ -1,1 +1,1 @@
-export { InMemoryEvidenceStore } from "./in-memory-store";
+export { InMemoryEvidenceStore } from "./in-memory-store.js";

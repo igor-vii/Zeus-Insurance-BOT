@@ -7,7 +7,7 @@
  * Payment parameters are immutable after signing.
  */
 
-import { PaymentAuthorizationRequest, PaymentSignatureResult } from './payment-types';
+import { PaymentAuthorizationRequest, PaymentSignatureResult } from './payment-types.js';
 
 /**
  * PaymentSigner boundary interface.

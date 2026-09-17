@@ -8,8 +8,8 @@
 
 import { createPublicClient, http, keccak256, parseAbiItem, toBytes, type PublicClient } from "viem";
 // Chain is provided via OnChainNetworkConfig (no hardcoded network)
-import type { RpcProviderConfig, FinalityPolicy } from "./types";
-import { DEFAULT_FINALITY_POLICY } from "./types";
+import type { RpcProviderConfig, FinalityPolicy } from "./types.js";
+import { DEFAULT_FINALITY_POLICY } from "./types.js";
 
 // EIP-3009 AuthorizationUsed(address authorizer, bytes32 nonce)
 const AUTHORIZATION_USED_EVENT = parseAbiItem(

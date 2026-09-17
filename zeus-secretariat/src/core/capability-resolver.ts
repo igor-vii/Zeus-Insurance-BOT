@@ -5,7 +5,7 @@
  * Priority: Registry > Discovery > Headers > NONE
  */
 
-import { RecoveryCapability, SellerCapabilities, Operation } from './types';
+import { RecoveryCapability, SellerCapabilities, Operation } from './types.js';
 
 export interface CapabilitySource {
   getCapability(url: string): Promise<SellerCapabilities | null>;

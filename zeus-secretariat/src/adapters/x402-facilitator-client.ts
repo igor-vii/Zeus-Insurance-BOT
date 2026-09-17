@@ -12,8 +12,8 @@ import type {
   DurablePaymentIntent,
   SettlementState,
   DurableEvidenceStore,
-} from "../core/types";
-import { allowNewPayment } from "../core/types";
+} from "../core/types.js";
+import { allowNewPayment } from "../core/types.js";
 
 // ---------------------------------------------------------------------------
 // Types

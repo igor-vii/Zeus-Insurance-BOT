@@ -27,13 +27,13 @@ import {
   PaymentRequirement,
   PaymentAuthorization,
   SigningContext,
-} from './types';
+} from './types.js';
 
-import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../adapters/x402-facilitator-client';
-import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliation-engine';
-import type { RecoveryJob, ExecutionAttempt, AtomicSettlementHandoff } from './post-settlement-engine';
-import type { PaymentAuthorizationRequest, PaymentSignatureResult } from './payment-types';
-import { CryptoNonceGenerator } from './nonce-generator';
+import type { SettlementAdapter, PaymentPayload, SubmitResult } from '../adapters/x402-facilitator-client.js';
+import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliation-engine.js';
+import type { RecoveryJob, ExecutionAttempt, AtomicSettlementHandoff } from './post-settlement-engine.js';
+import type { PaymentAuthorizationRequest, PaymentSignatureResult } from './payment-types.js';
+import { CryptoNonceGenerator } from './nonce-generator.js';
 import { keccak256, toBytes } from 'viem';
 
 // Legacy types used internally by StateMachine (Phase 2.1 payment flow)
@@ -56,8 +56,8 @@ type PaymentIntentStatus =
   | 'SETTLED'
   | 'FAILED'
   | 'UNKNOWN';
-import { X402Parser, X402Accept } from './x402-parser';
-import { SellerCapabilityResolver, CapabilitySource } from './capability-resolver';
+import { X402Parser, X402Accept } from './x402-parser.js';
+import { SellerCapabilityResolver, CapabilitySource } from './capability-resolver.js';
 
 // ============================================================================
 // UTILITY FUNCTIONS

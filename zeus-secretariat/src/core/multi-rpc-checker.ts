@@ -11,8 +11,8 @@ import type {
   RpcProviderConfig,
   ReconciliationObservation,
   FinalityPolicy,
-} from "./types";
-import { DEFAULT_FINALITY_POLICY } from "./types";
+} from "./types.js";
+import { DEFAULT_FINALITY_POLICY } from "./types.js";
 import { keccak256, toBytes } from "viem";
 
 // ---------------------------------------------------------------------------

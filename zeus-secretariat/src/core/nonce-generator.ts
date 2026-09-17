@@ -5,7 +5,7 @@
  * Format: 0x + 64 hex characters (bytes32-compatible for EIP-3009).
  */
 
-import { NonceGenerator } from './payment-types';
+import { NonceGenerator } from './payment-types.js';
 import { randomBytes } from 'crypto';
 
 export class CryptoNonceGenerator implements NonceGenerator {
