@@ -1,2 +1,2 @@
-export * from './in-memory-store';
+export { InMemoryEvidenceStore } from "./in-memory-store";
 //# sourceMappingURL=index.d.ts.map

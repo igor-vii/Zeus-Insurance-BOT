@@ -7,7 +7,7 @@
  * The Secretariat owns the operation state machine, payment intent lifecycle, settlement observation,
  * execution observation, recovery policy, and durable evidence.
  */
-export type OperationStatus = 'CREATED' | 'DISCOVERING' | 'PAYMENT_REQUIRED' | 'AUTHORIZED' | 'PAYMENT_SUBMITTED' | 'SETTLEMENT_UNKNOWN' | 'SETTLED' | 'EXECUTION_PENDING' | 'EXECUTION_CONFIRMED' | 'DELIVERED' | 'SUCCESS' | 'FAILED' | 'POLICY_REJECTED' | 'SETTLEMENT_FAILED' | 'EXECUTION_UNKNOWN' | 'RECOVERY_PENDING' | 'RECOVERED' | 'UNRESOLVABLE';
+export type OperationStatus = 'CREATED' | 'DISCOVERING' | 'PAYMENT_REQUIRED' | 'AWAITING_SIGNATURE' | 'AUTHORIZED' | 'PAYMENT_SUBMITTED' | 'SETTLEMENT_PENDING' | 'SETTLEMENT_UNKNOWN' | 'SETTLED' | 'EXECUTION_PENDING' | 'EXECUTION_CONFIRMED' | 'DELIVERED' | 'SUCCESS' | 'FAILED' | 'POLICY_REJECTED' | 'SETTLEMENT_FAILED' | 'EXECUTION_UNKNOWN' | 'RECOVERY_PENDING' | 'RECOVERED' | 'UNRESOLVABLE';
 export type PaymentStatus = 'NOT_STARTED' | 'AUTHORIZED' | 'SUBMITTED' | 'SETTLED' | 'FAILED' | 'UNKNOWN';
 export type ExecutionStatus = 'NOT_STARTED' | 'PENDING' | 'CONFIRMED' | 'FAILED' | 'UNKNOWN';
 export interface Operation {
@@ -18,9 +18,15 @@ export interface Operation {
      */
     readonly operationId: string;
     /**
-     * Original request identifier from the agent/client
+     * Original request identifier from the agent/client.
+     * Serves as the canonical idempotency key when combined with clientId.
      */
     readonly requestId: string;
+    /**
+     * Client identity for durable idempotency.
+     * Propagated from ExecuteRequest.clientId. Nullable for backward compatibility.
+     */
+    readonly clientId?: string;
     /**
      * Target endpoint to execute
      */
@@ -46,7 +52,7 @@ export interface Operation {
      */
     paymentState: PaymentStatus;
     executionState: ExecutionStatus;
-    deliveryState: 'NOT_STARTED' | 'PENDING' | 'DELIVERED' | 'FAILED';
+    deliveryState: 'NOT_STARTED' | 'PENDING' | 'DELIVERED' | 'FAILED' | 'UNKNOWN';
     /**
      * Current overall state
      */
@@ -128,21 +134,6 @@ export interface SellerCapabilities {
     idempotencyHeader?: string;
 }
 export type RecoveryCapability = 'NONE' | 'EXECUTION_IDEMPOTENT' | 'RESULT_RETRIEVAL' | 'SIGNED_RECEIPT';
-export interface PaymentIntent {
-    readonly operationId: string;
-    readonly requirement: PaymentRequirement;
-    readonly amount: string;
-    readonly asset: string;
-    readonly network: string;
-    authorization?: PaymentAuthorization;
-    readonly createdAt: number;
-    status: PaymentIntentStatus;
-    transactionHash?: string;
-    submittedAt?: number;
-    settledAt?: number;
-    failedAt?: number;
-}
-export type PaymentIntentStatus = 'CREATED' | 'AUTHORIZED' | 'SUBMITTED' | 'SETTLED' | 'FAILED' | 'UNKNOWN';
 export interface PaymentRequirement {
     /**
      * Required payment amount
@@ -186,6 +177,16 @@ export interface PaymentAuthorization {
      * Context used for signing
      */
     context: SigningContext;
+    /**
+     * Canonical EIP-3009 binding fields. Legacy adapters may omit these while
+     * the compatibility path is in use; the production V2 path validates them
+     * before accepting the authorization.
+     */
+    authorizer?: string;
+    payTo?: string;
+    value?: string;
+    validAfter?: number;
+    validBefore?: number;
 }
 export interface SigningContext {
     operationId: string;
@@ -193,6 +194,11 @@ export interface SigningContext {
     nonce?: string;
 }
 export interface PaymentSigner {
+    /**
+     * Address controlled by the signer. Required by the canonical V2 path so
+     * the durable intent can be bound before requesting a signature.
+     */
+    getAddress?: () => Promise<string>;
     /**
      * Sign a payment requirement
      * @param requirement - Payment requirement to sign
@@ -377,8 +383,231 @@ export interface ExecuteRequest {
      */
     policy: PaymentPolicy;
     /**
-     * Optional request ID (generated if not provided)
+     * Optional request ID (generated if not provided).
+     * Serves as the canonical idempotency key when combined with clientId.
      */
     requestId?: string;
+    /**
+     * Optional client identity for durable idempotency.
+     * When provided with requestId, enables (clientId, requestId) deduplication.
+     * Must represent the actual authenticated caller — never generated internally.
+     */
+    clientId?: string;
+    /**
+     * Address that will externally sign a non-custodial payment payload.
+     * Stage A persists this binding and never derives it from a server signer.
+     */
+    authorizer?: string;
+}
+/**
+ * §2: Canonical economic settlement states.
+ * UNKNOWN is internal-only; API/UI uses PAYMENT_RECONCILING etc.
+ * FAILED is NOT a valid settlement state — use RECONCILING instead.
+ */
+export type SettlementState = "PENDING_SIGNATURE" | "AUTHORIZED" | "SUBMITTING" | "SUBMITTED" | "SETTLEMENT_PENDING" | "RECONCILING" | "SETTLED" | "NOT_SETTLED" | "UNRESOLVED_MANUAL";
+/**
+ * §3: Economic safety invariant — the ONLY state that permits a new payment.
+ * This is enforced at DB level via allowNewPayment() guard.
+ */
+export declare function allowNewPayment(state: SettlementState): boolean;
+/** All states that BLOCK new payment creation. */
+export declare const PAYMENT_BLOCKED_STATES: readonly SettlementState[];
+/**
+ * §2: API/UI labels for settlement states.
+ */
+export type PaymentDisplayState = "PAYMENT_PENDING_SIGNATURE" | "PAYMENT_AUTHORIZED" | "PAYMENT_SUBMITTING" | "PAYMENT_SUBMITTED" | "PAYMENT_SETTLEMENT_PENDING" | "PAYMENT_RECONCILING" | "PAYMENT_SETTLED" | "PAYMENT_NOT_SETTLED" | "PAYMENT_UNRESOLVED_MANUAL";
+export declare function toDisplayState(state: SettlementState): PaymentDisplayState;
+/**
+ * §4: Durable Payment Intent — persisted BEFORE /settle network I/O.
+ */
+export interface DurablePaymentIntent {
+    readonly paymentIntentId: string;
+    readonly operationId: string;
+    readonly requestId?: string;
+    readonly clientId?: string;
+    readonly authorizer: string;
+    readonly payTo: string;
+    readonly value: string;
+    readonly asset: string;
+    readonly network: string;
+    readonly nonce: string;
+    readonly validAfter: number;
+    readonly validBefore: number;
+    readonly paymentPayload: string;
+    readonly paymentPayloadHash: string;
+    settlementState: SettlementState;
+    txHash?: string;
+    facilitatorHttpStatus?: number;
+    facilitatorResponseBody?: unknown;
+    errorReason?: string;
+    submitAttemptAt?: number;
+    settledAt?: number;
+    notSettledAt?: number;
+    reconciliationObservations?: ReconciliationObservation[];
+    settledEvidenceBundle?: SettledEvidenceBundle;
+    notSettledEvidenceBundle?: NotSettledEvidenceBundle;
+    probeCount?: number;
+    nextProbeAt?: number;
+    readonly createdAt: number;
+    updatedAt: number;
+}
+/**
+ * §22: Reconciliation observation — persisted per probe attempt.
+ */
+export interface ReconciliationObservation {
+    readonly attemptId: string;
+    readonly paymentIntentId: string;
+    readonly timestamp: number;
+    readonly rpcProviderId: string;
+    readonly headBlock: number;
+    readonly authorizationState: boolean | null;
+    readonly validBefore: number;
+    readonly result: "STILL_UNKNOWN" | "SETTLED_FOUND" | "NOT_SETTLED_CONFIRMED" | "RPC_ERROR" | "STALE_HEAD";
+    readonly error?: string;
+}
+/**
+ * §7 + §22: SETTLED evidence bundle — minimum proof for economic settlement.
+ */
+export interface SettledEvidenceBundle {
+    readonly authorizationUsed: {
+        readonly transactionHash: string;
+        readonly blockNumber: number;
+        readonly logIndex: number;
+    };
+    readonly receipt: {
+        readonly status: 1;
+        readonly blockNumber: number;
+        readonly gasUsed: string;
+    };
+    readonly transfer: {
+        readonly from: string;
+        readonly to: string;
+        readonly value: string;
+        readonly tokenContract: string;
+    };
+    readonly confirmations: number;
+    readonly finalityReached: boolean;
+    readonly rpcObservations: ReconciliationObservation[];
+}
+/**
+ * §11 + §23: NOT_SETTLED evidence bundle — strict positive proof.
+ */
+export interface NotSettledEvidenceBundle {
+    readonly authorizer: string;
+    readonly nonce: string;
+    readonly validBefore: number;
+    readonly expiryConfirmedAt: number;
+    readonly authorizationStateFalse: true;
+    readonly rpcObservations: readonly RpcObservationForNotSettled[];
+    readonly scanComplete: boolean;
+    readonly authorizationUsedScanResult: "NOT_FOUND" | "SCAN_COMPLETE_EMPTY";
+}
+/**
+ * §14-15: Individual RPC observation for NOT_SETTLED proof.
+ */
+export interface RpcObservationForNotSettled {
+    readonly providerId: string;
+    readonly underlyingProvider: string;
+    readonly observedAt: number;
+    readonly blockNumber: number;
+    readonly chainHead: number;
+    readonly authorizationState: false;
+    readonly stalenessBlocks: number;
+    readonly error?: string;
+}
+/**
+ * §14-15: RPC provider configuration with independence tracking.
+ */
+export interface RpcProviderConfig {
+    readonly providerId: string;
+    readonly underlyingProvider: string;
+    readonly rpcUrl: string;
+    readonly maxStalenessBlocks: number;
+    /** Expected EVM chain ID. A provider returning another chain is invalid. */
+    readonly chainId?: number;
+}
+/**
+ * §16: Reconciliation schedule configuration.
+ */
+export interface ReconciliationScheduleConfig {
+    readonly probes: readonly number[];
+    readonly periodicIntervalMs: number;
+    readonly safetyBufferAfterExpiryMs: number;
+}
+export declare const DEFAULT_RECONCILIATION_SCHEDULE: ReconciliationScheduleConfig;
+/**
+ * §24: Confirmation/finality policy.
+ */
+export interface FinalityPolicy {
+    readonly requiredConfirmations: number;
+    readonly reorgIncidentThreshold: number;
+}
+export declare const DEFAULT_FINALITY_POLICY: FinalityPolicy;
+/** @deprecated Use SettlementState instead */
+/** @deprecated Use DurablePaymentIntent instead */
+export type NonceStatus = "RESERVED" | "SIGNED" | "SUBMITTED" | "SETTLED";
+export interface NonceRecord {
+    readonly nonce: string;
+    readonly operationId: string;
+    status: NonceStatus;
+    payer: string;
+    createdAt: number;
+    updatedAt: number;
+}
+export interface DurableEvidenceStore {
+    append(record: EvidenceRecord): Promise<void>;
+    getOperation(operationId: string): Promise<Operation | null>;
+    saveOperation(operation: Operation): Promise<void>;
+    getEvidence(operationId: string): Promise<EvidenceRecord[]>;
+    getOperationsByStatus(status: OperationStatus): Promise<Operation[]>;
+    createPaymentIntent(intent: DurablePaymentIntent): Promise<void>;
+    getPaymentIntentByOperationId(operationId: string): Promise<DurablePaymentIntent | null>;
+    getPaymentIntentByRequestId?(requestId: string): Promise<DurablePaymentIntent | null>;
+    updatePaymentIntentAuthorization?: (paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">) => Promise<void>;
+    updatePaymentIntentStatus(intentId: string, status: SettlementState, extra?: Partial<Pick<DurablePaymentIntent, "txHash" | "facilitatorHttpStatus" | "facilitatorResponseBody" | "errorReason">>): Promise<void>;
+    reserveNonce(nonce: string, operationId: string, payer: string): Promise<void>;
+    getNonce(nonce: string): Promise<NonceRecord | null>;
+    markNonceSigned(nonce: string): Promise<void>;
+    markNonceSubmitted(nonce: string): Promise<void>;
+    markNonceSettled(nonce: string): Promise<void>;
+    createIntentWithNonce(intent: DurablePaymentIntent, payer: string): Promise<void>;
+    compareAndSetState(intentId: string, expectedState: SettlementState, newState: SettlementState, extra?: Partial<DurablePaymentIntent>): Promise<boolean>;
+    transitionToSubmitting(paymentIntentId: string): Promise<boolean>;
+    recordSubmissionResult(paymentIntentId: string, newState: SettlementState, txHash?: string, facilitatorHttpStatus?: number, facilitatorResponseBody?: unknown): Promise<boolean>;
+    getPaymentIntentById(paymentIntentId: string): Promise<DurablePaymentIntent | null>;
+    getNonTerminalIntents(): Promise<DurablePaymentIntent[]>;
+    canCreateNewPayment(operationId: string): Promise<boolean>;
+    appendReconciliationObservation(observation: ReconciliationObservation): Promise<void>;
+    getReconciliationObservations(paymentIntentId: string): Promise<ReconciliationObservation[]>;
+    saveSettledEvidenceBundle(intentId: string, bundle: SettledEvidenceBundle): Promise<void>;
+    saveNotSettledEvidenceBundle(intentId: string, bundle: NotSettledEvidenceBundle): Promise<void>;
+    getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
+    getOperationByRequestId?(requestId: string): Promise<Operation | null>;
+    createReconciliationJob(paymentIntentId: string, nextProbeAt: Date): Promise<string>;
+    getDueReconciliationJobs(): Promise<Array<{
+        jobId: string;
+        paymentIntentId: string;
+        probeCount: number;
+    }>>;
+    claimReconciliationJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean>;
+    completeReconciliationJob(jobId: string, workerId: string): Promise<boolean>;
+    rescheduleReconciliationJob(jobId: string, workerId: string, nextProbeAt: Date): Promise<boolean>;
+    failReconciliationJob(jobId: string, workerId: string, error: string): Promise<boolean>;
+    updatePaymentIntentProbeCount(paymentIntentId: string, probeCount: number): Promise<void>;
+}
+/**
+ * Explicit contract for payment submission safety transitions.
+ * All methods are REQUIRED. No optional chaining. No as any.
+ * Implementations MUST provide atomic DB-level guarantees.
+ */
+export interface PaymentSubmissionStore extends DurableEvidenceStore {
+    /** P0-1: Atomically transition AUTHORIZED -> SUBMITTING before network I/O */
+    transitionToSubmitting(paymentIntentId: string): Promise<boolean>;
+    /** P0-1: Record facilitator response result after network I/O */
+    recordSubmissionResult(paymentIntentId: string, newState: SettlementState, txHash?: string, facilitatorHttpStatus?: number, facilitatorResponseBody?: unknown): Promise<boolean>;
+    /** P0-6: Find all non-terminal intents for batch reconciliation */
+    getNonTerminalIntents(): Promise<DurablePaymentIntent[]>;
+    /** Lookup by paymentIntentId (not operationId) */
+    getPaymentIntentById(paymentIntentId: string): Promise<DurablePaymentIntent | null>;
 }
 //# sourceMappingURL=types.d.ts.map

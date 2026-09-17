@@ -1,4 +1,3 @@
-"use strict";
 /**
  * Zeus Secretariat V0
  *
@@ -6,27 +5,26 @@
  * Reuses proven x402 implementation patterns where useful, but does not import
  * Syra's architecture, dependencies, retry semantics, or economic assumptions.
  */
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __exportStar = (this && this.__exportStar) || function(m, exports) {
-    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
-};
-Object.defineProperty(exports, "__esModule", { value: true });
 // Core types
-__exportStar(require("./core/types"), exports);
+export * from './core/types';
+export { PaymentSigningError, NonceAlreadyUsedError, SignerBindingError, InvalidAuthorizationError, SignatureUnknownError, PolicyNotValidatedError, } from './core/payment-errors';
+export { CryptoNonceGenerator, InMemoryNonceRegistry, } from './core/nonce-generator';
 // State machine
-__exportStar(require("./core/state-machine"), exports);
+export * from './core/state-machine';
+export * from './core/eip3009-verifier';
 // Evidence store
-__exportStar(require("./store"), exports);
+export * from './store';
 // Adapters
-__exportStar(require("./adapters"), exports);
+export * from './adapters';
+// Post-settlement execution engine (canonical V0 seller execution lifecycle)
+export { PostSettlementEngine, InMemoryExecutionStore } from './core/post-settlement-engine';
+// Seller execution adapter (HTTP implementation)
+export { HttpSellerExecutionAdapter, MockSellerExecutionAdapter } from './adapters/seller-execution-adapter';
+// Reconciliation engine (B.3-A: canonical settlement verification)
+export { ReconciliationEngine } from './core/reconciliation-engine';
+// ReconciliationScheduleConfig and FinalityPolicy are exported from ./core/types
+// Reconciliation worker (B.3-B2: durable polling worker)
+export { ReconciliationWorker } from './core/reconciliation-worker';
+// Multi-RPC checker (required by ReconciliationEngine)
+export { MultiRpcChecker } from './core/multi-rpc-checker';
 //# sourceMappingURL=index.js.map
