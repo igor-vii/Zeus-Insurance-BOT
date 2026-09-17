@@ -8,6 +8,7 @@
 
 // Core types
 export * from './core/types';
+export { allowNewPayment } from './core/types';
 
 // Payment signer boundary (Phase 2.1)
 export type { PaymentSigner } from './core/payment-signer';

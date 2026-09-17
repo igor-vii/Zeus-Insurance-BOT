@@ -100,6 +100,9 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      "zeus-secretariat",
+      "@workspace/db",
+      "@workspace/api-zod",
     ],
     sourcemap: "linked",
     plugins: [

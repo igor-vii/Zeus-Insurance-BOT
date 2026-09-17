@@ -11,9 +11,8 @@
  *   await composition.shutdown();      // graceful stop (idempotent)
  */
 
-import { db } from "@workspace/db";
+import { db, createSharedStores } from "@workspace/db";
 import {
-  createSharedStores,
   Eip3009PaymentVerifier,
   MultiRpcChecker,
   ReconciliationEngine,

@@ -446,6 +446,23 @@ export declare const recoveryJobsTable: import("drizzle-orm/pg-core").PgTableWit
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        fenceGeneration: import("drizzle-orm/pg-core").PgColumn<{
+            name: "fence_generation";
+            tableName: "recovery_jobs";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: true;
+            hasDefault: true;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         lastError: import("drizzle-orm/pg-core").PgColumn<{
             name: "last_error";
             tableName: "recovery_jobs";

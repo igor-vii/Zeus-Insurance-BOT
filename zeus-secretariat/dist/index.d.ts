@@ -6,6 +6,7 @@
  * Syra's architecture, dependencies, retry semantics, or economic assumptions.
  */
 export * from './core/types';
+export { allowNewPayment } from './core/types';
 export type { PaymentSigner } from './core/payment-signer';
 export type { PaymentAuthorizationRequest, PaymentSignatureResult, SignedPaymentAuthorization, PaymentAuthorizationState, NonceGenerator, NonceRegistry, } from './core/payment-types';
 export { PaymentSigningError, NonceAlreadyUsedError, SignerBindingError, InvalidAuthorizationError, SignatureUnknownError, PolicyNotValidatedError, } from './core/payment-errors';

@@ -7,6 +7,7 @@
  */
 // Core types
 export * from './core/types';
+export { allowNewPayment } from './core/types';
 export { PaymentSigningError, NonceAlreadyUsedError, SignerBindingError, InvalidAuthorizationError, SignatureUnknownError, PolicyNotValidatedError, } from './core/payment-errors';
 export { CryptoNonceGenerator, InMemoryNonceRegistry, } from './core/nonce-generator';
 // State machine
