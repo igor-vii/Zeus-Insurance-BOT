@@ -1,141 +1,112 @@
-# Zeus Insurance Protocol
+# Zeus
 
-**Decentralized insurance for autonomous AI agents.** Live on X Layer (196) and BOT Chain (677).
+**Trust and execution infrastructure for AI-agent transactions.**
 
-AI agents buy delivery-failure and slashing protection policies via MCP or REST API. Premiums are priced dynamically using HUMI/WAMI trust scores. Claims are paid automatically from on-chain reserves.
+> **What happens to an agent transaction when payment, execution, and participant observations diverge?**
 
----
+Zeus is evolving from a standalone insurance application into infrastructure for protecting economic obligations in AI-agent transactions.
 
-## For AI Agents
+The system coordinates and verifies the lifecycle around:
 
-### Quick Start (MCP)
+**Payment → Settlement → Execution → Delivery → Evidence → Resolution**
 
-Connect to the MCP endpoint and call tools directly:
+Insurance is one protection mechanism within this broader system, not the whole architecture.
 
-    POST https://zeus-insurance-bot-api-production.up.railway.app/mcp
-    Content-Type: application/json
+## Why Zeus exists
 
-    {
-      "jsonrpc": "2.0",
-      "id": 1,
-      "method": "tools/call",
-      "params": {
-        "name": "insurance_quote",
-        "arguments": {
-          "amount": "1000",
-          "timeoutSeconds": 86400,
-          "maxRetries": 3,
-          "chainId": 196
-        }
-      }
-    }
+AI agents can authorize payments automatically, but a settled payment does not necessarily prove that the requested work was executed or that the expected result was delivered.
 
-### Available MCP Tools
+A transaction can therefore reach states such as:
+- payment settled, execution uncertain
+- execution completed, delivery not observed
+- transport failed after settlement
+- response missing after a paid operation
+- duplicate/retry attempted while the original payment state is unresolved
 
-| Tool | Description | Read/Write |
-|------|-------------|------------|
-| insurance_quote | Calculate premium for a policy | Read |
-| insurance_prepare_buy | Get signed calldata for buyPolicy() | Write |
-| insurance_get_policies | List active policies by buyer address | Read |
-| insurance_claim | File a claim for a failed delivery | Write |
-| insurance_reserve_stats | Check reserve fund health | Read |
-| escrow_prepare_deposit | Prepare escrow deposit calldata | Write |
-| escrow_prepare_confirm | Confirm execution and release funds | Write |
+Zeus is designed around this boundary between **economic state and observed reality**.
 
-### Example: Buy a Policy in 3 Steps
+## Core principle
 
-**Step 1 - Get a quote:**
+> **Payment is an event. Execution and delivery require evidence.**
 
-    {
-      "jsonrpc": "2.0", "id": 1,
-      "method": "tools/call",
-      "params": {
-        "name": "insurance_quote",
-        "arguments": { "amount": "500", "timeoutSeconds": 86400, "maxRetries": 2, "chainId": 196 }
-      }
-    }
+The system preserves uncertainty when evidence is insufficient:
 
-Response: { "premium": "35.00", "totalCost": "535.00", "token": "USDC" }
+**UNKNOWN ≠ FAILURE**
 
-**Step 2 - Prepare calldata:**
+This allows reconciliation and recovery to operate on what can actually be established rather than on assumptions.
 
-    {
-      "jsonrpc": "2.0", "id": 2,
-      "method": "tools/call",
-      "params": {
-        "name": "insurance_prepare_buy",
-        "arguments": {
-          "seller": "0xExecutorAddress...",
-          "amount": "500",
-          "timeoutSeconds": 86400,
-          "maxRetries": 2,
-          "chainId": 196,
-          "buyerPrivateKey": "0x..."
-        }
-      }
-    }
+## Zeus architecture
 
-Response: { "to": "0xa540...", "data": "0x...", "value": "0" }
+```
+AI Agent / Client
+       ↓
+   Zeus boundary
+       ↓
+   Secretariat
+       ↓
+Payment → Settlement → Execution → Delivery
+       ↓
+     Evidence
+       ↓
+    Resolution
+       ↓
+Protection / Escrow / Other mechanisms
+```
 
-**Step 3 - Submit on-chain:**
-Send the returned to + data as a transaction on X Layer (chain 196). The agent must have approved USDC spending to the insurance contract first.
+### Secretariat
 
-### Discovery
+**Zeus Secretariat** is the non-custodial orchestration and evidence layer.
 
-- llms.txt (API): https://zeus-insurance-bot-api-production.up.railway.app/llms.txt
-- llms.txt (Frontend): https://zeus-insurance-bot-frontend.vercel.app/llms.txt
-- MCP Endpoint: POST /mcp (JSON-RPC 2.0, stateless)
-- Health Check: GET /health
+It coordinates payment intents, settlement, reconciliation, seller execution, delivery observations, recovery, and resolution.
 
-### Supported Networks
+→ [`Zeus Secretariat`](zeus-secretariat/README.md)
 
-| Network | Chain ID | Token | Insurance Contract |
-|---------|----------|-------|--------------------|
-| X Layer Mainnet | 196 | USDC (0x74b7...6d22) | 0xed65...D908 |
-| BOT Chain Mainnet | 677 | USDT (0xaBab...7a3C) | 0x2E59...69ef |
+### Protection mechanisms
 
-### Rate Limiting
+Insurance, reserves, escrow, and related mechanisms can provide economic protection around specific transaction risks.
 
-100 requests per 15 minutes per IP. No API key required for public endpoints.
+The repository still contains the original Zeus Insurance implementation and its on-chain contracts. That history remains part of the project; the broader Zeus architecture now places those mechanisms within a larger execution-protection model.
 
-### SDK
+## Non-custodial boundary
 
-    npm install @zeus/sdk
+Zeus components are designed around explicit custody boundaries.
 
-    import { ZeusClient } from "@zeus/sdk";
-    const client = new ZeusClient({ chainId: 196 });
-    const quote = await client.getQuote({ amount: "1000", timeoutSeconds: 86400, maxRetries: 3 });
-    console.log("Premium: " + quote.premium + " USDC");
+Secretariat is not intended to become the holder of a client's private key or the custodian of client funds. Client authorization and transaction evidence remain distinct from orchestration and resolution.
 
----
+## External testing
 
-## Architecture
+The Zeus system is also tested from outside its production boundary by **Argus Agent Test Lab**.
 
-    AI Agent
-      |
-      +-- MCP (JSON-RPC 2.0) --> api-server --> X Layer / BOT Chain
-      +-- REST API -----------> api-server --> Smart Contracts
-      +-- SDK (@zeus/sdk) -----> ethers.js ---> On-chain directly
+Argus asks whether the system behaves correctly when payment, execution, delivery, network behavior, retries, or participant behavior diverge.
 
-### Smart Contracts (X Layer)
+```
+Zeus / Secretariat = system being tested
+Argus              = external testing and evidence layer
+```
 
-| Contract | Address | Verified |
-|----------|---------|----------|
-| ZeusReserveV2 (delivery) | 0xeB6A...591c | done |
-| ZeusInsuranceV2 | 0xed65...D908 | done |
-| ZeusEscrowBOT | 0x882c...1546 | done |
-| WatcherRegistry | 0xC175...b3c1 | done |
-| ZeusReserveV2 (staking) | 0x9d3D...19dE | done |
-| ZeusStakingInsurance | 0xe734...590b | done |
+## Current repository areas
 
-### Trust Layer (HUMI/WAMI)
+- `zeus-secretariat/` — payment, execution, reconciliation, recovery, evidence
+- insurance contracts and protection logic
+- escrow components
+- MCP/API integration
+- tests and engineering documentation
 
-Agent trust scores influence premium pricing:
-- Elite agents (HUMI >= 800) -> base premium
-- Standard agents (HUMI 400-799) -> base + 3%
-- New/unknown agents (HUMI < 400) -> base + 5%
+## Documentation
 
----
+- [`Zeus Secretariat`](zeus-secretariat/README.md)
+- [`Secretariat canonical execution path`](zeus-secretariat/docs/CANONICAL_V0_EXECUTION_PATH.md)
+- [`Zeus roadmap`](zeus-secretariat/docs/ROADMAP_2026-08-29.md)
+
+## Original insurance implementation
+
+Zeus began as an insurance protocol for autonomous AI-agent transactions, including delivery-failure and related economic protection.
+
+That implementation remains in this repository.
+
+The current public framing is broader:
+
+> **Zeus is infrastructure for protecting economic obligations when payment, execution, delivery, and evidence do not automatically agree.**
 
 ## License
 
