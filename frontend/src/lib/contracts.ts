@@ -28,7 +28,7 @@ export const CONTRACT_ADDRESSES: Record<SupportedChainId, {
     insurance:   "0x2E592BEBbcC38FC3976125CB2E11312068670C45" as `0x${string}`,
     reserve:     "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56" as `0x${string}`,
     token:       "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C" as `0x${string}`, // USDT on BOT Chain
-    escrow:      "0xed65F223d7919B24263F4d6fe74e3DA42e7fD908" as `0x${string}`,
+    escrow:      "0x04DbB961817B94EE99e1eAa7cc5c07E1BD042364" as `0x${string}`,
     stakingInsurance: "0x0000000000000000000000000000000000000000" as `0x${string}`,
     stakingReserve:   "0x0000000000000000000000000000000000000000" as `0x${string}`,
     watcherRegistry:  "0x0000000000000000000000000000000000000000" as `0x${string}`,
