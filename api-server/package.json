@@ -8,9 +8,12 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx/esm --test tests/mcp-server.test.ts tests/pricing.test.ts",
+    "test": "node --import tsx/esm --test tests/mcp-server.test.ts tests/pricing.test.ts tests/secretariat-standalone.test.ts",
     "test:pricing": "node --import tsx/esm --test tests/pricing.test.ts",
-    "dev:local": "node scripts/run-local.mjs"
+    "dev:local": "node scripts/run-local.mjs",
+    "build:secretariat": "node ./build-secretariat.mjs",
+    "start:secretariat": "node --enable-source-maps ./dist/secretariat-index.mjs",
+    "dev:secretariat": "tsx watch src/secretariat-index.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
