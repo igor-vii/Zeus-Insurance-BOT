@@ -59,6 +59,20 @@ export interface SecretariatComposition {
 }
 
 function chainIdForNetwork(network: string): number {
+  // [ARGUS-INTEGRATION PATCH #4]
+  // x402 V2 carries networks in canonical CAIP-2 form ("eip155:<chainId>"),
+  // and /v1/requests persists `network` exactly as it came from seller
+  // discovery. The previous switch only knew short aliases ("base-sepolia"),
+  // so every POST /v1/requests/:id/payment that reached
+  // Eip3009PaymentVerifier failed with DOMAIN_MISMATCH: the resolver
+  // (resolvePaymentDomain) threw inside chainIdForNetwork, and the verifier
+  // converted that exception into a generic DOMAIN_MISMATCH.
+  //
+  // Accept CAIP-2 first; keep the legacy aliases unchanged as a fallback.
+  // Pure network->chainId mapping, no business logic added.
+  const caip2 = /^eip155:(\d+)$/i.exec(network);
+  if (caip2) return Number(caip2[1]);
+
   switch (network.toLowerCase()) {
     case "base":
     case "base-mainnet":

@@ -33,6 +33,22 @@ interface PaymentIntentRow {
   nextProbeAt: Date | null; probeCount: number; version: number; createdAt: Date; updatedAt: Date;
 }
 
+// [ARGUS-INTEGRATION PATCH #5]
+// PostgreSQL NUMERIC(38,6) is returned by node-postgres as "1000000.000000",
+// but canonical x402 V2 amounts are plain integer strings ("1000000").
+// Eip3009PaymentVerifier.checkBinding compares accepted.amount vs intent.value
+// with strict string equality (same()), so a persisted "1000000.000000" never
+// matches a client-signed "1000000" -> VALUE_MISMATCH on every Stage-B submit.
+// Normalize numeric strings to their canonical integer form when materializing
+// a DurablePaymentIntent from a DB row. This is a representation fix in the
+// store, not business logic: the underlying NUMERIC column is unchanged.
+function canonNumeric(v: string | number | null | undefined): string {
+  const s = String(v ?? '').trim();
+  if (!s.includes('.')) return s;
+  const t = s.replace(/\.?0+$/, '');
+  return t === '' ? '0' : t;
+}
+
 export class PostgresEvidenceStore implements DurableEvidenceStore {
   private readonly db: NodePgDatabase;
 
@@ -115,21 +131,31 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
    * Two concurrent appends will both survive (no lost updates).
    */
   async append(record: EvidenceRecord): Promise<void> {
-    // Use dedicated reconciliation_observations table for durable, concurrent-safe storage
-    await this.appendReconciliationObservation({
-      attemptId: record.operationId + "-" + record.timestamp,
-      paymentIntentId: "", // Will be resolved by caller context
-      timestamp: record.timestamp,
-      rpcProviderId: "evidence-log",
-      headBlock: 0,
-      authorizationState: null,
-      validBefore: 0,
-      result: record.event as any,
-      error: undefined,
-    });
+    // [ARGUS-INTEGRATION PATCH #3 (F-Z7)]
+    // Evidence-append can be called BEFORE the payment intent exists
+    // (discovery/policy phase, or any failure path from failOperation()).
+    // The previous code hard-coded paymentIntentId: "" -> FK violation on
+    // reconciliation_observations_payment_intent_id_payment_intents_p, which
+    // turned every Stage-A error into a raw 500 from the DB layer and masked
+    // the real error. Fix: resolve the intent by operationId first, and only
+    // write the reconciliation observation when an intent actually exists.
+    const linkedIntent = await this.getPaymentIntentByOperationId(record.operationId);
+    if (linkedIntent) {
+      await this.appendReconciliationObservation({
+        attemptId: record.operationId + "-" + record.timestamp,
+        paymentIntentId: linkedIntent.paymentIntentId,
+        timestamp: record.timestamp,
+        rpcProviderId: "evidence-log",
+        headBlock: 0,
+        authorizationState: null,
+        validBefore: 0,
+        result: record.event as any,
+        error: undefined,
+      });
+    }
 
     // Also append to intent's JSONB field using atomic concatenation
-    const intent = await this.getPaymentIntentByOperationId(record.operationId);
+    const intent = linkedIntent;
     if (intent) {
       await this.db.execute(sql`
         UPDATE payment_intents
@@ -479,7 +505,8 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return {
       paymentIntentId: row.paymentIntentId, operationId: row.operationId,
       requestId: row.requestId ?? undefined, clientId: row.clientId ?? undefined,
-      authorizer: row.authorizer, payTo: row.payTo, value: row.value,
+      authorizer: row.authorizer, payTo: row.payTo,
+      value: canonNumeric(row.value),   // [ARGUS-INTEGRATION PATCH #5]
       asset: row.asset, network: row.network, nonce: row.nonce,
       validAfter: row.validAfter, validBefore: row.validBefore,
       paymentPayload: row.paymentPayload, paymentPayloadHash: row.paymentPayloadHash,

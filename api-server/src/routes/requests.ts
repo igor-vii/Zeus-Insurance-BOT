@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import { z } from "zod";
 import type {
   CreateRequestResult,
+  DurablePaymentIntent,
   Eip3009PaymentVerifier,
   ExecuteRequest,
   Operation,
@@ -25,6 +26,13 @@ const createRequestSchema = z.object({
   payload: z.unknown().optional(),
   clientId: z.string().min(1).optional(),
   requestId: z.string().min(1).optional(),
+  // [ARGUS-INTEGRATION PATCH #1]
+  // Stage-A non-custodial mode requires the authorizer address; core
+  // state-machine reads request.authorizer via requireNonEmpty(), but the
+  // Zod schema dropped the field -> createPendingPaymentIntent threw and
+  // every POST /v1/requests returned 500 (masked by the FK issue, see #3).
+  // Minimal fix: accept the optional field so it reaches core unchanged.
+  authorizer: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   policy: paymentPolicySchema,
 });
 
@@ -40,6 +48,19 @@ export interface PublicRequestStatusResponse {
   requestId: string;
   status: PublicRequestStatus;
   paymentRequired?: PaymentRequirement;
+  // [ARGUS-INTEGRATION PATCH #2] persisted DPI binding fields (public subset).
+  paymentIntent?: {
+    paymentIntentId: string;
+    authorizer: string;
+    payTo: string;
+    value: string;
+    asset: string;
+    network: string;
+    nonce: string;
+    validAfter: number;
+    validBefore: number;
+    settlementState: string;
+  };
   settlementTxHash?: string;
   outcome?: unknown;
   resolvedAt?: number;
@@ -64,6 +85,31 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null
     ? value as Record<string, unknown>
     : null;
+}
+
+/**
+ * [ARGUS-INTEGRATION PATCH #2 helper]
+ * Derives the public payment requirement from the persisted DPI when the
+ * discovery evidence round-trip did not survive persistence. Mirrors
+ * Secretariat's own internal fallback (requirementFromIntent in the
+ * state machine) — pure projection of fields already returned by core,
+ * no business logic added at the boundary.
+ */
+function requirementFromPaymentIntent(
+  intent: unknown,
+): PaymentRequirement | undefined {
+  const record = asRecord(intent);
+  if (!record) return undefined;
+  const requirement: PaymentRequirement = {
+    amount: String(record.value ?? ""),
+    asset: String(record.asset ?? ""),
+    network: String(record.network ?? ""),
+    payee: String(record.payTo ?? ""),
+  };
+  if (typeof record.validBefore === "number") {
+    requirement.deadline = record.validBefore * 1000;
+  }
+  return requirement;
 }
 
 function paymentRequirementFromOperation(
@@ -165,6 +211,7 @@ function publicStatusForOperation(operation: Operation): PublicRequestStatus {
 
 function toPublicRequestStatus(
   operation: Operation,
+  dpi?: DurablePaymentIntent | null,
 ): PublicRequestStatusResponse {
   const status = publicStatusForOperation(operation);
   const response: PublicRequestStatusResponse = {
@@ -172,8 +219,27 @@ function toPublicRequestStatus(
     status,
   };
 
-  const paymentRequired = paymentRequirementFromOperation(operation);
+  const paymentRequired =
+    paymentRequirementFromOperation(operation) ??
+    requirementFromPaymentIntent(dpi);
   if (paymentRequired) response.paymentRequired = paymentRequired;
+
+  // [ARGUS-INTEGRATION PATCH #2] Expose the persisted DPI binding fields so a
+  // black-box Stage-B client can sign the canonical EIP-3009 context.
+  if (dpi) {
+    response.paymentIntent = {
+      paymentIntentId: dpi.paymentIntentId,
+      authorizer: dpi.authorizer,
+      payTo: dpi.payTo,
+      value: dpi.value,
+      asset: dpi.asset,
+      network: dpi.network,
+      nonce: dpi.nonce,
+      validAfter: dpi.validAfter,
+      validBefore: dpi.validBefore,
+      settlementState: dpi.settlementState,
+    };
+  }
 
   const settlementTxHash = settlementTxHashFromOperation(operation);
   if (settlementTxHash) response.settlementTxHash = settlementTxHash;
@@ -206,6 +272,9 @@ function toPublicRequestStatus(
 export function createRequestsRouter(
   secretariat: SecretariatComposition["secretariat"],
   paymentVerifier?: Pick<InstanceType<typeof Eip3009PaymentVerifier>, "verify">,
+  // [ARGUS-INTEGRATION PATCH #2] read-only projection of the already
+  // persisted DPI for the public GET response. No writes, no business logic.
+  intentStore?: Pick<SecretariatComposition["stores"]["evidenceStore"], "getPaymentIntentByRequestId">,
 ): Router {
   const router = Router();
 
@@ -233,10 +302,20 @@ export function createRequestsRouter(
     }
 
     if (result.status === "AWAITING_PAYMENT_SIGNATURE") {
+      // [ARGUS-INTEGRATION PATCH #2]
+      // The core already returns the persisted DPI in result.paymentIntent,
+      // but the HTTP adapter dropped it. Stage-B clients (Argus S8) must sign
+      // the EXACT canonical context (nonce/validAfter/validBefore/payTo/value)
+      // or the EIP-3009 verifier rejects with NONCE_MISMATCH. Expose the DPI
+      // binding fields so the black-box client can construct a valid x402 V2
+      // payment payload without touching Secretariat internals.
+      const paymentRequired =
+        result.paymentRequired ?? requirementFromPaymentIntent(result.paymentIntent);
       response.status(201).json({
         requestId: result.requestId,
         status: result.status,
-        paymentRequired: result.paymentRequired,
+        paymentRequired,
+        paymentIntent: result.paymentIntent,
       });
       return;
     }
@@ -286,7 +365,15 @@ export function createRequestsRouter(
       return;
     }
 
-    response.status(200).json(toPublicRequestStatus(operation));
+    let dpi: DurablePaymentIntent | null = null;
+    if (typeof intentStore?.getPaymentIntentByRequestId === "function") {
+      try {
+        dpi = await intentStore.getPaymentIntentByRequestId(request.params.requestId);
+      } catch (error) {
+        logger.warn({ err: error }, "DPI projection lookup failed");
+      }
+    }
+    response.status(200).json(toPublicRequestStatus(operation, dpi));
   });
 
   router.post("/requests/:requestId/payment", async (request, response) => {
@@ -388,7 +475,16 @@ export function createRequestsRouter(
       return;
     }
 
-    response.status(200).json(toPublicRequestStatus(operation));
+    let paymentDpi: DurablePaymentIntent | null = null;
+    if (typeof intentStore?.getPaymentIntentByRequestId === "function") {
+      try {
+        paymentDpi = await intentStore.getPaymentIntentByRequestId(request.params.requestId);
+      } catch (error) {
+        logger.warn({ err: error }, "DPI projection lookup failed after payment");
+      }
+    }
+
+    response.status(200).json(toPublicRequestStatus(operation, paymentDpi));
   });
 
   return router;

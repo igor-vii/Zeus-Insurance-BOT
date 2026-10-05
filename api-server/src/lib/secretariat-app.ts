@@ -26,7 +26,7 @@ export function createSecretariatApp(options: SecretariatAppOptions = {}): Stand
   app.use(express.urlencoded({ extended: true }));
   app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false }));
   app.get(["/health", "/healthz"], (_req, res) => res.json({ status: "ok" }));
-  app.use("/v1", createRequestsRouter(composition.secretariat, composition.paymentVerifier));
+  app.use("/v1", createRequestsRouter(composition.secretariat, composition.paymentVerifier, composition.stores.evidenceStore));
 
   let httpServer: Server | null = null;
   let workerStarted = false;
