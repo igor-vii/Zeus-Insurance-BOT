@@ -69,7 +69,7 @@ export const NETWORKS = {
     "bot-chain-mainnet": {
         name: "bot-chain-mainnet",
         chainId: 677,
-        escrowAddress: "0xed65F223d7919B24263F4d6fe74e3DA42e7fD908",
+        escrowAddress: "0x04DbB961817B94EE99e1eAa7cc5c07E1BD042364",
         insuranceAddress: "0x2E592BEBbcC38FC3976125CB2E11312068670C45",
         reserveAddress: "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56",
         usdcAddress: "0xaBabc7Ddc03e501d190C676BF3d92ef0e6e87a3C", // USDT on BOT Chain

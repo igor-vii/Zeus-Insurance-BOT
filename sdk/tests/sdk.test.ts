@@ -9,6 +9,7 @@ import {
   NETWORKS,
   AgreementStatus,
 } from "../src/index.js";
+import { CONTRACT_ADDRESSES } from "../../frontend/src/lib/contracts.js";
 
 const MOCK_ADDRESS = "0x1234567890123456789012345678901234567890";
 const MOCK_EXECUTOR = "0xAbCdEf0123456789AbCdEf0123456789AbCdEf01";
@@ -284,4 +285,14 @@ describe("AgreementStatus", () => {
   it("Active is 0", () => assert.equal(AgreementStatus.Active, 0));
   it("Completed is 1", () => assert.equal(AgreementStatus.Completed, 1));
   it("Refunded is 2", () => assert.equal(AgreementStatus.Refunded, 2));
+});
+
+// ─── BOT Chain (677) escrow address ──────────────────────────────────────────
+
+describe("BOT Chain (677) escrow address", () => {
+  it("matches the deployed ZeusEscrowBOT in both SDK and frontend", () => {
+    const deployed = "0x04DbB961817B94EE99e1eAa7cc5c07E1BD042364";
+    assert.equal(NETWORKS["bot-chain-mainnet"].escrowAddress, deployed);
+    assert.equal(CONTRACT_ADDRESSES[677].escrow, deployed);
+  });
 });
