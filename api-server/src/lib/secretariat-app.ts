@@ -30,7 +30,10 @@ import express, { type Express } from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import type { Server } from "node:http";
-import { createSecretariatComposition } from "./secretariat-composition.js";
+import {
+  createSecretariatComposition,
+  type SecretariatComposition,
+} from "./secretariat-composition.js";
 import { createRequestsRouter } from "../routes/requests.js";
 import { logger } from "./logger.js";
 
@@ -47,9 +50,19 @@ export interface StandaloneSecretariatApp {
   shutdown(): Promise<void>;
 }
 
-export function createSecretariatApp(): StandaloneSecretariatApp {
+export interface SecretariatAppOptions {
+  /**
+   * Optional composition injection for tests only. In production the existing
+   * canonical factory (`createSecretariatComposition`) is used unchanged.
+   */
+  composition?: SecretariatComposition;
+}
+
+export function createSecretariatApp(
+  options: SecretariatAppOptions = {},
+): StandaloneSecretariatApp {
   // The existing production composition root — single shared dependency graph.
-  const composition = createSecretariatComposition();
+  const composition = options.composition ?? createSecretariatComposition();
 
   const app: Express = express();
   app.set("trust proxy", 1);
