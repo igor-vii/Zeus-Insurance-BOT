@@ -40,12 +40,11 @@ describe("standalone Secretariat API boundary", () => {
     const fake = fakeComposition();
     const instance = createSecretariatApp({ composition: fake });
     const server = await instance.listen(0);
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const base = `http://127.0.0.1:${address.port}`;
     try {
       assert.deepEqual(calls, ["recover", "startWorker"]);
-      const address = server.address();
-      assert.ok(address && typeof address === "object");
-      const base = `http://127.0.0.1:${address.port}`;
-
       const invalid = await fetch(`${base}/v1/requests`, {
         method: "POST",
         headers: { "content-type": "application/json" },
