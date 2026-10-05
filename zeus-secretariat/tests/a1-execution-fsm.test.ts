@@ -18,6 +18,7 @@
  * (no DATABASE_URL required — reproducible in sandbox).
  */
 
+import { jest } from "@jest/globals";
 import { PostgresEvidenceStore } from "@workspace/db/secretariat/postgres-store";
 import type { Operation, DurablePaymentIntent } from "zeus-secretariat";
 import {
@@ -75,9 +76,19 @@ interface AttemptRow {
   status: string;
 }
 
+/**
+ * Mirror of the engine's terminal-state monotonicity rules: a durable attempt
+ * transitions PENDING → ATTEMPTED → final obligation status, and terminal
+ * statuses are irreversible. FakeDb applies the same semantics so
+ * saveAttempt/updateAttemptStatus reflect real store behavior.
+ */
+const TERMINAL_ATTEMPT_STATUSES = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
+
 class FakeDb {
   intents = new Map<string, IntentRow>(); // keyed by operationId
   attempts: AttemptRow[] = [];
+  /** In-memory ExecutionAttempt mirrors (attemptId → record) for save/update. */
+  attemptRecords = new Map<string, { operationId: string; attemptNumber: number; status: string }>();
   failNextExecute = false;
   executeCalls = 0;
 
@@ -121,30 +132,100 @@ class FakeDb {
     });
   }
 
+  /** Flatten nested drizzle SQL `queryChunks` into an ordered token list. */
+  private static flattenChunks(node: unknown, out: unknown[] = []): unknown[] {
+    if (node == null) return out;
+    if (Array.isArray(node)) {
+      for (const c of node) FakeDb.flattenChunks(c, out);
+      return out;
+    }
+    const q = node as { queryChunks?: unknown[]; value?: unknown };
+    if (Array.isArray(q.queryChunks)) return FakeDb.flattenChunks(q.queryChunks, out);
+    out.push(node);
+    return out;
+  }
+
   /** Extract the first bound parameter value from a drizzle SQL object. */
   private static paramOf(query: unknown): string {
-    const q = query as { params?: unknown[]; queryChunks?: unknown[]; queryChunksList?: unknown[] };
-    const params = q.params ?? q.queryChunks ?? q.queryChunksList;
-    if (Array.isArray(params)) {
-      for (const p of params) {
-        const v = (p as { value?: unknown })?.value;
-        if (typeof v === "string") return v;
-        if (typeof p === "string" && !p.includes("SELECT") && !p.includes("UPDATE")) return p;
-      }
+    const tokens = FakeDb.flattenChunks(query);
+    for (const tok of tokens) {
+      const v = (tok as { value?: unknown })?.value;
+      if (typeof v === "string" && v.length > 0) return v;
     }
     return "";
   }
 
   /** Rebuild raw SQL text from a drizzle SQL template (inlining params as quoted literals). */
   private static sqlText(query: unknown): string {
-    const q = query as { queryChunks?: Array<string | { value?: unknown }> };
+    const q = query as { queryChunks?: unknown[] };
     if (Array.isArray(q.queryChunks)) {
-      return q.queryChunks
-        .map((c) => (typeof c === "string" ? c : `'${String(c?.value)}'`))
-        .join("");
+      const parts: string[] = [];
+      const walk = (node: unknown): void => {
+        if (node == null) return;
+        if (typeof node === "string") { parts.push(node); return; }
+        const n = node as { queryChunks?: unknown[]; value?: unknown };
+        if (Array.isArray(n.queryChunks)) { n.queryChunks.forEach(walk); return; }
+        parts.push(`'${String(n.value)}'`);
+      };
+      walk(q.queryChunks);
+      return parts.join("");
     }
     const t = query as { text?: string; sql?: string };
     return String(t?.text ?? t?.sql ?? query);
+  }
+
+  /** INSERT INTO execution_attempts … — upsert the mirrored attempt row. */
+  insert(_table: unknown) {
+    const self = this;
+    return {
+      values(row: { attemptId?: string; operationId?: string; attemptNumber?: number; status?: string }) {
+        const result = {
+          onConflictDoNothing: () => Promise.resolve(),
+          then<T>(res: (v: unknown) => T, rej?: (e: unknown) => T): Promise<T> {
+            if (row.attemptId && row.operationId) {
+              const rec = {
+                operationId: row.operationId,
+                attemptNumber: row.attemptNumber ?? 1,
+                status: row.status ?? "PENDING",
+              };
+              self.attemptRecords.set(row.attemptId, rec);
+              const existing = self.attempts.find((a) => a.attempt_id === row.attemptId);
+              if (existing) {
+                existing.attempt_number = rec.attemptNumber;
+                existing.status = rec.status;
+              } else {
+                self.attempts.push({
+                  operation_id: row.attemptId ? row.operationId : "",
+                  attempt_number: rec.attemptNumber,
+                  status: rec.status,
+                });
+                // Key rows by operation_id (as production does) but remember
+                // the attempt id for later UPDATE-by-attempt_id resolution.
+                (self.attempts[self.attempts.length - 1] as AttemptRow & { attempt_id?: string }).attempt_id = row.attemptId;
+              }
+            }
+            return Promise.resolve(undefined as unknown as T).then(res, rej);
+          },
+        };
+        return result;
+      },
+    };
+  }
+
+  /** UPDATE execution_attempts SET status = X WHERE attempt_id = Y (raw SQL). */
+  async updateExecutionAttempt(rawSql: string): Promise<void> {
+    const am = rawSql.match(/SET status = '([^']+)'/);
+    const im = rawSql.match(/WHERE attempt_id = '([^']+)'/);
+    if (!am || !im) return;
+    const rec = this.attemptRecords.get(im[1]);
+    if (!rec) return;
+    // Terminal monotonicity — mirror the fenced store's irreversibility rule.
+    if (TERMINAL_ATTEMPT_STATUSES.includes(rec.status)) return;
+    rec.status = am[1];
+    const row = this.attempts.find(
+      (a) => (a as AttemptRow & { attempt_id?: string }).attempt_id === im[1],
+    );
+    if (row) row.status = am[1];
   }
 
   /** Minimal drizzle select() chain for payment_intents WHERE operation_id = X LIMIT 1. */
@@ -187,15 +268,17 @@ class FakeDb {
 
     if (text.includes("jsonb_array_elements")) {
       // SELECT EXISTS (... WHERE e = ${record}::jsonb) AS present
-      const m = text.match(/'\[.*\]'::jsonb/s);
-      const recMatch = text.match(/AS \$\d+|=\s*'?(\{.*?\})'?\s*::jsonb/s);
+      // First ::jsonb param is the existing observations array, second is the
+      // record being checked. Use a non-greedy match that tolerates nested
+      // braces (JSON objects inside arrays).
+      const jsonbParams = [...text.matchAll(/'(.*?)'::jsonb/g)].map((m) => m[1]);
       let existing: unknown[] = [];
-      if (m) {
-        try { existing = JSON.parse(m[0].replace(/^'/, "").replace(/'::jsonb$/, "")); } catch { existing = []; }
+      if (jsonbParams[0]) {
+        try { existing = JSON.parse(jsonbParams[0]); } catch { existing = []; }
       }
       let record: unknown = null;
-      if (recMatch) {
-        try { record = JSON.parse(recMatch[1]); } catch { record = null; }
+      if (jsonbParams[1]) {
+        try { record = JSON.parse(jsonbParams[1]); } catch { record = null; }
       }
       const present =
         record !== null &&

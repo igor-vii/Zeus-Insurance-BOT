@@ -1,0 +1,377 @@
+/**
+ * A1 targeted verification — post-settlement execution FSM semantics.
+ *
+ * SCOPE OF THIS FILE (A1 repair, restructured):
+ * This suite tests A1 RUNTIME / FSM SEMANTICS ONLY. It uses in-memory
+ * persistence (production InMemoryEvidenceStore + production
+ * InMemoryExecutionStore) because the task under test is the feedback
+ * lifecycle, NOT SQL parsing. There is deliberately NO hand-written
+ * Postgres SQL mirror here — an attempt to fake `db.attempts` /
+ * insert()/updateExecutionAttempt() against PostgresEvidenceStore produced
+ * false failures that said nothing about production behavior.
+ *
+ * Real PostgreSQL reconstruction of getOperation() is covered SEPARATELY
+ * in a1-pg-reconstruction.test.ts using the pre-existing DATABASE_URL
+ * harness pattern (c1/c2/b8 describeIfDb).
+ *
+ * Covers the risks identified by the A1 audit (findings 1–6):
+ *   Group 1  worker claim lost            processJob→RUNNING ⇒ NO feedback, NO save
+ *   Group 2  SUCCESS feedback chain       SETTLED → … → SUCCESS + duplicate polling
+ *   Group 3  HTTP_FAILURE feedback        SETTLED → EXECUTION_PENDING → FAILED
+ *   Group 4  DELIVERY_UNKNOWN ≠ FAILED    critical invariant (spec §3 / B6-B)
+ *   Group 5  UNRESOLVABLE                 honest stop at EXECUTION_UNKNOWN;
+ *            duplicate/no-op feedback = PURE idempotent no-op
+ *            (EXECUTION_FEEDBACK_SKIPPED production-bug regression guard)
+ *   Group 6  restart reconstruction       durable attempt status drives axes
+ *            (via the pure production mapping functions from @workspace/db)
+ *   Group 7  plan table                   planExecutionTransitions contract
+ */
+
+import { jest } from "@jest/globals";
+import type { Operation, EvidenceRecord } from "../src/core/types";
+import {
+  mapSettlementToPaymentState,
+  mapAttemptStatusToExecutionState,
+  deriveDeliveryState,
+  deriveCurrentState,
+} from "@workspace/db/secretariat/postgres-store";
+import {
+  PostSettlementEngine,
+  InMemoryExecutionStore,
+  ExecutionWorker,
+  ExecutionFeedbackService,
+  planExecutionTransitions,
+} from "zeus-secretariat";
+import { InMemoryEvidenceStore } from "../src/store/in-memory-store";
+import type {
+  SellerExecutionAdapter,
+  SellerExecutionResult,
+} from "zeus-secretariat";
+
+// ---------------------------------------------------------------------------
+// Helpers — production components only, all in-memory
+// ---------------------------------------------------------------------------
+
+const baseOp = (opId: string, over?: Partial<Operation>): Operation => ({
+  operationId: opId,
+  requestId: `req-${opId}`,
+  clientId: `client-${opId}`,
+  target: "https://seller.example/api",
+  method: "POST",
+  paymentPolicy: { maxAmount: "10" } as any,
+  paymentState: "SETTLED",
+  executionState: "NOT_STARTED",
+  deliveryState: "NOT_STARTED",
+  currentState: "SETTLED" as any,
+  timestamps: { createdAt: 1_700_000_000_000, updatedAt: 1_700_000_000_000 },
+  evidence: [],
+  ...over,
+});
+
+function fixedAdapter(result: SellerExecutionResult): SellerExecutionAdapter {
+  return { execute: async () => result };
+}
+
+const SUCCESS_RESULT: SellerExecutionResult = {
+  kind: "SUCCESS", statusCode: 200, body: { ok: true }, headers: {}, durationMs: 5,
+};
+const HTTP_500_RESULT: SellerExecutionResult = {
+  kind: "HTTP_FAILURE", statusCode: 500, body: {}, headers: {}, durationMs: 5,
+};
+const TIMEOUT_RESULT: SellerExecutionResult = {
+  kind: "DELIVERY_UNKNOWN", reason: "TIMEOUT", error: "timeout", durationMs: 30_000,
+};
+
+/**
+ * Seed the REAL engine stack with in-memory persistence:
+ *   - InMemoryEvidenceStore (production) plays the role of the durable
+ *     Operation store for ExecutionFeedbackService and engine evidence;
+ *   - InMemoryExecutionStore (production) holds jobs/attempts.
+ */
+async function seedSettledPipeline(opts: {
+  capability: "EXECUTION_IDEMPOTENT" | "RESULT_RETRIEVAL" | "NONE";
+  adapter: SellerExecutionAdapter;
+  opId?: string;
+}) {
+  const opId = opts.opId ?? `op-${Math.random().toString(36).slice(2)}`;
+  const evidenceStore = new InMemoryEvidenceStore();
+  await evidenceStore.saveOperation(baseOp(opId));
+
+  // Minimal payment-store facade for the engine's evidence append path.
+  const paymentStore = {
+    append: (record: EvidenceRecord) => evidenceStore.append(record),
+    getPaymentIntentByOperationId: async () => null,
+  };
+
+  const execStore = new InMemoryExecutionStore();
+  const engine = new PostSettlementEngine(
+    paymentStore as never,
+    execStore as never,
+    opts.adapter,
+    { workerId: "test-worker", sellerUrl: "https://seller.example/api" },
+  );
+  await engine.initiateExecution(opId, opts.capability, { hello: "world" });
+  return { evidenceStore, opId, execStore, engine };
+}
+
+// ===========================================================================
+// Group 1 — worker claim lost ⇒ no feedback, no saveOperation (audit #1)
+// ===========================================================================
+describe("A1 hardening #1 — claim-lost no-op safety", () => {
+  it("processJob returning RUNNING (claim lost) applies NO FSM feedback and NO saveOperation", async () => {
+    const saveCalls: unknown[] = [];
+    const fakeEngine = {
+      processJob: async () => ({ success: false, finalStatus: "RUNNING" }),
+    };
+    const fakeStore = {
+      getPendingJobs: async () => [
+        { jobId: "job-x", operationId: "op-x", jobType: "EXECUTION", status: "RUNNING", priority: 0, maxAttempts: 3, currentAttempt: 1, createdAt: 0, updatedAt: 0 },
+      ],
+    };
+    const fakeOpsPersistence = {
+      getOperation: async () => null,
+      saveOperation: async (op: Operation) => { saveCalls.push(op); },
+    };
+    // Real ExecutionFeedbackService over a recording persistence — proves that
+    // NO feedback call means NO getOperation/saveOperation at all.
+    const feedback = new ExecutionFeedbackService(fakeOpsPersistence as never);
+    const applySpy = jest.spyOn(feedback, "applyResult");
+
+    const worker = new ExecutionWorker(fakeEngine as never, fakeStore as never, {
+      feedbackService: feedback,
+    });
+
+    await worker.runOnce();
+
+    expect(applySpy).not.toHaveBeenCalled(); // RUNNING ⇒ feedback NOT called
+    expect(saveCalls).toHaveLength(0);       // and therefore saveOperation NOT called
+  });
+
+  it("real engine: second concurrent claim returns RUNNING and job processes exactly once", async () => {
+    const { opId, execStore, engine } = await seedSettledPipeline({
+      capability: "EXECUTION_IDEMPOTENT", adapter: fixedAdapter(SUCCESS_RESULT),
+    });
+    const jobs = await execStore.getPendingJobs();
+    expect(jobs.length).toBe(1);
+    const first = await engine.processJob(jobs[0].jobId);
+    expect(first.finalStatus).toBe("SUCCESS");
+    // Job terminal — a racing consumer's claim must be rejected → RUNNING no-op
+    const second = await engine.processJob(jobs[0].jobId);
+    expect(second.finalStatus).toBe("RUNNING");
+    const attempts = await execStore.getAttemptsByOperation(opId);
+    expect(attempts.filter((a) => a.status === "SUCCESS")).toHaveLength(1);
+  });
+});
+
+// ===========================================================================
+// Group 2 — SUCCESS feedback + duplicate polling idempotency
+// ===========================================================================
+describe("A1 hardening #2 — SUCCESS feedback & duplicate handling", () => {
+  it("worker drives SETTLED → EXECUTION_PENDING → EXECUTION_CONFIRMED → DELIVERED → SUCCESS and duplicate poll adds nothing", async () => {
+    const { evidenceStore, opId, execStore, engine } = await seedSettledPipeline({
+      capability: "EXECUTION_IDEMPOTENT", adapter: fixedAdapter(SUCCESS_RESULT),
+    });
+    const feedback = new ExecutionFeedbackService(evidenceStore);
+    const worker = new ExecutionWorker(engine, execStore as never, { feedbackService: feedback });
+
+    await worker.runOnce();
+
+    const op = await evidenceStore.getOperation(opId);
+    expect(op!.currentState).toBe("SUCCESS");
+    expect(op!.executionState).toBe("CONFIRMED");
+    expect(op!.deliveryState).toBe("DELIVERED");
+    const transitions = op!.evidence.filter((e) => e.event === "STATE_TRANSITION");
+    expect(transitions.map((t) => (t.payload as any).to)).toEqual([
+      "EXECUTION_PENDING", "EXECUTION_CONFIRMED", "DELIVERED", "SUCCESS",
+    ]);
+
+    // Duplicate iteration: job COMPLETED → getPendingJobs empty → no re-drive.
+    const evidenceLen = op!.evidence.length;
+    await worker.runOnce();
+    const op2 = await evidenceStore.getOperation(opId);
+    expect(op2!.evidence).toHaveLength(evidenceLen);
+    expect(op2!.currentState).toBe("SUCCESS");
+
+    // Even a forced duplicate feedback call is a no-op (terminal guard):
+    const res = await feedback.applyResult(opId, "SUCCESS");
+    expect(res.applied).toBe(false);
+    const op3 = await evidenceStore.getOperation(opId);
+    expect(op3!.evidence).toHaveLength(evidenceLen);
+  });
+});
+
+// ===========================================================================
+// Group 3 — HTTP_FAILURE feedback
+// ===========================================================================
+describe("A1 hardening — HTTP_FAILURE feedback", () => {
+  it("SETTLED → EXECUTION_PENDING → FAILED (exact states, not a disjunction)", async () => {
+    const { evidenceStore, opId, execStore, engine } = await seedSettledPipeline({
+      capability: "EXECUTION_IDEMPOTENT", adapter: fixedAdapter(HTTP_500_RESULT),
+    });
+    const feedback = new ExecutionFeedbackService(evidenceStore);
+    const worker = new ExecutionWorker(engine, execStore as never, { feedbackService: feedback });
+
+    await worker.runOnce();
+    const op = await evidenceStore.getOperation(opId);
+    expect(op!.currentState).toBe("FAILED");
+    expect(op!.executionState).toBe("FAILED");
+    const transitions = op!.evidence.filter((e) => e.event === "STATE_TRANSITION");
+    expect(transitions.map((t) => (t.payload as any).to)).toEqual(["EXECUTION_PENDING", "FAILED"]);
+  });
+});
+
+// ===========================================================================
+// Group 4 — CRITICAL INVARIANT: DELIVERY_UNKNOWN ≠ FAILED
+// ===========================================================================
+describe("A1 invariant — DELIVERY_UNKNOWN ≠ FAILED", () => {
+  it("RESULT_RETRIEVAL timeout ends at EXECUTION_UNKNOWN, never FAILED", async () => {
+    const { evidenceStore, opId, execStore, engine } = await seedSettledPipeline({
+      capability: "RESULT_RETRIEVAL", adapter: fixedAdapter(TIMEOUT_RESULT),
+    });
+    const feedback = new ExecutionFeedbackService(evidenceStore);
+    const worker = new ExecutionWorker(engine, execStore as never, { feedbackService: feedback });
+
+    await worker.runOnce();
+    const op = await evidenceStore.getOperation(opId);
+    expect(op!.currentState).toBe("EXECUTION_UNKNOWN");
+    expect(op!.currentState).not.toBe("FAILED"); // ГЛАВНЫЙ ASSERT
+    expect(op!.executionState).toBe("UNKNOWN");
+    expect(op!.deliveryState).toBe("UNKNOWN");
+  });
+});
+
+// ===========================================================================
+// Group 5 — UNRESOLVABLE semantics + PURE idempotent no-op (A1 repair)
+//   Production bug fixed in this repair: when applyResult() could not apply
+//   ANY transition it still pushed EXECUTION_FEEDBACK_SKIPPED into
+//   operation.evidence while leaving applied=false — mutating the operation
+//   without a durable save and breaking clean idempotency on repeated polls.
+//   Contract now: repeat terminal/no-op feedback = PURE no-op
+//   (no evidence growth, no mutation, no saveOperation call).
+// ===========================================================================
+describe("A1 hardening #4 — UNRESOLVABLE semantics & no-op idempotency", () => {
+  it("UNRESOLVABLE feedback stops honestly at EXECUTION_UNKNOWN; duplicate call is a PURE no-op", async () => {
+    const evidenceStore = new InMemoryEvidenceStore();
+    const opId = "op-unresolvable-feedback";
+    await evidenceStore.saveOperation(baseOp(opId));
+    const feedback = new ExecutionFeedbackService(evidenceStore);
+    const saveSpy = jest.spyOn(evidenceStore, "saveOperation");
+
+    // First application: SETTLED → EXECUTION_PENDING → EXECUTION_UNKNOWN.
+    const r1 = await feedback.applyResult(opId, "UNRESOLVABLE");
+    expect(r1.applied).toBe(true);
+    const op1 = await evidenceStore.getOperation(opId);
+    expect(op1!.currentState).toBe("EXECUTION_UNKNOWN"); // honest stop, no fabricated edge
+    expect(op1!.currentState).not.toBe("FAILED");
+    const len = op1!.evidence.length;
+    expect(op1!.evidence.some((e) => e.event === "EXECUTION_FEEDBACK_SKIPPED")).toBe(false);
+
+    // Second application (repeat poll): EXECUTION_UNKNOWN → EXECUTION_PENDING
+    // has no FSM edge and EXECUTION_UNKNOWN is already reached ⇒ NOTHING may
+    // be applied, mutated, or saved.
+    saveSpy.mockClear();
+    const r2 = await feedback.applyResult(opId, "UNRESOLVABLE");
+    expect(r2.applied).toBe(false);
+    expect(r2.currentState).toBe("EXECUTION_UNKNOWN");
+
+    const op2 = await evidenceStore.getOperation(opId);
+    expect(op2!.evidence).toHaveLength(len);              // evidence count unchanged
+    expect(op2!.evidence.some((e) => e.event === "EXECUTION_FEEDBACK_SKIPPED")).toBe(false);
+    expect(saveSpy).not.toHaveBeenCalled();               // no durable write for a no-op
+
+    // Third application — stability under repetition (the old bug grew the
+    // in-memory evidence array on every poll).
+    const r3 = await feedback.applyResult(opId, "UNRESOLVABLE");
+    expect(r3.applied).toBe(false);
+    const op3 = await evidenceStore.getOperation(opId);
+    expect(op3!.evidence).toHaveLength(len);
+  });
+
+  it("duplicate feedback on a fresh SETTLED operation mutates nothing and saves nothing", async () => {
+    const evidenceStore = new InMemoryEvidenceStore();
+    const opId = "op-dup-nomut";
+    await evidenceStore.saveOperation(baseOp(opId, { currentState: "FAILED" as any }));
+    const feedback = new ExecutionFeedbackService(evidenceStore);
+    const saveSpy = jest.spyOn(evidenceStore, "saveOperation");
+
+    // Terminal-state guard branch.
+    const res = await feedback.applyResult(opId, "HTTP_FAILURE");
+    expect(res.applied).toBe(false);
+    expect(res.currentState).toBe("FAILED");
+    expect(saveSpy).not.toHaveBeenCalled();
+    const op = await evidenceStore.getOperation(opId);
+    expect(op!.evidence).toHaveLength(0);
+  });
+});
+
+// ===========================================================================
+// Group 6 — restart reconstruction contract (pure production functions)
+//   The same deterministic mapping used by PostgresEvidenceStore.getOperation
+//   (lib/db/src/secretariat/postgres-store.ts). Testing the PURE functions
+//   verifies FSM reconstruction semantics without faking a SQL server.
+//   End-to-end PG verification lives in a1-pg-reconstruction.test.ts.
+// ===========================================================================
+describe("A1 restart reconstruction — production mapping contract", () => {
+  const ev = (timestamp: number, from: string, to: string): EvidenceRecord => ({
+    operationId: "op-x", phase: "EXECUTION", timestamp, event: "STATE_TRANSITION",
+    payload: { from, to },
+  });
+
+  it("HTTP_FAILURE: attempt status → executionState=FAILED, currentState fast-forwards PENDING→FAILED", () => {
+    const evidence = [ev(100, "SETTLED", "EXECUTION_PENDING")];
+    expect(mapAttemptStatusToExecutionState("HTTP_FAILURE")).toBe("FAILED");
+    expect(deriveCurrentState(evidence, "SETTLED", "HTTP_FAILURE")).toBe("FAILED");
+    expect(deriveDeliveryState(evidence)).toBe("PENDING"); // audit #3: not NOT_STARTED
+  });
+
+  it("SUCCESS: attempt status → executionState=CONFIRMED; evidence-only chain reaches DELIVERED", () => {
+    expect(mapAttemptStatusToExecutionState("SUCCESS")).toBe("CONFIRMED");
+    const evidence = [ev(100, "SETTLED", "EXECUTION_PENDING"), ev(200, "EXECUTION_PENDING", "EXECUTION_CONFIRMED")];
+    expect(deriveCurrentState(evidence, "SETTLED", "SUCCESS")).toBe("EXECUTION_CONFIRMED");
+    expect(deriveDeliveryState(evidence)).toBe("PENDING"); // EXECUTION_CONFIRMED → delivery still PENDING (audit #3)
+    const delivered = [...evidence, ev(300, "EXECUTION_CONFIRMED", "DELIVERED")];
+    expect(deriveDeliveryState(delivered)).toBe("DELIVERED");
+    expect(deriveCurrentState(delivered, "SETTLED", "SUCCESS")).toBe("DELIVERED");
+  });
+
+  it("DELIVERY_UNKNOWN: executionState=UNKNOWN, currentState=EXECUTION_UNKNOWN, never FAILED", () => {
+    expect(mapAttemptStatusToExecutionState("DELIVERY_UNKNOWN")).toBe("UNKNOWN");
+    const evidence = [ev(100, "SETTLED", "EXECUTION_PENDING")];
+    expect(deriveCurrentState(evidence, "SETTLED", "DELIVERY_UNKNOWN")).toBe("EXECUTION_UNKNOWN");
+    expect(deriveCurrentState(evidence, "SETTLED", "DELIVERY_UNKNOWN")).not.toBe("FAILED");
+    expect(deriveDeliveryState([ev(100, "EXECUTION_PENDING", "EXECUTION_UNKNOWN")])).toBe("UNKNOWN");
+  });
+
+  it("UNRESOLVABLE: executionState=CONFIRMED (call definitely happened), currentState=UNRESOLVABLE, deliveryState=UNKNOWN", () => {
+    expect(mapAttemptStatusToExecutionState("UNRESOLVABLE")).toBe("CONFIRMED");
+    const evidence = [ev(100, "EXECUTION_PENDING", "EXECUTION_UNKNOWN")];
+    expect(deriveCurrentState(evidence, "SETTLED", "UNRESOLVABLE")).toBe("UNRESOLVABLE");
+    expect(deriveCurrentState(evidence, "SETTLED", "UNRESOLVABLE")).not.toBe("FAILED");
+    expect(deriveDeliveryState(evidence)).toBe("UNKNOWN");
+  });
+
+  it("payment axis maps settlement_state independently of execution outcome", () => {
+    expect(mapSettlementToPaymentState("SETTLED")).toBe("SETTLED");
+    expect(mapSettlementToPaymentState("PENDING_SIGNATURE")).toBe("NOT_STARTED");
+  });
+});
+
+// ===========================================================================
+// Group 7 — canonical mapping table (spec §3)
+// ===========================================================================
+describe("A1 plan table — spec §3 mapping", () => {
+  it("planExecutionTransitions returns the canonical chains", () => {
+    expect(planExecutionTransitions("SUCCESS")).toEqual([
+      "EXECUTION_PENDING", "EXECUTION_CONFIRMED", "DELIVERED", "SUCCESS",
+    ]);
+    expect(planExecutionTransitions("HTTP_FAILURE")).toEqual(["EXECUTION_PENDING", "FAILED"]);
+    const unknownPlan = planExecutionTransitions("DELIVERY_UNKNOWN")!;
+    expect(unknownPlan).toEqual(["EXECUTION_PENDING", "EXECUTION_UNKNOWN"]);
+    expect(unknownPlan).not.toContain("FAILED"); // CRITICAL invariant
+    const unresolvablePlan = planExecutionTransitions("UNRESOLVABLE")!;
+    expect(unresolvablePlan).toEqual(["EXECUTION_PENDING", "EXECUTION_UNKNOWN"]);
+    expect(unresolvablePlan).not.toContain("UNRESOLVABLE"); // no fabricated FSM edge
+    expect(unresolvablePlan).not.toContain("FAILED");
+    expect(planExecutionTransitions("RUNNING")).toBeNull();
+  });
+});

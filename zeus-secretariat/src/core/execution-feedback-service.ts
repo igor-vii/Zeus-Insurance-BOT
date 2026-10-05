@@ -96,8 +96,8 @@ const ALLOWED_EDGES: Record<string, OperationStatus[]> = {
   // edge (state-machine.ts:115 — EXECUTION_UNKNOWN → RECOVERY_PENDING | FAILED;
   // UNRESOLVABLE is reachable only from RECOVERY_PENDING). We do NOT add new
   // edges to the authoritative FSM. The feedback path stops at EXECUTION_UNKNOWN
-  // for UNRESOLVABLE results and records that honestly via
-  // EXECUTION_FEEDBACK_SKIPPED evidence. UNRESOLVABLE remains authoritative in
+  // for UNRESOLVABLE results (a repeat call from there is a pure idempotent
+  // no-op — see applyResult A1-repair note). UNRESOLVABLE remains authoritative in
   // durable job/attempt state (recovery_jobs / execution_attempts) and in
   // currentState when reconstructed after restart (see postgres-store
   // deriveCurrentState fallback).
@@ -122,6 +122,17 @@ export class ExecutionFeedbackService {
    *
    * Idempotent: if the operation is already at (or beyond) the target terminal
    * state, no duplicate transitions/evidence are produced.
+   *
+   * A1 repair: a repeat call that applies NO transition is a PURE no-op —
+   * the operation object is not mutated at all (no EXECUTION_FEEDBACK_SKIPPED
+   * evidence is appended), saveOperation() is not called, and therefore
+   * duplicate polls / restarts can never grow the durable evidence array.
+   * Previously the skipped-edge branch pushed EXECUTION_FEEDBACK_SKIPPED into
+   * operation.evidence while leaving appliedAny=false: the in-memory copy was
+   * mutated but never durably saved, so every repeated poll re-read, re-pushed
+   * and re-dropped another skip record — breaking clean idempotency without
+   * any durable benefit. The honest outcome of a non-applicable edge is simply
+   * `{ applied: false, currentState }` with zero side effects.
    */
   async applyResult(
     operationId: string,
@@ -140,18 +151,22 @@ export class ExecutionFeedbackService {
       return { applied: false, currentState: operation.currentState };
     }
 
+    // Dry-run the transition chain BEFORE mutating anything. If the very first
+    // step that is not already reached has no valid FSM edge, the whole call
+    // is a pure no-op: return immediately without touching operation.evidence
+    // (A1 repair — see class doc above).
+    const firstActionable = plan.find((next) => operation.currentState !== next);
+    if (firstActionable !== undefined && !canTransition(operation.currentState, firstActionable)) {
+      return { applied: false, currentState: operation.currentState };
+    }
+
     let appliedAny = false;
     for (const next of plan) {
       if (operation.currentState === next) continue; // already there (restart mid-chain)
       if (!canTransition(operation.currentState, next)) {
-        // Edge not present in the existing FSM — stop applying further steps.
-        // Honest behavior: keep current durable state, record why.
-        this.pushEvidence(operation, "EXECUTION_FEEDBACK_SKIPPED", {
-          attemptedFrom: operation.currentState,
-          attemptedTo: next,
-          reason: "transition not present in existing VALID_TRANSITIONS",
-          finalStatus,
-        });
+        // Defensive: unreachable after the dry-run above (each successful step
+        // advances currentState exactly onto the next plan entry). Stop without
+        // recording anything — a partially applied chain still saves honestly.
         break;
       }
 
@@ -164,8 +179,8 @@ export class ExecutionFeedbackService {
     }
 
     // Audit finding #2: save ONLY when something actually changed. A no-op
-    // (no transitions applied and no skip recorded) must never re-append the
-    // last evidence record on duplicate polling iterations.
+    // (no transitions applied) must never mutate or re-append evidence on
+    // duplicate polling iterations.
     if (appliedAny) {
       await this.ops.saveOperation(operation);
     }
