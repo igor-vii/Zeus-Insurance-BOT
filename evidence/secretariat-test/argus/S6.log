@@ -1,0 +1,14 @@
+
+Run:
+  ID: run_1791487223197_mk9nhhk52
+  Scenario: S6
+  Status: COMPLETED
+  Started: 2026-10-08T19:20:23.197Z
+  Finished: 2026-10-08T19:20:23.199Z
+
+Evidence:
+  Count: 6
+
+Verdict:
+  Result: INCONCLUSIVE
+  Reason: no settlement observed yet

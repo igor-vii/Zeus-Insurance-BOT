@@ -1,0 +1,14 @@
+
+Run:
+  ID: run_1791487182438_7sxmznmjh
+  Scenario: S2
+  Status: COMPLETED
+  Started: 2026-10-08T19:19:42.438Z
+  Finished: 2026-10-08T19:19:42.445Z
+
+Evidence:
+  Count: 5
+
+Verdict:
+  Result: INCONCLUSIVE
+  Reason: payment_settled not observed yet
