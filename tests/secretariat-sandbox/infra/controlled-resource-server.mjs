@@ -35,22 +35,23 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && req.url.startsWith("/resource")) {
     const mode = new URL(req.url,"http://l").searchParams.get("mode") || "HAPPY";
     logReq({ method:"GET", path:req.url, headers:{}, body:null, stage:"discovery", mode });
+    // NOTE: field name "amount" is required by Secretariat X402Parser (see finding F-CRS:
+    // parser does not accept the canonical x402-v2 "maxAmountRequired").
     const challenge = {
       x402Version: 2,
       accepts: [{
         scheme: "exact", network: "base-sepolia",
-        maxAmountRequired: "100000", // 0.1 USDC
+        amount: "100000", // 0.1 USDC; parser reads .amount
         resource: `http://127.0.0.1:${port}/execute?mode=${mode}`,
         description: "Controlled test execution",
         mimeType: "application/json", payTo: process.env.SELLER_PAY_TO || "0x1111111111111111111111111111111111111111",
         maxTimeoutSeconds: 60, asset: process.env.TEST_USDC || "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
         extra: { name: "USDC", version: "2" },
         authorizationType: "EIP3009"
-      }],
-      ...(mode !== "NONE" ? {} : {})
+      }]
     };
     const b64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
-    res.writeHead(402, { "X-PAYMENT-REQUIRED": b64, "Content-Type": "application/json", "X-Recovery-Capability": (mode==="RETRY"||mode==="IDEMPOTENT") ? "EXECUTION_IDEMPOTENT" : "RESULT_RETRIEVAL" });
+    res.writeHead(402, { "PAYMENT-REQUIRED": b64, "Content-Type": "application/json", "X-Recovery-Capability": (mode==="RETRY"||mode==="IDEMPOTENT") ? "EXECUTION_IDEMPOTENT" : "RESULT_RETRIEVAL" });
     res.end(JSON.stringify(challenge));
     return;
   }

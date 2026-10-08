@@ -1,0 +1,98 @@
+[20:43:59.629] [31mERROR[39m (24923): [36m[secretariat-standalone] Startup failed — exiting[39m
+    err: {
+      "type": "DrizzleQueryError",
+      "message": "Failed query: select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)\nparams: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING: password authentication failed for user \"secretariat_test\"",
+      "stack":
+          Error: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+          params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+              at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/pg-core/session.ts:73:11)
+              at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+              at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/node-postgres/session.ts:154:19)
+              at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+              at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+              at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+              at async Object.listen (/workspace/api-server/src/lib/secretariat-app.ts:35:5)
+              at async <anonymous> (/workspace/api-server/src/secretariat-index.ts:11:3)
+          caused by: error: password authentication failed for user "secretariat_test"
+              at /workspace/node_modules/.pnpm/pg-pool@3.14.0_pg@8.22.0/node_modules/pg-pool/index.js:45:11
+              at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+              at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/node-postgres/session.ts:161:13)
+              at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/pg-core/session.ts:71:12)
+              at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/node-postgres/session.ts:154:19)
+              at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+              at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+              at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+              at async Object.listen (/workspace/api-server/src/lib/secretariat-app.ts:35:5)
+              at async <anonymous> (/workspace/api-server/src/secretariat-index.ts:11:3)
+      "query": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)",
+      "params": [
+        "SUBMITTING",
+        "SUBMITTED",
+        "SETTLEMENT_PENDING",
+        "RECONCILING"
+      ]
+    }
+[20:45:08.387] [32mINFO[39m (25319): [36m[composition] ReconciliationWorker started[39m
+[20:45:08.390] [32mINFO[39m (25319): [36m[secretariat-standalone] Server listening[39m
+    [35mport[39m: 18791
+[20:45:08.390] [32mINFO[39m (25319): [36m[secretariat-standalone] Secretariat API ready on /v1[39m
+    [35mport[39m: 18791
+[20:45:11.960] [31mERROR[39m (25319): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "DrizzleQueryError",
+      "message": "Failed query: insert into \"reconciliation_observations\" (\"observation_id\", \"payment_intent_id\", \"attempt_id\", \"rpc_provider_id\", \"underlying_provider\", \"observed_at\", \"block_number\", \"chain_head\", \"authorization_state\", \"valid_before\", \"result\", \"staleness_blocks\", \"error\", \"created_at\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, $12, default)\nparams: op_1791492311946_gldyd0sho2-1791492311951-evidence-log,,op_1791492311946_gldyd0sho2-1791492311951,evidence-log,,2026-10-08T20:45:11.951Z,0,0,,0,OPERATION_FAILED,: insert or update on table \"reconciliation_observations\" violates foreign key constraint \"reconciliation_observations_payment_intent_id_payment_intents_p\"",
+      "stack":
+          Error: Failed query: insert into "reconciliation_observations" ("observation_id", "payment_intent_id", "attempt_id", "rpc_provider_id", "underlying_provider", "observed_at", "block_number", "chain_head", "authorization_state", "valid_before", "result", "staleness_blocks", "error", "created_at") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, $12, default)
+          params: op_1791492311946_gldyd0sho2-1791492311951-evidence-log,,op_1791492311946_gldyd0sho2-1791492311951,evidence-log,,2026-10-08T20:45:11.951Z,0,0,,0,OPERATION_FAILED,
+              at NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/pg-core/session.ts:73:11)
+              at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+              at async PostgresEvidenceStore.appendReconciliationObservation (file:///workspace/lib/db/dist/secretariat/postgres-store.js:123:9)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:96:9)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+          caused by: error: insert or update on table "reconciliation_observations" violates foreign key constraint "reconciliation_observations_payment_intent_id_payment_intents_p"
+              at /workspace/node_modules/.pnpm/pg-pool@3.14.0_pg@8.22.0/node_modules/pg-pool/index.js:45:11
+              at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+              at async <anonymous> (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/node-postgres/session.ts:149:14)
+              at async NodePgPreparedQuery.queryWithCache (/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/pg-core/session.ts:71:12)
+              at async PostgresEvidenceStore.appendReconciliationObservation (file:///workspace/lib/db/dist/secretariat/postgres-store.js:123:9)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:96:9)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+      "query": "insert into \"reconciliation_observations\" (\"observation_id\", \"payment_intent_id\", \"attempt_id\", \"rpc_provider_id\", \"underlying_provider\", \"observed_at\", \"block_number\", \"chain_head\", \"authorization_state\", \"valid_before\", \"result\", \"staleness_blocks\", \"error\", \"created_at\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, $12, default)",
+      "params": [
+        "op_1791492311946_gldyd0sho2-1791492311951-evidence-log",
+        "",
+        "op_1791492311946_gldyd0sho2-1791492311951",
+        "evidence-log",
+        "",
+        "2026-10-08T20:45:11.951Z",
+        0,
+        0,
+        null,
+        0,
+        "OPERATION_FAILED",
+        null
+      ]
+    }
+[20:49:53.550] [32mINFO[39m (25319): [36m[secretariat-standalone] Shutdown signal received[39m
+    [35msignal[39m: "SIGTERM"
+[20:49:53.553] [32mINFO[39m (25319): [36m[composition] Graceful shutdown initiated[39m
+[20:49:53.553] [32mINFO[39m (25319): [36m[composition] ReconciliationWorker stopped[39m
+[20:49:58.912] [32mINFO[39m (26627): [36m[composition] ReconciliationWorker started[39m
+[20:49:58.915] [32mINFO[39m (26627): [36m[secretariat-standalone] Server listening[39m
+    [35mport[39m: 18791
+[20:49:58.915] [32mINFO[39m (26627): [36m[secretariat-standalone] Secretariat API ready on /v1[39m
+    [35mport[39m: 18791
+[20:51:23.611] [32mINFO[39m (26627): [36m[secretariat-standalone] Shutdown signal received[39m
+    [35msignal[39m: "SIGTERM"
+[20:51:23.611] [32mINFO[39m (26627): [36m[composition] Graceful shutdown initiated[39m
+[20:51:23.611] [32mINFO[39m (26627): [36m[composition] ReconciliationWorker stopped[39m
+[20:51:28.400] [32mINFO[39m (27071): [36m[composition] ReconciliationWorker started[39m
+[20:51:28.402] [32mINFO[39m (27071): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791

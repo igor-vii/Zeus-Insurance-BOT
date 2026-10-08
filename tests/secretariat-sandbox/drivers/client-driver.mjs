@@ -116,11 +116,16 @@ async function runScenario(client, scenario, { noPolicyId = true } = {}) {
   };
   if (!noPolicyId) body.policy.policyId = "should-be-ignored-or-rejected";
 
-  const reqEntry = { ts: now(), client, scenario, step: "stage-a-request", method: "POST", url: `${SECRETARIAT}/v1/requests`, body };
+  // F-Z3 workaround (documented in FINAL-REPORT.md): the public Zod schema of
+  // POST /v1/requests strips `authorizer` from the HTTP body. The sandbox SUT
+  // entry (infra/sut-test-entry.ts) injects it back from this test header so
+  // the non-custodial DPI binding can be established without touching prod code.
+  const headers = { "content-type": "application/json", "x-test-authorizer": account.address };
+  const reqEntry = { ts: now(), client, scenario, step: "stage-a-request", method: "POST", url: `${SECRETARIAT}/v1/requests`, headers: { "content-type": "application/json", "x-test-authorizer": account.address }, body };
   appendJsonl(`${EVIDENCE_DIR}/secretariat/requests.jsonl`, reqEntry);
 
   const stageA = await fetchJson(`${SECRETARIAT}/v1/requests`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    method: "POST", headers, body: JSON.stringify(body),
   });
   const respEntry = { ts: now(), client, scenario, step: "stage-a-response", status: stageA.status, headers: stageA.headers, body: stageA.body };
   appendJsonl(`${EVIDENCE_DIR}/secretariat/responses.jsonl`, respEntry);
