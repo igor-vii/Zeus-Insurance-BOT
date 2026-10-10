@@ -96,3 +96,398 @@
 [20:51:28.400] [32mINFO[39m (27071): [36m[composition] ReconciliationWorker started[39m
 [20:51:28.402] [32mINFO[39m (27071): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
     [35mport[39m: 18791
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/workspace/api-server/node_modules/tsx/dist/cli.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/api-server/node_modules/.bin/tsx:2
+basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+          ^^^^^^^
+
+SyntaxError: missing ) after argument list
+    at wrapSafe (node:internal/modules/cjs/loader:1464:18)
+    at Module._compile (node:internal/modules/cjs/loader:1495:20)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/api-server/src/sbx-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/workspace/api-server/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/dist/cli.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/api-server/node_modules/.bin/tsx:2
+basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+          ^^^^^^^
+
+SyntaxError: missing ) after argument list
+    at wrapSafe (node:internal/modules/cjs/loader:1464:18)
+    at Module._compile (node:internal/modules/cjs/loader:1495:20)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163
+    throw new Error(
+          ^
+
+
+Error: Invalid private key format. Expected 0x-prefixed 64-character hex string.
+    at createLocalEoaSignerFromEnv (/workspace/zeus-secretariat/src/adapters/local-eoa-signer.ts:163:11)
+    at createSecretariatComposition (/workspace/api-server/src/lib/secretariat-composition.ts:153:7)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:30:21)
+    at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v20.20.2
+nohup: ignoring input
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/workspace/tests/secretariat-sandbox/node_modules/tsx/dist/cli.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'pino' imported from /workspace/api-server/src/lib/logger.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'pino' imported from /workspace/api-server/src/lib/logger.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/api-server/src/routes/requests.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+=== SUT RESTART 2026-10-10T14:19:41Z ===
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2

@@ -18,16 +18,12 @@
  * mirrors secretariat-app.ts so the SUT behaves identically to the standalone
  * composition root under test.
  */
-// TEST-ONLY isolated virtual DB (pg-mem, real production schema migrations applied).
-// MUST be imported before anything that constructs a pg Pool (lib/db).
-import { memdb } from "./pg-mem-boot.js";
-import fs from "node:fs";
 import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import { createSecretariatComposition } from "../../../api-server/src/lib/secretariat-composition.js";
-import { createRequestsRouter } from "../../../api-server/src/routes/requests.js";
-import { logger } from "../../../api-server/src/lib/logger.js";
+import { createSecretariatComposition } from "../src/lib/secretariat-composition.js";
+import { createRequestsRouter } from "../src/routes/requests.js";
+import { logger } from "../src/lib/logger.js";
 
 const port = Number(process.env.SECRETARIAT_PORT ?? 18791);
 
@@ -57,45 +53,7 @@ const server = app.listen(port);
 await new Promise<void>((resolve) => server.once("listening", () => resolve()));
 logger.info({ port }, "[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)");
 
-// TEST-ONLY: on SIGUSR1, dump every Secretariat-owned table of the isolated
-// virtual DB to evidence/secretariat-test/secretariat-test-db-dump.json (§6).
-const DUMP_TABLES = [
-  "payment_intents",
-  "nonce_registry",
-  "execution_attempts",
-  "reconciliation_observations",
-  "reconciliation_jobs",
-  "recovery_jobs",
-];
-function dumpDb(): void {
-  const tables: Record<string, unknown[]> = {};
-  for (const t of DUMP_TABLES) {
-    try {
-      const rows = memdb.public.query(`SELECT * FROM "${t}"`).execute() as unknown[];
-      tables[t] = JSON.parse(JSON.stringify(rows));
-    } catch (e) {
-      tables[t] = [];
-      logger.error({ err: String(e), table: t }, "[sandbox] dump table failed");
-    }
-  }
-  const out = {
-    database: {
-      type: "pg-mem (in-process PostgreSQL-compatible engine; no PG server binary available in this environment)",
-      isolated: true,
-      schemaSource: "lib/db/drizzle/0000_init.sql + lib/db/drizzle/migrations/0005_secretariat_tables.sql (production migrations applied verbatim; 0004_partitioning skipped — watcher partitioning not used by Secretariat stores; deviation F-DB2)",
-      dumpedAt: new Date().toISOString(),
-    },
-    tables,
-  };
-  fs.writeFileSync("/workspace/evidence/secretariat-test/secretariat-test-db-dump.json", JSON.stringify(out, null, 2));
-  logger.info("[sandbox] DB dump written");
-}
-process.on("SIGUSR1", () => {
-  dumpDb();
-});
-
 async function shutdown(): Promise<void> {
-  dumpDb();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await composition.shutdown();
   process.exit(0);
