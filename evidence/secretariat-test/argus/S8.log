@@ -1,0 +1,14 @@
+
+Run:
+  ID: run_1791487228988_79rw7tb7q
+  Scenario: S8
+  Status: COMPLETED
+  Started: 2026-10-08T19:20:28.988Z
+  Finished: 2026-10-08T19:20:28.989Z
+
+Evidence:
+  Count: 1
+
+Verdict:
+  Result: FAIL
+  Reason: payment not signed and retried

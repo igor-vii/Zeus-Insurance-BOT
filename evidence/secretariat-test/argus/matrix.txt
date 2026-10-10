@@ -1,0 +1,9 @@
+S1|exit=0|verdict=PASS|reason=
+S2|exit=0|verdict=INCONCLUSIVE|reason=payment_settled not observed yet
+S3|exit=0|verdict=INCONCLUSIVE|reason=no settlement observed yet
+S4|exit=0|verdict=NONE|reason=
+S5|exit=0|verdict=PASS|reason=
+S6|exit=0|verdict=INCONCLUSIVE|reason=no settlement observed yet
+S7|exit=0|verdict=INCONCLUSIVE|reason=seller has not sent response yet
+S8|exit=1|verdict=FAIL|reason=payment not signed and retried
+S9|exit=0|verdict=PASS|reason=
