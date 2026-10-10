@@ -95,11 +95,26 @@ function normalizeQueryArg(textOrCfg: unknown): { text: string; values: unknown[
   return { text: String(cfg.text ?? ""), values: Array.isArray(cfg.values) ? cfg.values : null };
 }
 
-async function runQueryAsync(textOrCfg: unknown, params?: unknown[]): Promise<{ rows: unknown[]; rowCount: number }> {
-  const norm = normalizeQueryArg(textOrCfg);
+// TEST-ONLY FIX (v5): drizzle's node-postgres session passes a full pg QueryConfig
+// object ({text, values, rowMode:"array", types:{}, name?}) as the FIRST argument to
+// client.query(). The previous code treated any non-string first arg as an options
+// object and passed `undefined` text -> pg-mem threw "getTypeParser is not supported".
+// Normalize both call shapes here (sandbox adapter only).
+function normalizeFirstArg(first: unknown): { text: string; values: unknown[] | null } {
+  if (typeof first === "string") return { text: first, values: null };
+  if (first && typeof first === "object") {
+    const cfg = first as { text?: string; query?: string; values?: unknown[] };
+    const text = String(cfg.text ?? cfg.query ?? "");
+    return { text, values: Array.isArray(cfg.values) ? cfg.values : null };
+  }
+  return { text: "", values: null };
+}
+
+async function runQueryAsync(first: unknown, params?: unknown): Promise<{ rows: unknown[]; rowCount: number }> {
+  const norm = normalizeFirstArg(first);
   const values = Array.isArray(params) && params.length > 0 ? params : norm.values ?? [];
   const c = await getClient();
-  const res = await c.query(norm.text, values);
+  const res = await c.query(norm.text, values as unknown[]);
   return { rows: Array.isArray(res.rows) ? res.rows : [], rowCount: typeof res.rowCount === "number" ? res.rowCount : 0 };
 }
 
@@ -112,11 +127,12 @@ function makeSandboxPool(opts?: unknown) {
   (p as Record<string, unknown>).connect = async () => {
     await ensure();
     const fakeClient = {
-      query: async (text: string, paramsOrCb?: unknown, cb?: unknown) => {
-        // support (text, values) and (text, values, callback) signatures
+      query: async (first: unknown, paramsOrCb?: unknown, cb?: unknown) => {
+        // support (text, values), (QueryConfig), and callback signatures
         const params = Array.isArray(paramsOrCb) ? (paramsOrCb as unknown[]) : [];
-        const out = await runQueryAsync(text, params);
+        const out = await runQueryAsync(first, params);
         if (typeof cb === "function") { (cb as Function)(null, out); return undefined; }
+        if (typeof paramsOrCb === "function") { (paramsOrCb as Function)(null, out); return undefined; }
         return out;
       },
       release: () => {},
@@ -124,12 +140,13 @@ function makeSandboxPool(opts?: unknown) {
     };
     return [fakeClient, fakeClient.release];
   };
-  // Also support pool.query(text, params[, cb]) style (some call sites use it directly).
-  (p as Record<string, unknown>).query = async (text: string, paramsOrCb?: unknown, cb?: unknown) => {
+  // Also support pool.query(text, params[, cb]) / pool.query(QueryConfig[, cb]) style.
+  (p as Record<string, unknown>).query = async (first: unknown, paramsOrCb?: unknown, cb?: unknown) => {
     await ensure();
     const params = Array.isArray(paramsOrCb) ? (paramsOrCb as unknown[]) : [];
-    const out = await runQueryAsync(text, params);
+    const out = await runQueryAsync(first, params);
     if (typeof cb === "function") { (cb as Function)(null, out); return undefined; }
+    if (typeof paramsOrCb === "function") { (paramsOrCb as Function)(null, out); return undefined; }
     return out;
   };
   return p;

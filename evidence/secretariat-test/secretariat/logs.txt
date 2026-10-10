@@ -1234,3 +1234,2073 @@ nohup: ignoring input
 [16:44:01.818] [32mINFO[39m (19603): [36m[composition] ReconciliationWorker started[39m
 [16:44:01.853] [32mINFO[39m (19603): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
     [35mport[39m: 18791
+[17:25:11.003] [31mERROR[39m (19603): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:25:11.004] [31mERROR[39m (19603): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:25:11.005] [31mERROR[39m (19603): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:25:11.010] [31mERROR[39m (19603): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:25:11.014] [31mERROR[39m (19603): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:25:11.018] [31mERROR[39m (19603): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:25:11.019] [32mINFO[39m (19603): [36m[sandbox] DB dump written[39m
+[17:25:11.020] [32mINFO[39m (19603): [36m[composition] Graceful shutdown initiated[39m
+[17:25:11.020] [32mINFO[39m (19603): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[17:25:17.399] [32mINFO[39m (20378): [36m[composition] ReconciliationWorker started[39m
+[17:25:17.411] [32mINFO[39m (20378): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+=== RUN ClawRouter S0 2026-10-10T17:25:28Z ===
+[2026-10-10T17:25:29.069Z] START client=ClawRouter scenario=S0 mode=HAPPY
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S1 2026-10-10T17:25:29Z ===
+[2026-10-10T17:25:29.795Z] START client=ClawRouter scenario=S1 mode=TIMEOUT
+{
+  "client": "ClawRouter",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S2 2026-10-10T17:25:30Z ===
+[2026-10-10T17:25:30.316Z] START client=ClawRouter scenario=S2 mode=RESPONSE_LOST
+{
+  "client": "ClawRouter",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S3 2026-10-10T17:25:30Z ===
+[2026-10-10T17:25:30.909Z] START client=ClawRouter scenario=S3 mode=EXEC_FAILURE
+{
+  "client": "ClawRouter",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S4 2026-10-10T17:25:31Z ===
+[2026-10-10T17:25:31.464Z] START client=ClawRouter scenario=S4 mode=RETRY
+{
+  "client": "ClawRouter",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S5 2026-10-10T17:25:31Z ===
+[2026-10-10T17:25:31.962Z] START client=ClawRouter scenario=S5 mode=IDEMPOTENT
+{
+  "client": "ClawRouter",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S0 2026-10-10T17:25:32Z ===
+[2026-10-10T17:25:32.486Z] START client=Franklin scenario=S0 mode=HAPPY
+{
+  "client": "Franklin",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S1 2026-10-10T17:25:32Z ===
+[2026-10-10T17:25:33.001Z] START client=Franklin scenario=S1 mode=TIMEOUT
+{
+  "client": "Franklin",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S2 2026-10-10T17:25:33Z ===
+[2026-10-10T17:25:33.530Z] START client=Franklin scenario=S2 mode=RESPONSE_LOST
+{
+  "client": "Franklin",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S3 2026-10-10T17:25:33Z ===
+[2026-10-10T17:25:34.074Z] START client=Franklin scenario=S3 mode=EXEC_FAILURE
+{
+  "client": "Franklin",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S4 2026-10-10T17:25:34Z ===
+[2026-10-10T17:25:34.633Z] START client=Franklin scenario=S4 mode=RETRY
+{
+  "client": "Franklin",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S5 2026-10-10T17:25:35Z ===
+[2026-10-10T17:25:35.200Z] START client=Franklin scenario=S5 mode=IDEMPOTENT
+{
+  "client": "Franklin",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S0 2026-10-10T17:25:35Z ===
+[2026-10-10T17:25:35.705Z] START client=BlockRun scenario=S0 mode=HAPPY
+{
+  "client": "BlockRun",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S1 2026-10-10T17:25:36Z ===
+[2026-10-10T17:25:36.222Z] START client=BlockRun scenario=S1 mode=TIMEOUT
+{
+  "client": "BlockRun",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S2 2026-10-10T17:25:36Z ===
+[2026-10-10T17:25:36.729Z] START client=BlockRun scenario=S2 mode=RESPONSE_LOST
+{
+  "client": "BlockRun",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S3 2026-10-10T17:25:37Z ===
+[2026-10-10T17:25:37.216Z] START client=BlockRun scenario=S3 mode=EXEC_FAILURE
+{
+  "client": "BlockRun",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S4 2026-10-10T17:25:37Z ===
+[2026-10-10T17:25:37.760Z] START client=BlockRun scenario=S4 mode=RETRY
+{
+  "client": "BlockRun",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S5 2026-10-10T17:25:38Z ===
+[2026-10-10T17:25:38.253Z] START client=BlockRun scenario=S5 mode=IDEMPOTENT
+{
+  "client": "BlockRun",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== POLICYID-LESS PROOF RUN (ClawRouter S0, no policyId — default) already covered; explicit with-policyId probe: ===
+[2026-10-10T17:25:38.732Z] START client=ClawRouter scenario=S0 mode=HAPPY
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[17:26:59.116] [31mERROR[39m (20378): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:26:59.117] [31mERROR[39m (20378): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:26:59.119] [31mERROR[39m (20378): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:26:59.122] [31mERROR[39m (20378): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:26:59.128] [31mERROR[39m (20378): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:26:59.133] [31mERROR[39m (20378): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:26:59.133] [32mINFO[39m (20378): [36m[sandbox] DB dump written[39m
+[17:26:59.134] [32mINFO[39m (20378): [36m[composition] Graceful shutdown initiated[39m
+[17:26:59.134] [32mINFO[39m (20378): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[17:27:05.484] [32mINFO[39m (21039): [36m[composition] ReconciliationWorker started[39m
+[17:27:05.497] [32mINFO[39m (21039): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[17:27:12.408] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "probe-1"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653232221_400duomaazz",
+        "phase": "DISCOVERY",
+        "timestamp": 1791653232375,
+        "event": "DISCOVERY_STARTED",
+        "payload": {
+          "target": "http://127.0.0.1:18700/resource?mode=HAPPY"
+        }
+      },
+      {
+        "operationId": "op_1791653232221_400duomaazz",
+        "phase": "DISCOVERY",
+        "timestamp": 1791653232394,
+        "event": "DISCOVERY_ERROR",
+        "payload": {
+          "error": "HTTP 404: Not Found"
+        }
+      },
+      {
+        "operationId": "op_1791653232221_400duomaazz",
+        "phase": "FINAL",
+        "timestamp": 1791653232394,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "HTTP 404: Not Found"
+        }
+      }
+    ]
+    error: "HTTP 404: Not Found"
+=== RUN ClawRouter S0 2026-10-10T17:37:12Z ===
+[2026-10-10T17:37:12.395Z] START client=ClawRouter scenario=S0 mode=HAPPY
+[17:37:12.658] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791653832469"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653832583_yujxw1s5nyn",
+        "phase": "POLICY",
+        "timestamp": 1791653832606,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653832583_yujxw1s5nyn",
+        "phase": "POLICY",
+        "timestamp": 1791653832606,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653832583_yujxw1s5nyn",
+        "phase": "FINAL",
+        "timestamp": 1791653832607,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S1 2026-10-10T17:37:12Z ===
+[2026-10-10T17:37:13.125Z] START client=ClawRouter scenario=S1 mode=TIMEOUT
+[17:37:13.384] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S1-1791653833206"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653833298_thiba6grtxr",
+        "phase": "POLICY",
+        "timestamp": 1791653833368,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653833298_thiba6grtxr",
+        "phase": "POLICY",
+        "timestamp": 1791653833368,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653833298_thiba6grtxr",
+        "phase": "FINAL",
+        "timestamp": 1791653833368,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S2 2026-10-10T17:37:13Z ===
+[2026-10-10T17:37:13.682Z] START client=ClawRouter scenario=S2 mode=RESPONSE_LOST
+[17:37:13.880] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S2-1791653833754"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653833813_inwh2cv8df",
+        "phase": "POLICY",
+        "timestamp": 1791653833873,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653833813_inwh2cv8df",
+        "phase": "POLICY",
+        "timestamp": 1791653833873,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653833813_inwh2cv8df",
+        "phase": "FINAL",
+        "timestamp": 1791653833873,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S3 2026-10-10T17:37:14Z ===
+[2026-10-10T17:37:14.174Z] START client=ClawRouter scenario=S3 mode=EXEC_FAILURE
+[17:37:14.411] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S3-1791653834252"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653834375_cwytgtmcyi",
+        "phase": "POLICY",
+        "timestamp": 1791653834402,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653834375_cwytgtmcyi",
+        "phase": "POLICY",
+        "timestamp": 1791653834402,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653834375_cwytgtmcyi",
+        "phase": "FINAL",
+        "timestamp": 1791653834402,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S4 2026-10-10T17:37:14Z ===
+[2026-10-10T17:37:14.690Z] START client=ClawRouter scenario=S4 mode=RETRY
+[17:37:14.900] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S4-1791653834768"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653834870_buzduayrt8h",
+        "phase": "POLICY",
+        "timestamp": 1791653834887,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653834870_buzduayrt8h",
+        "phase": "POLICY",
+        "timestamp": 1791653834887,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653834870_buzduayrt8h",
+        "phase": "FINAL",
+        "timestamp": 1791653834888,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S5 2026-10-10T17:37:15Z ===
+[2026-10-10T17:37:15.199Z] START client=ClawRouter scenario=S5 mode=IDEMPOTENT
+[17:37:15.394] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S5-1791653835269"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653835364_e8i9tw05zha",
+        "phase": "POLICY",
+        "timestamp": 1791653835389,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653835364_e8i9tw05zha",
+        "phase": "POLICY",
+        "timestamp": 1791653835389,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653835364_e8i9tw05zha",
+        "phase": "FINAL",
+        "timestamp": 1791653835389,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S0 2026-10-10T17:37:15Z ===
+[2026-10-10T17:37:15.684Z] START client=Franklin scenario=S0 mode=HAPPY
+[17:37:15.884] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S0-1791653835759"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653835859_f6xvr33jz3u",
+        "phase": "POLICY",
+        "timestamp": 1791653835878,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653835859_f6xvr33jz3u",
+        "phase": "POLICY",
+        "timestamp": 1791653835878,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653835859_f6xvr33jz3u",
+        "phase": "FINAL",
+        "timestamp": 1791653835879,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S1 2026-10-10T17:37:16Z ===
+[2026-10-10T17:37:16.184Z] START client=Franklin scenario=S1 mode=TIMEOUT
+[17:37:16.385] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S1-1791653836258"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653836359_xw9lhpytkb",
+        "phase": "POLICY",
+        "timestamp": 1791653836379,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653836359_xw9lhpytkb",
+        "phase": "POLICY",
+        "timestamp": 1791653836379,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653836359_xw9lhpytkb",
+        "phase": "FINAL",
+        "timestamp": 1791653836379,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S2 2026-10-10T17:37:16Z ===
+[2026-10-10T17:37:16.683Z] START client=Franklin scenario=S2 mode=RESPONSE_LOST
+[17:37:16.888] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S2-1791653836756"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653836859_ywxqs31dfwm",
+        "phase": "POLICY",
+        "timestamp": 1791653836877,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653836859_ywxqs31dfwm",
+        "phase": "POLICY",
+        "timestamp": 1791653836877,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653836859_ywxqs31dfwm",
+        "phase": "FINAL",
+        "timestamp": 1791653836878,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S3 2026-10-10T17:37:17Z ===
+[2026-10-10T17:37:17.192Z] START client=Franklin scenario=S3 mode=EXEC_FAILURE
+[17:37:17.389] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S3-1791653837270"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653837359_l4c8qgvh9xj",
+        "phase": "POLICY",
+        "timestamp": 1791653837384,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653837359_l4c8qgvh9xj",
+        "phase": "POLICY",
+        "timestamp": 1791653837384,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653837359_l4c8qgvh9xj",
+        "phase": "FINAL",
+        "timestamp": 1791653837384,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S4 2026-10-10T17:37:17Z ===
+[2026-10-10T17:37:17.716Z] START client=Franklin scenario=S4 mode=RETRY
+[17:37:17.905] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S4-1791653837784"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653837878_mv248y4z9t",
+        "phase": "POLICY",
+        "timestamp": 1791653837900,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653837878_mv248y4z9t",
+        "phase": "POLICY",
+        "timestamp": 1791653837900,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653837878_mv248y4z9t",
+        "phase": "FINAL",
+        "timestamp": 1791653837900,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S5 2026-10-10T17:37:18Z ===
+[2026-10-10T17:37:18.221Z] START client=Franklin scenario=S5 mode=IDEMPOTENT
+[17:37:18.402] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S5-1791653838285"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653838370_ooh98irc1mf",
+        "phase": "POLICY",
+        "timestamp": 1791653838388,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653838370_ooh98irc1mf",
+        "phase": "POLICY",
+        "timestamp": 1791653838388,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653838370_ooh98irc1mf",
+        "phase": "FINAL",
+        "timestamp": 1791653838388,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S0 2026-10-10T17:37:18Z ===
+[2026-10-10T17:37:18.707Z] START client=BlockRun scenario=S0 mode=HAPPY
+[17:37:19.001] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S0-1791653838784"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653838872_336y5iumdko",
+        "phase": "POLICY",
+        "timestamp": 1791653838995,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653838872_336y5iumdko",
+        "phase": "POLICY",
+        "timestamp": 1791653838995,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653838872_336y5iumdko",
+        "phase": "FINAL",
+        "timestamp": 1791653838995,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S1 2026-10-10T17:37:19Z ===
+[2026-10-10T17:37:19.308Z] START client=BlockRun scenario=S1 mode=TIMEOUT
+[17:37:19.516] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S1-1791653839383"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653839489_or1tvrorx2",
+        "phase": "POLICY",
+        "timestamp": 1791653839507,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653839489_or1tvrorx2",
+        "phase": "POLICY",
+        "timestamp": 1791653839507,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653839489_or1tvrorx2",
+        "phase": "FINAL",
+        "timestamp": 1791653839507,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S2 2026-10-10T17:37:19Z ===
+[2026-10-10T17:37:19.813Z] START client=BlockRun scenario=S2 mode=RESPONSE_LOST
+{
+  "client": "BlockRun",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[17:37:20.009] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S2-1791653839884"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653839983_kf446fm08pi",
+        "phase": "POLICY",
+        "timestamp": 1791653840002,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653839983_kf446fm08pi",
+        "phase": "POLICY",
+        "timestamp": 1791653840002,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653839983_kf446fm08pi",
+        "phase": "FINAL",
+        "timestamp": 1791653840002,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+=== RUN BlockRun S3 2026-10-10T17:37:20Z ===
+[2026-10-10T17:37:20.322Z] START client=BlockRun scenario=S3 mode=EXEC_FAILURE
+[17:37:20.563] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S3-1791653840397"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653840482_9eoncciop0w",
+        "phase": "POLICY",
+        "timestamp": 1791653840557,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653840482_9eoncciop0w",
+        "phase": "POLICY",
+        "timestamp": 1791653840557,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653840482_9eoncciop0w",
+        "phase": "FINAL",
+        "timestamp": 1791653840557,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S4 2026-10-10T17:37:20Z ===
+[2026-10-10T17:37:20.826Z] START client=BlockRun scenario=S4 mode=RETRY
+[17:37:21.019] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S4-1791653840906"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653840987_yddebzno7qp",
+        "phase": "POLICY",
+        "timestamp": 1791653841012,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653840987_yddebzno7qp",
+        "phase": "POLICY",
+        "timestamp": 1791653841012,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653840987_yddebzno7qp",
+        "phase": "FINAL",
+        "timestamp": 1791653841012,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S5 2026-10-10T17:37:21Z ===
+[2026-10-10T17:37:21.321Z] START client=BlockRun scenario=S5 mode=IDEMPOTENT
+[17:37:21.509] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S5-1791653841394"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653841479_nca9hezqp3",
+        "phase": "POLICY",
+        "timestamp": 1791653841498,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653841479_nca9hezqp3",
+        "phase": "POLICY",
+        "timestamp": 1791653841498,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653841479_nca9hezqp3",
+        "phase": "FINAL",
+        "timestamp": 1791653841498,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== POLICYID-LESS PROOF RUN (ClawRouter S0, no policyId — default) already covered; explicit with-policyId probe: ===
+[2026-10-10T17:37:21.823Z] START client=ClawRouter scenario=S0 mode=HAPPY
+[17:37:22.009] [32mINFO[39m (21039): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791653841890"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653841983_6gkm96wp3tc",
+        "phase": "POLICY",
+        "timestamp": 1791653842004,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653841983_6gkm96wp3tc",
+        "phase": "POLICY",
+        "timestamp": 1791653842004,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653841983_6gkm96wp3tc",
+        "phase": "FINAL",
+        "timestamp": 1791653842004,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[17:38:15.938] [31mERROR[39m (21039): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:38:15.940] [31mERROR[39m (21039): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:38:15.943] [31mERROR[39m (21039): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:38:15.947] [31mERROR[39m (21039): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:38:15.952] [31mERROR[39m (21039): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:38:15.957] [31mERROR[39m (21039): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:38:15.957] [32mINFO[39m (21039): [36m[sandbox] DB dump written[39m
+[17:38:15.957] [32mINFO[39m (21039): [36m[composition] Graceful shutdown initiated[39m
+[17:38:15.958] [32mINFO[39m (21039): [36m[composition] ReconciliationWorker stopped[39m
+[17:38:22.654] [32mINFO[39m (23484): [36m[composition] ReconciliationWorker started[39m
+[17:38:22.666] [32mINFO[39m (23484): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+=== RUN ClawRouter S0 2026-10-10T17:38:32Z ===
+[2026-10-10T17:38:32.726Z] START client=ClawRouter scenario=S0 mode=HAPPY
+[17:38:33.063] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791653912802"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653912988_7g2wn6dq14v",
+        "phase": "POLICY",
+        "timestamp": 1791653913041,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653912988_7g2wn6dq14v",
+        "phase": "POLICY",
+        "timestamp": 1791653913051,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653912988_7g2wn6dq14v",
+        "phase": "FINAL",
+        "timestamp": 1791653913052,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S1 2026-10-10T17:38:33Z ===
+[2026-10-10T17:38:33.533Z] START client=ClawRouter scenario=S1 mode=TIMEOUT
+[17:38:33.784] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S1-1791653913610"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653913708_5rs2uo6ynq",
+        "phase": "POLICY",
+        "timestamp": 1791653913776,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653913708_5rs2uo6ynq",
+        "phase": "POLICY",
+        "timestamp": 1791653913776,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653913708_5rs2uo6ynq",
+        "phase": "FINAL",
+        "timestamp": 1791653913776,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S2 2026-10-10T17:38:33Z ===
+[2026-10-10T17:38:34.104Z] START client=ClawRouter scenario=S2 mode=RESPONSE_LOST
+[17:38:34.314] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S2-1791653914175"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653914283_enyk853wmxs",
+        "phase": "POLICY",
+        "timestamp": 1791653914306,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653914283_enyk853wmxs",
+        "phase": "POLICY",
+        "timestamp": 1791653914306,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653914283_enyk853wmxs",
+        "phase": "FINAL",
+        "timestamp": 1791653914306,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S3 2026-10-10T17:38:34Z ===
+[2026-10-10T17:38:34.603Z] START client=ClawRouter scenario=S3 mode=EXEC_FAILURE
+[17:38:34.821] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S3-1791653914687"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653914789_dc1x4res69r",
+        "phase": "POLICY",
+        "timestamp": 1791653914814,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653914789_dc1x4res69r",
+        "phase": "POLICY",
+        "timestamp": 1791653914814,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653914789_dc1x4res69r",
+        "phase": "FINAL",
+        "timestamp": 1791653914814,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S4 2026-10-10T17:38:34Z ===
+[2026-10-10T17:38:35.124Z] START client=ClawRouter scenario=S4 mode=RETRY
+[17:38:35.328] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S4-1791653915199"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653915291_bv234beaalr",
+        "phase": "POLICY",
+        "timestamp": 1791653915313,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653915291_bv234beaalr",
+        "phase": "POLICY",
+        "timestamp": 1791653915313,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653915291_bv234beaalr",
+        "phase": "FINAL",
+        "timestamp": 1791653915313,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S5 2026-10-10T17:38:35Z ===
+[2026-10-10T17:38:35.635Z] START client=ClawRouter scenario=S5 mode=IDEMPOTENT
+[17:38:36.004] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S5-1791653915718"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653915884_d9h0sv9a9m",
+        "phase": "POLICY",
+        "timestamp": 1791653915995,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653915884_d9h0sv9a9m",
+        "phase": "POLICY",
+        "timestamp": 1791653915995,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653915884_d9h0sv9a9m",
+        "phase": "FINAL",
+        "timestamp": 1791653915995,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S0 2026-10-10T17:38:36Z ===
+[2026-10-10T17:38:36.328Z] START client=Franklin scenario=S0 mode=HAPPY
+[17:38:36.551] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S0-1791653916393"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653916485_l1r1r1szeki",
+        "phase": "POLICY",
+        "timestamp": 1791653916511,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653916485_l1r1r1szeki",
+        "phase": "POLICY",
+        "timestamp": 1791653916511,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653916485_l1r1r1szeki",
+        "phase": "FINAL",
+        "timestamp": 1791653916511,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S1 2026-10-10T17:38:36Z ===
+[2026-10-10T17:38:36.831Z] START client=Franklin scenario=S1 mode=TIMEOUT
+[17:38:37.083] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S1-1791653916910"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653917011_q0pg3mpcwv",
+        "phase": "POLICY",
+        "timestamp": 1791653917072,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653917011_q0pg3mpcwv",
+        "phase": "POLICY",
+        "timestamp": 1791653917072,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653917011_q0pg3mpcwv",
+        "phase": "FINAL",
+        "timestamp": 1791653917072,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S2 2026-10-10T17:38:37Z ===
+[2026-10-10T17:38:37.422Z] START client=Franklin scenario=S2 mode=RESPONSE_LOST
+[17:38:37.605] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S2-1791653917494"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653917575_g1awj7zt6s",
+        "phase": "POLICY",
+        "timestamp": 1791653917597,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653917575_g1awj7zt6s",
+        "phase": "POLICY",
+        "timestamp": 1791653917597,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653917575_g1awj7zt6s",
+        "phase": "FINAL",
+        "timestamp": 1791653917597,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S3 2026-10-10T17:38:37Z ===
+[2026-10-10T17:38:37.927Z] START client=Franklin scenario=S3 mode=EXEC_FAILURE
+[17:38:38.155] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S3-1791653918001"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653918092_dib6zklji1",
+        "phase": "POLICY",
+        "timestamp": 1791653918112,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653918092_dib6zklji1",
+        "phase": "POLICY",
+        "timestamp": 1791653918112,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653918092_dib6zklji1",
+        "phase": "FINAL",
+        "timestamp": 1791653918112,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S4 2026-10-10T17:38:38Z ===
+[2026-10-10T17:38:38.426Z] START client=Franklin scenario=S4 mode=RETRY
+[17:38:38.678] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S4-1791653918499"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653918614_5kd1x154bb6",
+        "phase": "POLICY",
+        "timestamp": 1791653918666,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653918614_5kd1x154bb6",
+        "phase": "POLICY",
+        "timestamp": 1791653918666,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653918614_5kd1x154bb6",
+        "phase": "FINAL",
+        "timestamp": 1791653918666,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S5 2026-10-10T17:38:38Z ===
+[2026-10-10T17:38:38.973Z] START client=Franklin scenario=S5 mode=IDEMPOTENT
+[17:38:39.179] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S5-1791653919056"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653919154_ruc8g7tz7nh",
+        "phase": "POLICY",
+        "timestamp": 1791653919173,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653919154_ruc8g7tz7nh",
+        "phase": "POLICY",
+        "timestamp": 1791653919173,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653919154_ruc8g7tz7nh",
+        "phase": "FINAL",
+        "timestamp": 1791653919173,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "Franklin",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S0 2026-10-10T17:38:39Z ===
+[2026-10-10T17:38:39.470Z] START client=BlockRun scenario=S0 mode=HAPPY
+[17:38:39.672] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S0-1791653919525"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653919612_zilqsnm4dh",
+        "phase": "POLICY",
+        "timestamp": 1791653919666,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653919612_zilqsnm4dh",
+        "phase": "POLICY",
+        "timestamp": 1791653919666,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653919612_zilqsnm4dh",
+        "phase": "FINAL",
+        "timestamp": 1791653919666,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S1 2026-10-10T17:38:39Z ===
+[2026-10-10T17:38:39.983Z] START client=BlockRun scenario=S1 mode=TIMEOUT
+[17:38:40.195] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S1-1791653920056"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653920162_7azofh15g3w",
+        "phase": "POLICY",
+        "timestamp": 1791653920186,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653920162_7azofh15g3w",
+        "phase": "POLICY",
+        "timestamp": 1791653920186,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653920162_7azofh15g3w",
+        "phase": "FINAL",
+        "timestamp": 1791653920186,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S2 2026-10-10T17:38:40Z ===
+[2026-10-10T17:38:40.492Z] START client=BlockRun scenario=S2 mode=RESPONSE_LOST
+[17:38:40.795] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S2-1791653920565"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653920669_u577ackg0zm",
+        "phase": "POLICY",
+        "timestamp": 1791653920765,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653920669_u577ackg0zm",
+        "phase": "POLICY",
+        "timestamp": 1791653920765,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653920669_u577ackg0zm",
+        "phase": "FINAL",
+        "timestamp": 1791653920765,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S3 2026-10-10T17:38:40Z ===
+[2026-10-10T17:38:41.118Z] START client=BlockRun scenario=S3 mode=EXEC_FAILURE
+[17:38:41.364] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S3-1791653921204"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653921288_kmc9zs7mkjs",
+        "phase": "POLICY",
+        "timestamp": 1791653921317,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653921288_kmc9zs7mkjs",
+        "phase": "POLICY",
+        "timestamp": 1791653921317,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653921288_kmc9zs7mkjs",
+        "phase": "FINAL",
+        "timestamp": 1791653921317,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S4 2026-10-10T17:38:41Z ===
+[2026-10-10T17:38:41.644Z] START client=BlockRun scenario=S4 mode=RETRY
+[17:38:41.867] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S4-1791653921711"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653921797_88ycrjqczr3",
+        "phase": "POLICY",
+        "timestamp": 1791653921860,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653921797_88ycrjqczr3",
+        "phase": "POLICY",
+        "timestamp": 1791653921860,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653921797_88ycrjqczr3",
+        "phase": "FINAL",
+        "timestamp": 1791653921861,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S5 2026-10-10T17:38:42Z ===
+[2026-10-10T17:38:42.175Z] START client=BlockRun scenario=S5 mode=IDEMPOTENT
+[17:38:42.380] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S5-1791653922253"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653922351_1fhtsr42y0x",
+        "phase": "POLICY",
+        "timestamp": 1791653922372,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653922351_1fhtsr42y0x",
+        "phase": "POLICY",
+        "timestamp": 1791653922372,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653922351_1fhtsr42y0x",
+        "phase": "FINAL",
+        "timestamp": 1791653922372,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "BlockRun",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== POLICYID-LESS PROOF RUN (ClawRouter S0, no policyId — default) already covered; explicit with-policyId probe: ===
+[2026-10-10T17:38:42.715Z] START client=ClawRouter scenario=S0 mode=HAPPY
+[17:38:42.978] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791653922793"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653922915_9dpw55czj9p",
+        "phase": "POLICY",
+        "timestamp": 1791653922970,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653922915_9dpw55czj9p",
+        "phase": "POLICY",
+        "timestamp": 1791653922970,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653922915_9dpw55czj9p",
+        "phase": "FINAL",
+        "timestamp": 1791653922970,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[17:38:53.116] [32mINFO[39m (23484): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "probe-1"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653933088_34vgv5jpvm6",
+        "phase": "POLICY",
+        "timestamp": 1791653933108,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653933088_34vgv5jpvm6",
+        "phase": "POLICY",
+        "timestamp": 1791653933108,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653933088_34vgv5jpvm6",
+        "phase": "FINAL",
+        "timestamp": 1791653933108,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"
+[17:39:03.310] [31mERROR[39m (23484): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:39:03.312] [31mERROR[39m (23484): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:39:03.313] [31mERROR[39m (23484): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:39:03.315] [31mERROR[39m (23484): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:39:03.316] [31mERROR[39m (23484): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:39:03.316] [31mERROR[39m (23484): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[17:39:03.317] [32mINFO[39m (23484): [36m[sandbox] DB dump written[39m
+[17:39:03.317] [32mINFO[39m (23484): [36m[composition] Graceful shutdown initiated[39m
+[17:39:03.317] [32mINFO[39m (23484): [36m[composition] ReconciliationWorker stopped[39m
+[17:39:09.521] [32mINFO[39m (23863): [36m[composition] ReconciliationWorker started[39m
+[17:39:09.558] [32mINFO[39m (23863): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[17:39:16.469] [32mINFO[39m (23863): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "probe-2"
+    [35mstatus[39m: "REJECTED"
+    [35mstate[39m: "FAILED"
+    [35mlastEvidence[39m: [
+      {
+        "operationId": "op_1791653956394_8goxkr6ifx3",
+        "phase": "POLICY",
+        "timestamp": 1791653956452,
+        "event": "POLICY_VALIDATION_STARTED",
+        "payload": {}
+      },
+      {
+        "operationId": "op_1791653956394_8goxkr6ifx3",
+        "phase": "POLICY",
+        "timestamp": 1791653956452,
+        "event": "POLICY_VALIDATION_PASSED",
+        "payload": {
+          "amount": "100000",
+          "network": "base-sepolia",
+          "asset": "0x036CbD53842c942c0a9d39f23520231D3dF71be4",
+          "payee": "0x1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "operationId": "op_1791653956394_8goxkr6ifx3",
+        "phase": "FINAL",
+        "timestamp": 1791653956452,
+        "event": "OPERATION_FAILED",
+        "payload": {
+          "status": "FAILED",
+          "error": "Invalid payment authorization: authorizer is required"
+        }
+      }
+    ]
+    error: "Invalid payment authorization: authorizer is required"

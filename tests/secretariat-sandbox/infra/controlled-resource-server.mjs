@@ -32,7 +32,9 @@ const server = http.createServer((req, res) => {
     saveLedger(); res.writeHead(200); res.end(JSON.stringify({ok:true})); return;
   }
   // Discovery endpoint: resource advertises x402 payment requirement (402)
-  if (req.method === "GET" && req.url.startsWith("/resource")) {
+  // FIX (sandbox infra only, per §12): serve discovery via BOTH GET and POST —
+  // clients probe with the method they will use for execution.
+  if ((req.method === "GET" || req.method === "POST") && req.url.startsWith("/resource")) {
     const mode = new URL(req.url,"http://l").searchParams.get("mode") || "HAPPY";
     logReq({ method:"GET", path:req.url, headers:{}, body:null, stage:"discovery", mode });
     // NOTE: field name "amount" is required by Secretariat X402Parser (see finding F-CRS:

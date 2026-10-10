@@ -49,6 +49,42 @@ app.use("/v1/requests", (req, _res, next) => {
 });
 
 app.get(["/health", "/healthz"], (_req, res) => res.json({ status: "ok" }));
+
+// TEST-ONLY DIAGNOSTIC WRAPPER (finding F-D1 instrumentation; production class
+// untouched). Captures the real internal failure reason of Stage-A discovery/
+// policy validation, which the public router collapses into a generic 422.
+{
+  const s = composition.secretariat as unknown as {
+    prepareStageA(req: unknown, opts?: unknown): Promise<{ status: string; operation?: { evidence: unknown[] }; result?: unknown }>;
+  };
+  const orig = s.prepareStageA.bind(s);
+  s.prepareStageA = async (req: unknown, opts?: unknown) => {
+    let out: Awaited<ReturnType<typeof orig>> | null = null;
+    let thrown: unknown = null;
+    try {
+      out = await orig(req, opts);
+    } catch (e) {
+      thrown = e;
+    }
+    try {
+      const op = out?.operation as { currentState?: string; error?: string; evidence?: { phase: string; event: string; payload: unknown }[] } | undefined;
+      logger.info(
+        {
+          diag: "stage-a",
+          requestId: (req as { requestId?: string }).requestId,
+          status: out?.status ?? null,
+          state: op?.currentState ?? null,
+          error: op?.error ?? String((thrown as Error)?.message ?? thrown ?? ""),
+          lastEvidence: (op?.evidence ?? []).slice(-3),
+        },
+        "[sandbox-diag] prepareStageA outcome"
+      );
+    } catch { /* diagnostics must never break the flow */ }
+    if (thrown) throw thrown;
+    return out!;
+  };
+}
+
 app.use("/v1", createRequestsRouter(composition.secretariat, composition.paymentVerifier));
 
 await composition.recover();

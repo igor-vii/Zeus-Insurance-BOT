@@ -1,0 +1,58 @@
+{
+  "client": "BlockRun",
+  "scenario": "S5",
+  "stoppedAt": "STAGE_A",
+  "stageA": {
+    "status": 422,
+    "headers": {
+      "access-control-allow-origin": "*",
+      "connection": "keep-alive",
+      "content-length": "96",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Sat, 10 Oct 2026 17:38:42 GMT",
+      "etag": "W/\"60-L+5PwlEwPr8rRCN8nyecvX/9wRM\"",
+      "keep-alive": "timeout=5",
+      "ratelimit-limit": "5000",
+      "ratelimit-policy": "5000;w=900",
+      "ratelimit-remaining": "4981",
+      "ratelimit-reset": "887",
+      "x-powered-by": "Express"
+    },
+    "body": {
+      "error": {
+        "code": "REQUEST_REJECTED",
+        "message": "The request was rejected by the payment policy"
+      }
+    }
+  },
+  "runLog": [
+    {
+      "ts": "2026-10-10T17:38:42.392Z",
+      "client": "BlockRun",
+      "scenario": "S5",
+      "step": "stage-a-response",
+      "status": 422,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "connection": "keep-alive",
+        "content-length": "96",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 10 Oct 2026 17:38:42 GMT",
+        "etag": "W/\"60-L+5PwlEwPr8rRCN8nyecvX/9wRM\"",
+        "keep-alive": "timeout=5",
+        "ratelimit-limit": "5000",
+        "ratelimit-policy": "5000;w=900",
+        "ratelimit-remaining": "4981",
+        "ratelimit-reset": "887",
+        "x-powered-by": "Express"
+      },
+      "body": {
+        "error": {
+          "code": "REQUEST_REJECTED",
+          "message": "The request was rejected by the payment policy"
+        }
+      }
+    }
+  ],
+  "verdict": "SCENARIO NOT REACHED"
+}
