@@ -54,8 +54,12 @@ const server = http.createServer((req, res) => {
   }
   if (req.method !== "POST") { res.writeHead(404); res.end(); return; }
   let body = "";
-  req.on("data", (c) => (body += c));
-  req.on("end", () => {
+  // TEST-ONLY FIX: 'readable' pauses the stream (flowing=false), so 'end' never
+  // fires. Use flowing-mode 'data' + 'end', plus a no-body safety timer.
+  let processed = false;
+  const runHandler = () => {
+    if (processed) return;
+    processed = true;
     let rpc;
     try { rpc = JSON.parse(body); } catch { res.writeHead(400); res.end("{}"); return; }
     const send = (result) => res.writeHead(200, { "content-type": "application/json" }) || res.end(JSON.stringify({ jsonrpc: "2.0", id: rpc.id ?? 1, result }));
@@ -106,7 +110,10 @@ const server = http.createServer((req, res) => {
       default:
         return err("method not mocked: " + rpc.method);
     }
-  });
+  };
+  req.on("data", (c) => (body += c));
+  req.on("end", runHandler);
+  req.on("error", () => {});
 });
 
 server.listen(port, "127.0.0.1", () => console.log(`[rpc-mock] listening on ${port}`));

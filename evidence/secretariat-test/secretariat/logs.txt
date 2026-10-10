@@ -5102,3 +5102,121 @@ nohup: ignoring input
               at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
               at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
     }
+[18:30:43.126] [31mERROR[39m (369): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:30:43.128] [31mERROR[39m (369): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:30:43.133] [31mERROR[39m (369): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:30:43.135] [31mERROR[39m (369): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:30:43.140] [31mERROR[39m (369): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:30:43.141] [31mERROR[39m (369): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:30:43.142] [32mINFO[39m (369): [36m[sandbox] DB dump written[39m
+[18:30:43.142] [32mINFO[39m (369): [36m[composition] Graceful shutdown initiated[39m
+[18:30:43.142] [32mINFO[39m (369): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[18:30:56.501] [32mINFO[39m (2803): [36m[composition] ReconciliationWorker started[39m
+[18:30:56.512] [32mINFO[39m (2803): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[18:31:28.680] [32mINFO[39m (2803): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791657088401"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:31:28.680] [31mERROR[39m (2803): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+nohup: ignoring input
+[18:37:30.524] [32mINFO[39m (3939): [36m[composition] ReconciliationWorker started[39m
+node:events:502
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::18791
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at Function.listen (/workspace/tests/secretariat-sandbox/node_modules/express/lib/application.js:635:24)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:160:20)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1944:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 18791
+}
+
+Node.js v20.20.2
+[18:37:50.246] [31mERROR[39m (2803): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:37:50.249] [31mERROR[39m (2803): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:37:50.250] [31mERROR[39m (2803): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:37:50.252] [31mERROR[39m (2803): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:37:50.254] [31mERROR[39m (2803): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:37:50.256] [31mERROR[39m (2803): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:37:50.257] [32mINFO[39m (2803): [36m[sandbox] DB dump written[39m
+[18:37:50.257] [32mINFO[39m (2803): [36m[composition] Graceful shutdown initiated[39m
+[18:37:50.257] [32mINFO[39m (2803): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[18:37:56.579] [32mINFO[39m (4074): [36m[composition] ReconciliationWorker started[39m
+[18:37:56.597] [32mINFO[39m (4074): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[18:47:31.770] [31mERROR[39m (4074): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:47:31.773] [31mERROR[39m (4074): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:47:31.774] [31mERROR[39m (4074): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:47:31.775] [31mERROR[39m (4074): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:47:31.778] [31mERROR[39m (4074): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:47:31.783] [31mERROR[39m (4074): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:47:31.784] [32mINFO[39m (4074): [36m[sandbox] DB dump written[39m
+[18:47:31.784] [32mINFO[39m (4074): [36m[composition] Graceful shutdown initiated[39m
+[18:47:31.784] [32mINFO[39m (4074): [36m[composition] ReconciliationWorker stopped[39m
