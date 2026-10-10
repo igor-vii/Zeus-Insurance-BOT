@@ -491,3 +491,563 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /works
 }
 
 Node.js v20.20.2
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'ip-address' imported from /workspace/tests/secretariat-sandbox/node_modules/express-rate-limit/dist/index.mjs
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:23:21Z ===
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'debug' imported from /workspace/tests/secretariat-sandbox/node_modules/express-rate-limit/dist/index.mjs
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:23:57Z ===
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+node:internal/modules/cjs/loader:1207
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module 'pg-types'
+Require stack:
+- /workspace/tests/secretariat-sandbox/node_modules/pg/lib/defaults.js
+- /workspace/tests/secretariat-sandbox/node_modules/pg/lib/utils.js
+- /workspace/tests/secretariat-sandbox/node_modules/pg/lib/client.js
+- /workspace/tests/secretariat-sandbox/node_modules/pg/lib/index.js
+- /workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at nextResolveSimple (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1006)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4959
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4261
+    at resolveTsPaths (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:759)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1199
+    at j._resolveFilename (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:17957)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/workspace/tests/secretariat-sandbox/node_modules/pg/lib/defaults.js',
+    '/workspace/tests/secretariat-sandbox/node_modules/pg/lib/utils.js',
+    '/workspace/tests/secretariat-sandbox/node_modules/pg/lib/client.js',
+    '/workspace/tests/secretariat-sandbox/node_modules/pg/lib/index.js',
+    '/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts'
+  ]
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:24:31Z ===
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:25:30Z ===
+nohup: ignoring input
+node:internal/modules/cjs/loader:1207
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module '/workspace/tests/secretariat-sandbox/node_modules/pg-mem'
+Require stack:
+- /workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at nextResolveSimple (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1006)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4959
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4261
+    at resolveTsPaths (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:759)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1199
+    at j._resolveFilename (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:17957)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts' ]
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:26:13Z ===
+nohup: ignoring input
+
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'express' imported from /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts
+    at packageResolve (node:internal/modules/esm/resolve:873:9)
+    at moduleResolve (node:internal/modules/esm/resolve:946:18)
+    at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at resolveBase (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:10334)
+    at resolveDirectory (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:11421)
+    at resolveTsPaths (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:13062)
+    at resolve (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:14748)
+    at nextResolve (node:internal/modules/esm/hooks:864:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:306:30) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:27:23Z ===
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+node:internal/modules/cjs/loader:1207
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module 'pg-types'
+Require stack:
+- /workspace/lib/db/node_modules/pg/lib/defaults.js
+- /workspace/lib/db/node_modules/pg/lib/utils.js
+- /workspace/lib/db/node_modules/pg/lib/client.js
+- /workspace/lib/db/node_modules/pg/lib/index.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at nextResolveSimple (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1006)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4959
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4261
+    at resolveTsPaths (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:759)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1199
+    at j._resolveFilename (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:17957)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/workspace/lib/db/node_modules/pg/lib/defaults.js',
+    '/workspace/lib/db/node_modules/pg/lib/utils.js',
+    '/workspace/lib/db/node_modules/pg/lib/client.js',
+    '/workspace/lib/db/node_modules/pg/lib/index.js'
+  ]
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:27:55Z ===
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+node:internal/modules/cjs/loader:1207
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module 'pg-int8'
+Require stack:
+- /workspace/lib/db/node_modules/pg-types/lib/binaryParsers.js
+- /workspace/lib/db/node_modules/pg-types/index.js
+- /workspace/lib/db/node_modules/pg/lib/defaults.js
+- /workspace/lib/db/node_modules/pg/lib/utils.js
+- /workspace/lib/db/node_modules/pg/lib/client.js
+- /workspace/lib/db/node_modules/pg/lib/index.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at nextResolveSimple (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1006)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4959
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:9:4261
+    at resolveTsPaths (/workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:759)
+    at /workspace/tests/argus/node_modules/tsx/dist/register-OY9cqBEN.cjs:10:1199
+    at j._resolveFilename (file:///workspace/tests/argus/node_modules/tsx/dist/register-SoqaU4rg.mjs:2:17957)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at require (node:internal/modules/helpers:182:18) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/workspace/lib/db/node_modules/pg-types/lib/binaryParsers.js',
+    '/workspace/lib/db/node_modules/pg-types/index.js',
+    '/workspace/lib/db/node_modules/pg/lib/defaults.js',
+    '/workspace/lib/db/node_modules/pg/lib/utils.js',
+    '/workspace/lib/db/node_modules/pg/lib/client.js',
+    '/workspace/lib/db/node_modules/pg/lib/index.js'
+  ]
+}
+
+Node.js v20.20.2
+=== NEW RUN 2026-10-10T15:28:37Z ===
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    ... 3 lines matching cause stack trace ...
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: Error: connect ECONNREFUSED 127.0.0.1:5432
+      at /workspace/lib/db/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:161:13)
+      at async NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:71:12)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+      at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+      at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+      at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+      at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+    errno: -111,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 5432
+  }
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    ... 3 lines matching cause stack trace ...
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: Error: connect ECONNREFUSED 127.0.0.1:5432
+      at /workspace/lib/db/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:161:13)
+      at async NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:71:12)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+      at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+      at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+      at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+      at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+    errno: -111,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 5432
+  }
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    ... 3 lines matching cause stack trace ...
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: Error: connect ECONNREFUSED 127.0.0.1:5432
+      at /workspace/lib/db/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:161:13)
+      at async NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:71:12)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+      at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+      at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+      at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+      at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+    errno: -111,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 5432
+  }
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: 🔨 Not supported 🔨 : getTypeParser is not supported
+      at MemPg.adaptQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/adapters/adapters.ts:152:27)
+      at MemPg.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/adapters/adapters.ts:87:38)
+      at <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:161:26)
+      at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:71:18)
+      at <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:160:17)
+      at Object.startActiveSpan (/workspace/lib/db/node_modules/src/tracing.ts:27:11)
+      at <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:32)
+      at Object.startActiveSpan (/workspace/lib/db/node_modules/src/tracing.ts:27:11)
+      at NodePgPreparedQuery.execute (/workspace/lib/db/node_modules/src/node-postgres/session.ts:134:17)
+      at <anonymous> (/workspace/lib/db/node_modules/src/pg-core/query-builders/select.ts:1120:27)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "payment_intents" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "nonce_registry" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_observations" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "reconciliation_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "execution_attempts" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+[pg-mem-boot] WARN statement failed in 0005_secretariat_tables.sql: relation "recovery_jobs" does not exist
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: 🔨 Not supported 🔨 : getTypeParser is not supported
+      at MemPg.adaptQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/adapters/adapters.ts:152:27)
+      at MemPg.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/adapters/adapters.ts:87:38)
+      at <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:161:26)
+      at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:71:18)
+      at <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:160:17)
+      at Object.startActiveSpan (/workspace/lib/db/node_modules/src/tracing.ts:27:11)
+      at <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:32)
+      at Object.startActiveSpan (/workspace/lib/db/node_modules/src/tracing.ts:27:11)
+      at NodePgPreparedQuery.execute (/workspace/lib/db/node_modules/src/node-postgres/session.ts:134:17)
+      at <anonymous> (/workspace/lib/db/node_modules/src/pg-core/query-builders/select.ts:1120:27)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+    at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: Not supported:  {"text":"select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)","rowMode":"array","types":{}}
+      at Function.never (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/utils.ts:22:16)
+      at Visitor.statement (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:304:36)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1348:33)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-visitor.ts:40:33)
+      at AstDefaultMapper.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1350:29)
+      at collectParams (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:64:23)
+      at prepareQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:74:20)
+      at DbSchema.prepare (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:90:37)
+      at DbSchema.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:63:21)
+      at MemPg.p.query (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:83:28)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+    at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: Not supported:  {"text":"select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)","rowMode":"array","types":{}}
+      at Function.never (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/utils.ts:22:16)
+      at Visitor.statement (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:304:36)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1348:33)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-visitor.ts:40:33)
+      at AstDefaultMapper.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1350:29)
+      at collectParams (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:64:23)
+      at prepareQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:74:20)
+      at DbSchema.prepare (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:90:37)
+      at DbSchema.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:63:21)
+      at runQuery (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:67:26)
+}
+
+Node.js v20.20.2

@@ -1,1 +1,2 @@
-{ "name": "secretariat-sandbox", "private": true, "type": "module" }
+{ "name": "secretariat-sandbox", "private": true, "type": "module",
+  "dependencies": { "express": "^4.21.0", "cors": "^2.8.5", "express-rate-limit": "^7.4.0", "pino": "^9.0.0", "zod": "^3.23.0", "drizzle-orm": "^0.36.0", "pg": "^8.13.0", "viem": "^2.21.0", "debug": "^4.4.0", "ip-address": "^9.0.5", "pg-mem": "^3.0.0" } }
