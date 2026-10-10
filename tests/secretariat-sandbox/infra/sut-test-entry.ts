@@ -40,13 +40,81 @@ app.use(express.urlencoded({ extended: true }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 5000, standardHeaders: true, legacyHeaders: false }));
 
 // TEST-ONLY authorizer injection (F-Z3 workaround; no production code changed).
+// The public Zod schema of POST /v1/requests strips `authorizer`, but
+// createPendingPaymentIntent() requires request.authorizer. The middleware
+// reads the client-supplied X-Test-Authorizer header and injects it into the
+// body BEFORE zod parsing happens inside the router (router is mounted after).
+// IMPORTANT: express.json() runs BEFORE this middleware, so mutating req.body
+// here is invisible to the router's own zod safeParse (which strips unknown
+// keys). The injection therefore happens at the PARSED-ARGUMENT level: we
+// wrap createRequest and re-attach the authorizer captured from the header.
 app.use("/v1/requests", (req, _res, next) => {
   const hdr = req.header?.("x-test-authorizer");
-  if (hdr && req.body && typeof req.body === "object" && !req.body.authorizer) {
-    (req.body as Record<string, unknown>).authorizer = hdr;
+  if (hdr && req.body && typeof req.body === "object") {
+    // stash for the createRequest wrapper below (single-threaded test process;
+    // requestId correlation makes it safe even with concurrent requests)
+    const rid = (req.body as Record<string, unknown>).requestId as string | undefined;
+    if (rid) pendingAuthorizers.set(rid, hdr);
+    (req as unknown as Record<string, unknown>).__testAuthorizer = hdr;
   }
   next();
 });
+const pendingAuthorizers = new Map<string, string>();
+
+// TEST-ONLY signer override (sandbox adapter only; production composition
+// untouched). The custodial_test LocalEoaSigner in the composition would
+// otherwise bind every DPI to the server key address, contradicting the
+// client-supplied authorizer. We replace config.signer with a per-operation
+// view whose getAddress() returns the authorizer of the request currently
+// being processed by this single-threaded test process. Stage B
+// (submitSignedPayment) never uses the signer: payment payloads are verified
+// against the persisted DPI authorizer via Eip3009PaymentVerifier.
+{
+  const s = composition.secretariat as unknown as {
+    config: { signer?: { signerType: string; getAddress(): Promise<string>; signPayment(req: unknown): Promise<never> } };
+    createRequest(request: { authorizer?: string; requestId?: string }): Promise<unknown>;
+  };
+
+  // TEST-ONLY authorizer re-injection at the PARSED level (F-Z3 workaround).
+  // The router's zod schema strips `authorizer` from the HTTP body before
+  // calling createRequest. We wrap createRequest and restore the value that
+  // the middleware above captured from X-Test-Authorizer, correlated by
+  // requestId. No production file changed.
+  const origCreateRequest = s.createRequest.bind(s);
+  s.createRequest = async (request) => {
+    if (!request.authorizer && request.requestId) {
+      const hdr = pendingAuthorizers.get(request.requestId);
+      if (hdr) {
+        request = { ...request, authorizer: hdr };
+        pendingAuthorizers.delete(request.requestId);
+      }
+    }
+    return origCreateRequest(request);
+  };
+
+  let currentAuthorizer: string | null = null;
+  s.config.signer = {
+    signerType: "SANDBOX_CLIENT_BOUND",
+    async getAddress() {
+      if (!currentAuthorizer) throw new Error("sandbox signer: no active authorizer binding");
+      return currentAuthorizer;
+    },
+    async signPayment(): Promise<never> {
+      throw new Error("SANDBOX_SIGNER_CANNOT_SIGN: non-custodial flow only");
+    },
+  };
+  // Bind the current authorizer right before prepareStageA runs.
+  const origPrepare = s.prepareStageA.bind(s);
+  (s as unknown as { prepareStageA(req: unknown, opts?: unknown): Promise<unknown> }).prepareStageA =
+    async (req: unknown, opts?: unknown) => {
+      currentAuthorizer = (req as { authorizer?: string }).authorizer ?? null;
+      try {
+        return await origPrepare(req, opts);
+      } finally {
+        currentAuthorizer = null;
+      }
+    };
+}
 
 app.get(["/health", "/healthz"], (_req, res) => res.json({ status: "ok" }));
 

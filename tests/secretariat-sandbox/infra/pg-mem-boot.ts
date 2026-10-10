@@ -110,12 +110,54 @@ function normalizeFirstArg(first: unknown): { text: string; values: unknown[] | 
   return { text: "", values: null };
 }
 
+// TEST-ONLY FIX (v6, sandbox adapter only): pg-mem's replaceQueryArgs$ -> toLiteral()
+// cannot parse a raw JS Date substituted into INSERT VALUES ($1) — verified in isolation:
+// both `new Date(...)` and its ISO string fail with "query failed to parse". Real PG accepts
+// the ISO form natively. We convert Date params to the PG-canonical
+// "YYYY-MM-DD HH:MM:SS.SSS+00" form (verified round-trip: SELECT returns a JS Date).
+const PG_TS_RE = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?.*$/;
+function dateToPgTimestamp(d: Date): string {
+  const iso = new Date(d.getTime() + d.getTimezoneOffset() * 60000).toISOString();
+  const m = PG_TS_RE.exec(iso);
+  if (!m) return iso.slice(0, 19) + "+00";
+  const ms = (m[3] ?? "").padEnd(3, "0");
+  return `${m[1]} ${m[2]}.${ms}+00`;
+}
+function sanitizeParam(v: unknown): unknown {
+  if (v instanceof Date) return dateToPgTimestamp(v);
+  if (typeof v === "bigint") return v.toString();
+  return v;
+}
+
 async function runQueryAsync(first: unknown, params?: unknown): Promise<{ rows: unknown[]; rowCount: number }> {
   const norm = normalizeFirstArg(first);
   const values = Array.isArray(params) && params.length > 0 ? params : norm.values ?? [];
+  const sanitized = (values as unknown[]).map(sanitizeParam);
   const c = await getClient();
-  const res = await c.query(norm.text, values as unknown[]);
-  return { rows: Array.isArray(res.rows) ? res.rows : [], rowCount: typeof res.rowCount === "number" ? res.rowCount : 0 };
+  const res = await c.query(norm.text, sanitized as unknown[]);
+  // TEST-ONLY row hydration (sandbox adapter only): lib/db's production row mappers
+  // call .getTime() on timestamp columns (postgres-store.js rowToIntent etc.).
+  // Depending on pg-mem's internal path, SELECT may hand back epoch numbers or ISO
+  // strings instead of JS Dates. Revive them here so production code is untouched.
+  const rows = Array.isArray(res.rows) ? res.rows.map(hydrateRowDates) : [];
+  return { rows, rowCount: typeof res.rowCount === "number" ? res.rowCount : 0 };
+}
+
+const TS_LIKE_KEYS = /(at|_at)$/i;
+function hydrateRowDates(row: unknown): unknown {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+  const out: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  for (const k of Object.keys(out)) {
+    const v = out[k];
+    if (v == null || v instanceof Date) continue;
+    if ((typeof v === "number" && v > 1e11 && v < 4e12) || (typeof v === "string" && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(v))) {
+      if (TS_LIKE_KEYS.test(k) || /timestamp/i.test(k)) {
+        const d = new Date(typeof v === "number" ? v : v.replace(" ", "T"));
+        if (!Number.isNaN(d.getTime())) out[k] = d;
+      }
+    }
+  }
+  return out;
 }
 
 function makeSandboxPool(opts?: unknown) {
