@@ -4347,3 +4347,758 @@ nohup: ignoring input
 [18:06:10.900] [32mINFO[39m (29759): [36m[composition] ReconciliationWorker started[39m
 [18:06:10.909] [32mINFO[39m (29759): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
     [35mport[39m: 18791
+=== RUN ClawRouter S0 2026-10-10T18:10:29Z ===
+[2026-10-10T18:10:30.189Z] START client=ClawRouter scenario=S0 mode=HAPPY
+[18:10:30.585] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791655830269"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:30.585] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S1 2026-10-10T18:10:30Z ===
+[2026-10-10T18:10:31.026Z] START client=ClawRouter scenario=S1 mode=TIMEOUT
+[18:10:31.410] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S1-1791655831103"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:31.411] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at runNextTicks (node:internal/process/task_queues:60:5)
+              at process.processImmediate (node:internal/timers:454:9)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+    }
+{
+  "client": "ClawRouter",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S2 2026-10-10T18:10:31Z ===
+[2026-10-10T18:10:31.732Z] START client=ClawRouter scenario=S2 mode=RESPONSE_LOST
+[18:10:31.991] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S2-1791655831814"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:31.991] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "ClawRouter",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S3 2026-10-10T18:10:32Z ===
+[2026-10-10T18:10:32.278Z] START client=ClawRouter scenario=S3 mode=EXEC_FAILURE
+[18:10:32.506] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S3-1791655832355"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:32.506] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "ClawRouter",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN ClawRouter S4 2026-10-10T18:10:32Z ===
+[2026-10-10T18:10:32.813Z] START client=ClawRouter scenario=S4 mode=RETRY
+{
+  "client": "ClawRouter",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[18:10:33.075] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S4-1791655832888"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:33.075] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+=== RUN ClawRouter S5 2026-10-10T18:10:33Z ===
+[2026-10-10T18:10:33.370Z] START client=ClawRouter scenario=S5 mode=IDEMPOTENT
+[18:10:33.606] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S5-1791655833423"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:33.606] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "ClawRouter",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S0 2026-10-10T18:10:33Z ===
+[2026-10-10T18:10:33.917Z] START client=Franklin scenario=S0 mode=HAPPY
+[18:10:34.107] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S0-1791655833990"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:34.107] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "Franklin",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S1 2026-10-10T18:10:34Z ===
+[2026-10-10T18:10:34.412Z] START client=Franklin scenario=S1 mode=TIMEOUT
+[18:10:34.667] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S1-1791655834491"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:34.667] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "Franklin",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S2 2026-10-10T18:10:34Z ===
+[2026-10-10T18:10:34.932Z] START client=Franklin scenario=S2 mode=RESPONSE_LOST
+[18:10:35.180] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S2-1791655835009"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:35.180] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "Franklin",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S3 2026-10-10T18:10:35Z ===
+[2026-10-10T18:10:35.464Z] START client=Franklin scenario=S3 mode=EXEC_FAILURE
+[18:10:35.700] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S3-1791655835523"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:35.700] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "Franklin",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S4 2026-10-10T18:10:35Z ===
+[2026-10-10T18:10:36.072Z] START client=Franklin scenario=S4 mode=RETRY
+[18:10:36.298] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S4-1791655836153"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:36.298] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "Franklin",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN Franklin S5 2026-10-10T18:10:36Z ===
+[2026-10-10T18:10:36.581Z] START client=Franklin scenario=S5 mode=IDEMPOTENT
+[18:10:36.799] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-Franklin-S5-1791655836660"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:36.799] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "Franklin",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S0 2026-10-10T18:10:36Z ===
+[2026-10-10T18:10:37.085Z] START client=BlockRun scenario=S0 mode=HAPPY
+[18:10:37.290] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S0-1791655837164"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:37.290] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "BlockRun",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S1 2026-10-10T18:10:37Z ===
+[2026-10-10T18:10:37.579Z] START client=BlockRun scenario=S1 mode=TIMEOUT
+[18:10:37.794] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S1-1791655837656"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:37.794] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "BlockRun",
+  "scenario": "S1",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S2 2026-10-10T18:10:37Z ===
+[2026-10-10T18:10:38.085Z] START client=BlockRun scenario=S2 mode=RESPONSE_LOST
+{
+  "client": "BlockRun",
+  "scenario": "S2",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[18:10:38.405] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S2-1791655838169"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:38.405] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+=== RUN BlockRun S3 2026-10-10T18:10:38Z ===
+[2026-10-10T18:10:38.713Z] START client=BlockRun scenario=S3 mode=EXEC_FAILURE
+{
+  "client": "BlockRun",
+  "scenario": "S3",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[18:10:38.926] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S3-1791655838792"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:38.926] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+=== RUN BlockRun S4 2026-10-10T18:10:39Z ===
+[2026-10-10T18:10:39.219Z] START client=BlockRun scenario=S4 mode=RETRY
+[18:10:39.412] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S4-1791655839285"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:39.412] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "BlockRun",
+  "scenario": "S4",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== RUN BlockRun S5 2026-10-10T18:10:39Z ===
+[2026-10-10T18:10:39.722Z] START client=BlockRun scenario=S5 mode=IDEMPOTENT
+[18:10:39.967] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-BlockRun-S5-1791655839798"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:39.967] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "BlockRun",
+  "scenario": "S5",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+=== POLICYID-LESS PROOF RUN (ClawRouter S0, no policyId — default) already covered; explicit with-policyId probe: ===
+[2026-10-10T18:10:40.265Z] START client=ClawRouter scenario=S0 mode=HAPPY
+[18:10:40.484] [32mINFO[39m (29759): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791655840325"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:10:40.484] [31mERROR[39m (29759): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
+[18:13:19.601] [31mERROR[39m (29759): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:13:19.602] [31mERROR[39m (29759): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:13:19.603] [31mERROR[39m (29759): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:13:19.605] [31mERROR[39m (29759): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:13:19.608] [31mERROR[39m (29759): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:13:19.612] [31mERROR[39m (29759): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:13:19.613] [32mINFO[39m (29759): [36m[sandbox] DB dump written[39m
+[18:13:19.613] [32mINFO[39m (29759): [36m[composition] Graceful shutdown initiated[39m
+[18:13:19.613] [32mINFO[39m (29759): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[18:13:25.994] [32mINFO[39m (31541): [36m[composition] ReconciliationWorker started[39m
+[18:13:26.010] [32mINFO[39m (31541): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[18:13:35.279] [32mINFO[39m (31541): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791656015004"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:13:35.279] [31mERROR[39m (31541): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[18:18:54.660] [31mERROR[39m (31541): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:18:54.662] [31mERROR[39m (31541): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:18:54.664] [31mERROR[39m (31541): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:18:54.665] [31mERROR[39m (31541): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:18:54.666] [31mERROR[39m (31541): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:18:54.670] [31mERROR[39m (31541): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:18:54.670] [32mINFO[39m (31541): [36m[sandbox] DB dump written[39m
+[18:18:54.671] [32mINFO[39m (31541): [36m[composition] Graceful shutdown initiated[39m
+[18:18:54.671] [32mINFO[39m (31541): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[18:19:00.901] [32mINFO[39m (32584): [36m[composition] ReconciliationWorker started[39m
+[18:19:00.910] [32mINFO[39m (32584): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[18:19:23.400] [32mINFO[39m (32584): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791656363075"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:19:23.400] [31mERROR[39m (32584): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[18:20:11.491] [31mERROR[39m (32584): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:20:11.494] [31mERROR[39m (32584): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:20:11.495] [31mERROR[39m (32584): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:20:11.496] [31mERROR[39m (32584): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:20:11.502] [31mERROR[39m (32584): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:20:11.506] [31mERROR[39m (32584): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[18:20:11.507] [32mINFO[39m (32584): [36m[sandbox] DB dump written[39m
+[18:20:11.507] [32mINFO[39m (32584): [36m[composition] Graceful shutdown initiated[39m
+[18:20:11.507] [32mINFO[39m (32584): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[18:20:17.808] [32mINFO[39m (369): [36m[composition] ReconciliationWorker started[39m
+[18:20:17.818] [32mINFO[39m (369): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[18:20:26.990] [32mINFO[39m (369): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791656426760"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:20:26.990] [31mERROR[39m (369): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }

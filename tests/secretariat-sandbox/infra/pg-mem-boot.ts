@@ -143,17 +143,58 @@ async function runQueryAsync(first: unknown, params?: unknown): Promise<{ rows: 
   return { rows, rowCount: typeof res.rowCount === "number" ? res.rowCount : 0 };
 }
 
-const TS_LIKE_KEYS = /(at|_at)$/i;
+// TEST-ONLY FIX (v7): pg-mem's Client adapter returns timestamp columns as STRINGS
+// on the QueryConfig path ({text,values}) and as Dates only on the plain-text path —
+// verified in isolation both ways. Production lib/db mappers call .getTime() directly.
+// Broaden hydration to any string that parses as a date/time or epoch number for keys
+// ending in *_at / *At (plus observed_at). No production file touched.
+// TEST-ONLY FIX (v8, sandbox adapter only): the previous regex-based heuristic
+// silently failed on pg-mem's `defaultNow()` output format ("Sat Oct 10 2026 ..."
+// JS Date.toString()), leaving created_at/updated_at as strings and crashing the
+// UNMODIFIED production mapper (postgres-store.js rowToIntent -> createdAt.getTime()).
+// Verified in isolation: pg-mem@3.0.14 returns timestamp columns either as real JS
+// Dates or as such legacy date strings — never epoch numbers. We therefore hydrate
+// ANY string that parses to a valid Date when the column name is timestamp-like
+// (covers snake_case DB names AND camelCase aliases used by drizzle select()).
+// Verified against lib/db dist mappers (postgres-store.js rowToIntent L459,
+// postgres-execution-store.js rowToAttempt L537-556 / rowToJob L557-572): every
+// timestamp column consumed via .getTime() is one of these names (snake or camel).
+const TS_NAME_RE = /(^|_)(created|updated|observed|submit_attempt|submitted|settled|not_settled|next_probe|locked_until|started|completed|expires|valid_after|valid_before)(_?at)?($|_)|(created|updated|observed|submitAttempt|settled|notSettled|nextProbe|lockedUntil|started|completed|expires|attempted|scheduled)[A-Za-z]*(At|Until)$/;
+const LEGACY_DATE_RE = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}/;
+function looksLikeDate(v: unknown): boolean {
+  if (typeof v !== "string") return false;
+  const t = v.trim();
+  if (t.length === 0) return false;
+  // ISO-ish or PG timestamp form
+  if (/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}|Z)/.test(t)) return true;
+  // pg-mem defaultNow() legacy toString form
+  if (LEGACY_DATE_RE.test(t)) return true;
+  return false;
+}
+function reviveTs(v: unknown): Date | null {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  if (typeof v === "number" && v > 1e11 && v < 4e12) return new Date(v);
+  if (looksLikeDate(v)) {
+    const t = String(v).trim();
+    const d = new Date(/^\d+$/.test(t) ? Number(t) : t.replace(" ", "T"));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
 function hydrateRowDates(row: unknown): unknown {
   if (!row || typeof row !== "object" || Array.isArray(row)) return row;
   const out: Record<string, unknown> = { ...(row as Record<string, unknown>) };
   for (const k of Object.keys(out)) {
     const v = out[k];
     if (v == null || v instanceof Date) continue;
-    if ((typeof v === "number" && v > 1e11 && v < 4e12) || (typeof v === "string" && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(v))) {
-      if (TS_LIKE_KEYS.test(k) || /timestamp/i.test(k)) {
-        const d = new Date(typeof v === "number" ? v : v.replace(" ", "T"));
-        if (!Number.isNaN(d.getTime())) out[k] = d;
+    if (TS_NAME_RE.test(k)) {
+      const d = reviveTs(v);
+      if (d) out[k] = d;
+    } else if (looksLikeDate(v)) {
+      // belt & braces: any parseable date string under a *_time/*date* key too
+      if (/time|date/i.test(k)) {
+        const d = reviveTs(v);
+        if (d) out[k] = d;
       }
     }
   }
