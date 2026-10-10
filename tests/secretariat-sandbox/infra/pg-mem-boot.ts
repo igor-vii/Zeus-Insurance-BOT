@@ -63,15 +63,43 @@ const adapter = memdb.adapters.createPg();
 // pg-mem query(text,{params,rowMode:"array",types:{}}) returns {rows,rowCount}
 // for parameterized SQL including IN ($1,$2,...) lists (drizzle passes
 // rowMode:"array" + types:{} which the raw pg-mem adapter rejects).
-function runQuery(text: string, params?: unknown[], rowMode?: string): { rows: unknown[]; rowCount: number } {
-  const r = memdb.public.query(text, {
-    params: params ?? [],
-    ...(rowMode === "array" ? { rowMode: "array", types: {} } : {}),
-  });
-  if (r && typeof r.then === "function") {
-    throw new Error("pg-mem returned a promise where a sync result was expected: " + text.slice(0, 80));
+// TEST-ONLY FIX (v4, sandbox adapter only): v2 passed drizzle's config object into
+// pg-mem schema-level query() ("Not supported: {...}" crash on recoverAfterCrash IN-list);
+// v3 used db.public.prepare(text, types) which ALSO fails because pg-mem@3.0.14's
+// prepareQuery->collectParams receives the VALUES array in the `types` slot when called
+// as prepare(text, valuesArray) from our wrapper — verified in isolation:
+//   - THE ONLY reliable parameterized path is the pg Client adapter:
+//       new adapter.Client(); await c.connect(); await c.query(text, valuesArray)
+//     which internally runs replaceQueryArgs$(sql, values) -> toLiteral() substitution
+//     and returns {rows, rowCount} (verified: IN ($1,$2) with ['x','y'] -> 2 rows).
+//   - rowMode:"array" from drizzle is ignored (drizzle consumes .rows objects on this
+//     path); recorded as sandbox deviation F-DB3.
+let sandboxClient: { connect(): Promise<unknown>; query(t: string, v?: unknown[]): Promise<{ rows?: unknown[]; rowCount?: number }> } | null = null;
+async function getClient(): Promise<NonNullable<typeof sandboxClient>> {
+  if (!sandboxClient) {
+    const c = new (adapter.Client as new () => NonNullable<typeof sandboxClient>)();
+    await c.connect();
+    sandboxClient = c;
   }
-  const res = r as { rows?: unknown[]; rowCount?: number };
+  return sandboxClient;
+}
+
+// pg-mem's MemPg.adaptQuery throws "getTypeParser is not supported" when drizzle's
+// node-postgres session passes a config object containing `types` ({types:{}}).
+// Verified in isolation: Client.query(text, valuesArray) works. So we normalize the
+// first argument here (sandbox adapter code only): strip unsupported keys (`types`,
+// `rowMode`) from the config object and keep its text/values. Recorded as F-DB3.
+function normalizeQueryArg(textOrCfg: unknown): { text: string; values: unknown[] | null } {
+  if (typeof textOrCfg === "string") return { text: textOrCfg, values: null };
+  const cfg = textOrCfg as { text?: string; values?: unknown[]; types?: unknown; rowMode?: unknown };
+  return { text: String(cfg.text ?? ""), values: Array.isArray(cfg.values) ? cfg.values : null };
+}
+
+async function runQueryAsync(textOrCfg: unknown, params?: unknown[]): Promise<{ rows: unknown[]; rowCount: number }> {
+  const norm = normalizeQueryArg(textOrCfg);
+  const values = Array.isArray(params) && params.length > 0 ? params : norm.values ?? [];
+  const c = await getClient();
+  const res = await c.query(norm.text, values);
   return { rows: Array.isArray(res.rows) ? res.rows : [], rowCount: typeof res.rowCount === "number" ? res.rowCount : 0 };
 }
 
@@ -87,7 +115,7 @@ function makeSandboxPool(opts?: unknown) {
       query: async (text: string, paramsOrCb?: unknown, cb?: unknown) => {
         // support (text, values) and (text, values, callback) signatures
         const params = Array.isArray(paramsOrCb) ? (paramsOrCb as unknown[]) : [];
-        const out = runQuery(text, params);
+        const out = await runQueryAsync(text, params);
         if (typeof cb === "function") { (cb as Function)(null, out); return undefined; }
         return out;
       },
@@ -100,7 +128,7 @@ function makeSandboxPool(opts?: unknown) {
   (p as Record<string, unknown>).query = async (text: string, paramsOrCb?: unknown, cb?: unknown) => {
     await ensure();
     const params = Array.isArray(paramsOrCb) ? (paramsOrCb as unknown[]) : [];
-    const out = runQuery(text, params);
+    const out = await runQueryAsync(text, params);
     if (typeof cb === "function") { (cb as Function)(null, out); return undefined; }
     return out;
   };

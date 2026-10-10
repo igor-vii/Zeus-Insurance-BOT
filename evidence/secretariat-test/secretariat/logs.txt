@@ -1051,3 +1051,186 @@ params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
 }
 
 Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+    at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: Not supported:  {"text":"select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)","rowMode":"array","types":{}}
+      at Function.never (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/utils.ts:22:16)
+      at Visitor.statement (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:304:36)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1348:33)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-visitor.ts:40:33)
+      at AstDefaultMapper.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1350:29)
+      at collectParams (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:64:23)
+      at prepareQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:74:20)
+      at DbSchema.prepare (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:90:37)
+      at DbSchema.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:63:21)
+      at runQuery (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:67:26)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+    at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: Not supported:  {"text":"select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)","rowMode":"array","types":{}}
+      at Function.never (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/utils.ts:22:16)
+      at Visitor.statement (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:304:36)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1348:33)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-visitor.ts:40:33)
+      at AstDefaultMapper.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1350:29)
+      at collectParams (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:64:23)
+      at prepareQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:74:20)
+      at DbSchema.prepare (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:90:37)
+      at DbSchema.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:63:21)
+      at runQuery (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:67:26)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+    at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: Not supported:  {"text":"select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)","rowMode":"array","types":{}}
+      at Function.never (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/utils.ts:22:16)
+      at Visitor.statement (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:304:36)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1348:33)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-visitor.ts:40:33)
+      at AstDefaultMapper.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1350:29)
+      at collectParams (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:64:23)
+      at prepareQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:74:20)
+      at DbSchema.prepare (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:90:37)
+      at DbSchema.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:63:21)
+      at runQuery (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:77:20)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+    at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: Not supported:  {"text":"select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)","rowMode":"array","types":{}}
+      at Function.never (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/utils.ts:22:16)
+      at Visitor.statement (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:304:36)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1348:33)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-visitor.ts:40:33)
+      at AstDefaultMapper.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1350:29)
+      at collectParams (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:64:23)
+      at prepareQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:74:20)
+      at DbSchema.prepare (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:90:37)
+      at DbSchema.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:63:21)
+      at runQuery (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:77:20)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+    at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: Not supported:  {"text":"select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\", \"settled_evidence_bundle\", \"not_settled_evidence_bundle\", \"reconciliation_observations\", \"next_probe_at\", \"probe_count\", \"version\", \"created_at\", \"updated_at\" from \"payment_intents\" where \"payment_intents\".\"settlement_state\" in ($1, $2, $3, $4)","rowMode":"array","types":{}}
+      at Function.never (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/utils.ts:22:16)
+      at Visitor.statement (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:304:36)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1348:33)
+      at Visitor.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-visitor.ts:40:33)
+      at AstDefaultMapper.<anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pgsql-ast-parser/src/ast-mapper.ts:1350:29)
+      at collectParams (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:64:23)
+      at prepareQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/prepared.ts:74:20)
+      at DbSchema.prepare (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/schema/schema.ts:90:37)
+      at runQuery (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:85:24)
+      at MemPg.p.query (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:124:17)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+/workspace/lib/db/node_modules/src/pg-core/session.ts:73
+				throw new DrizzleQueryError(queryString, params, e as Error);
+				      ^
+
+
+DrizzleQueryError: Failed query: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)
+params: SUBMITTING,SUBMITTED,SETTLEMENT_PENDING,RECONCILING
+    at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+    at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+    ... 2 lines matching cause stack trace ...
+    at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+    at async <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:54:1) {
+  query: 'select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload", "payment_payload_hash", "settlement_state", "tx_hash", "facilitator_http_status", "facilitator_response_body", "error_reason", "submit_attempt_at", "settled_at", "not_settled_at", "settled_evidence_bundle", "not_settled_evidence_bundle", "reconciliation_observations", "next_probe_at", "probe_count", "version", "created_at", "updated_at" from "payment_intents" where "payment_intents"."settlement_state" in ($1, $2, $3, $4)',
+  params: [ 'SUBMITTING', 'SUBMITTED', 'SETTLEMENT_PENDING', 'RECONCILING' ],
+  cause: NotSupported [Error]: 🔨 Not supported 🔨 : getTypeParser is not supported
+      at MemPg.adaptQuery (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/adapters/adapters.ts:152:27)
+      at MemPg.query (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/adapters/adapters.ts:87:38)
+      at runQueryAsync (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:88:23)
+      at async MemPg.p.query (/workspace/tests/secretariat-sandbox/infra/pg-mem-boot.ts:117:17)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:161:13)
+      at async NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:71:12)
+      at async <anonymous> (/workspace/lib/db/node_modules/src/node-postgres/session.ts:154:19)
+      at async PostgresEvidenceStore.getNonTerminalIntents (file:///workspace/lib/db/dist/secretariat/postgres-store.js:185:22)
+      at async ReconciliationEngine.recoverAfterCrash (/workspace/zeus-secretariat/src/core/reconciliation-engine.ts:441:32)
+      at async Object.recover (/workspace/api-server/src/lib/secretariat-composition.ts:209:26)
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+[16:44:01.818] [32mINFO[39m (19603): [36m[composition] ReconciliationWorker started[39m
+[16:44:01.853] [32mINFO[39m (19603): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
