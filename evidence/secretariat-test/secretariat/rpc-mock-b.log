@@ -27,3 +27,8 @@ Error: Cannot find module '/workspace/infra/rpc-mock.mjs'
 }
 
 Node.js v20.20.2
+nohup: ignoring input
+[rpc-mock] listening on 18546
+[rpc-mock] listening on 18546
+[rpc-mock] listening on 18546
+[rpc-mock] listening on 18546

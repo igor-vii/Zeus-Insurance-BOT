@@ -47,7 +47,7 @@ export ZEUS_SIGNER_MODE=custodial_test
 export ZEUS_SIGNER_PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945d7186280032909be093da20fbccc4f0a111
 # Sandbox SUT entry: production composition + /v1 router UNCHANGED, plus a
 # test-only X-Test-Authorizer injection middleware (finding F-Z3 workaround).
-npx tsx /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts >> "$LOGS/logs.txt" 2>&1 &
+node /workspace/tests/argus/node_modules/tsx/dist/cli.mjs /workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts >> "$LOGS/logs.txt" 2>&1 &
 echo $! > /tmp/sbx-sut.pid
 for i in $(seq 1 60); do
   curl -s -m 1 http://127.0.0.1:18791/healthz >/dev/null 2>&1 && { echo "SUT UP on :18791"; exit 0; }

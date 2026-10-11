@@ -20,7 +20,7 @@
  */
 // TEST-ONLY isolated virtual DB (pg-mem, real production schema migrations applied).
 // MUST be imported before anything that constructs a pg Pool (lib/db).
-import { memdb } from "./pg-mem-boot.js";
+import { memdb, lastQueryDiag } from "./pg-mem-boot.js";
 import fs from "node:fs";
 import express from "express";
 import cors from "cors";
@@ -144,6 +144,11 @@ app.get(["/health", "/healthz"], (_req, res) => res.json({ status: "ok" }));
           state: op?.currentState ?? null,
           error: op?.error ?? String((thrown as Error)?.message ?? thrown ?? ""),
           lastEvidence: (op?.evidence ?? []).slice(-3),
+          // TEST-ONLY DIAG (v10): when the failure is a mapper TypeError, log the
+          // exact SQL + params that produced the offending row (sandbox adapter).
+          ...(thrown && String((thrown as Error)?.message ?? "").includes("getTime")
+            ? { failingSql: lastQueryDiag.text.slice(0, 400), failingParams: JSON.stringify(lastQueryDiag.values).slice(0, 400) }
+            : {}),
         },
         "[sandbox-diag] prepareStageA outcome"
       );
@@ -175,7 +180,14 @@ function dumpDb(): void {
   const tables: Record<string, unknown[]> = {};
   for (const t of DUMP_TABLES) {
     try {
-      const rows = memdb.public.query(`SELECT * FROM "${t}"`).execute() as unknown[];
+      // TEST-ONLY FIX (v9): pg-mem@3.0.14's plain-text query() returns a pg-like
+      // result object ({rows, rowCount}), NOT a prepared statement with .execute().
+      // The previous `.query(...).execute()` call crashed every dump ("...execute is
+      // not a function"), producing an empty DB dump despite rows existing.
+      const res = memdb.public.query(`SELECT * FROM "${t}"`) as unknown;
+      const rows: unknown[] = Array.isArray(res)
+        ? res
+        : ((res as { rows?: unknown[] }).rows ?? []);
       tables[t] = JSON.parse(JSON.stringify(rows));
     } catch (e) {
       tables[t] = [];

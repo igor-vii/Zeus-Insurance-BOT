@@ -5220,3 +5220,386 @@ nohup: ignoring input
 [18:47:31.784] [32mINFO[39m (4074): [36m[sandbox] DB dump written[39m
 [18:47:31.784] [32mINFO[39m (4074): [36m[composition] Graceful shutdown initiated[39m
 [18:47:31.784] [32mINFO[39m (4074): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[18:55:10.606] [32mINFO[39m (7671): [36m[composition] ReconciliationWorker started[39m
+[18:55:10.620] [32mINFO[39m (7671): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[18:55:29.888] [32mINFO[39m (7671): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791658529563"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[18:55:29.888] [31mERROR[39m (7671): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+nohup: ignoring input
+[19:01:52.000] [32mINFO[39m (8604): [36m[composition] ReconciliationWorker started[39m
+node:events:502
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::18791
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at Function.listen (/workspace/tests/secretariat-sandbox/node_modules/express/lib/application.js:635:24)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:160:20)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1944:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 18791
+}
+
+Node.js v20.20.2
+nohup: ignoring input
+[19:06:32.094] [32mINFO[39m (9671): [36m[composition] ReconciliationWorker started[39m
+node:events:502
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::18791
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at Function.listen (/workspace/tests/secretariat-sandbox/node_modules/express/lib/application.js:635:24)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:160:20)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1944:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 18791
+}
+
+Node.js v20.20.2
+[19:07:03.388] [32mINFO[39m (7671): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791659223112"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[19:07:03.388] [31mERROR[39m (7671): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[19:32:07.629] [31mERROR[39m (7671): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:32:07.630] [31mERROR[39m (7671): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:32:07.632] [31mERROR[39m (7671): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:32:07.634] [31mERROR[39m (7671): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:32:07.635] [31mERROR[39m (7671): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:32:07.635] [31mERROR[39m (7671): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:32:07.637] [32mINFO[39m (7671): [36m[sandbox] DB dump written[39m
+[19:32:07.637] [32mINFO[39m (7671): [36m[composition] Graceful shutdown initiated[39m
+[19:32:07.637] [32mINFO[39m (7671): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[19:32:20.074] [32mINFO[39m (10789): [36m[composition] ReconciliationWorker started[39m
+[19:32:20.087] [32mINFO[39m (10789): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+nohup: ignoring input
+[19:33:09.311] [32mINFO[39m (10971): [36m[composition] ReconciliationWorker started[39m
+node:events:502
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::18791
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at Function.listen (/workspace/tests/secretariat-sandbox/node_modules/express/lib/application.js:635:24)
+    at <anonymous> (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:160:20)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1944:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 18791
+}
+
+Node.js v20.20.2
+[19:33:22.081] [32mINFO[39m (10789): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791660801794"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[19:33:22.081] [31mERROR[39m (10789): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[19:33:57.925] [31mERROR[39m (10789): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "payment_intents"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:33:57.927] [31mERROR[39m (10789): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "nonce_registry"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:33:57.927] [31mERROR[39m (10789): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "execution_attempts"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:33:57.928] [31mERROR[39m (10789): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_observations"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:33:57.929] [31mERROR[39m (10789): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "reconciliation_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:33:57.930] [31mERROR[39m (10789): [36m[sandbox] dump table failed[39m
+    [35mtable[39m: "recovery_jobs"
+    err: "TypeError: memdb.public.query(...).execute is not a function"
+[19:33:57.931] [32mINFO[39m (10789): [36m[sandbox] DB dump written[39m
+[19:33:57.932] [32mINFO[39m (10789): [36m[composition] Graceful shutdown initiated[39m
+[19:33:58.033] [32mINFO[39m (10789): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[19:34:04.872] [32mINFO[39m (11153): [36m[composition] ReconciliationWorker started[39m
+[19:34:04.881] [32mINFO[39m (11153): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[19:34:15.483] [32mINFO[39m (11153): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791660855165"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    [35mfailingSql[39m: "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\","
+    [35mfailingParams[39m: "[\"op_1791660855299_ffj6c18agma\",1]"
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[19:34:15.483] [31mERROR[39m (11153): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[12:16:06.476] [32mINFO[39m (1002): [36m[composition] ReconciliationWorker started[39m
+[12:16:06.485] [32mINFO[39m (1002): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[12:16:12.246] [32mINFO[39m (1002): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791720971957"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    [35mfailingSql[39m: "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\","
+    [35mfailingParams[39m: "[\"op_1791720972132_86r8y8tgzb6\",1]"
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[12:16:12.246] [31mERROR[39m (1002): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[12:17:00.134] [32mINFO[39m (1002): [36m[sandbox] DB dump written[39m
+[12:17:00.135] [32mINFO[39m (1002): [36m[composition] Graceful shutdown initiated[39m
+[12:17:00.135] [32mINFO[39m (1002): [36m[composition] ReconciliationWorker stopped[39m
+[12:17:07.875] [32mINFO[39m (1239): [36m[composition] ReconciliationWorker started[39m
+[12:17:07.890] [32mINFO[39m (1239): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[12:17:10.350] [32mINFO[39m (1239): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791721030076"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    [35mfailingSql[39m: "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\","
+    [35mfailingParams[39m: "[\"op_1791721030237_2pskcnka7w7\",1]"
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[12:17:10.350] [31mERROR[39m (1239): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[12:18:25.035] [32mINFO[39m (1239): [36m[sandbox] DB dump written[39m
+[12:18:25.036] [32mINFO[39m (1239): [36m[composition] Graceful shutdown initiated[39m
+[12:18:25.036] [32mINFO[39m (1239): [36m[composition] ReconciliationWorker stopped[39m
+[12:18:32.867] [32mINFO[39m (1500): [36m[composition] ReconciliationWorker started[39m
+[12:18:32.880] [32mINFO[39m (1500): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[12:18:33.344] [32mINFO[39m (1500): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791721113153"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    error: "Failed query: insert into \"reconciliation_observations\" (\"observation_id\", \"payment_intent_id\", \"attempt_id\", \"rpc_provider_id\", \"underlying_provider\", \"observed_at\", \"block_number\", \"chain_head\", \"authorization_state\", \"valid_before\", \"result\", \"staleness_blocks\", \"error\", \"created_at\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, $12, default)\nparams: op_1791721113278_mx9oem3z9e-1791721113336-evidence-log,,op_1791721113278_mx9oem3z9e-1791721113336,evidence-log,,2026-10-11T12:18:33.336Z,0,0,,0,OPERATION_FAILED,"
+[12:18:33.344] [31mERROR[39m (1500): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "DrizzleQueryError",
+      "message": "Failed query: insert into \"reconciliation_observations\" (\"observation_id\", \"payment_intent_id\", \"attempt_id\", \"rpc_provider_id\", \"underlying_provider\", \"observed_at\", \"block_number\", \"chain_head\", \"authorization_state\", \"valid_before\", \"result\", \"staleness_blocks\", \"error\", \"created_at\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, $12, default)\nparams: op_1791721113278_mx9oem3z9e-1791721113336-evidence-log,,op_1791721113278_mx9oem3z9e-1791721113336,evidence-log,,2026-10-11T12:18:33.336Z,0,0,,0,OPERATION_FAILED,: column \"updated_at\" does not exist\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: insert into \"reconciliation_observations\" (\"observation_id\", \"payment_intent_id\", \"attempt_id\", \"rpc_provider_id\", \"underlying_provider\", \"observed_at\", \"block_number\", \"chain_head\", \"authorization_state\", \"valid_before\", \"result\", \"staleness_blocks\", \"error\", \"created_at\",\"updated_at\") values ('op_1791721113278_mx9oem3z9e-1791721113336-evidence-log', '', 'op_1791721113278_mx9oem3z9e-1791721113336', 'evidence-log', '', '2026-10-11T12:18:33.336Z', '0', '0', null, '0', 'OPERATION_FAILED', default, null, default,now());\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n",
+      "stack":
+          Error: Failed query: insert into "reconciliation_observations" ("observation_id", "payment_intent_id", "attempt_id", "rpc_provider_id", "underlying_provider", "observed_at", "block_number", "chain_head", "authorization_state", "valid_before", "result", "staleness_blocks", "error", "created_at") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, $12, default)
+          params: op_1791721113278_mx9oem3z9e-1791721113336-evidence-log,,op_1791721113278_mx9oem3z9e-1791721113336,evidence-log,,2026-10-11T12:18:33.336Z,0,0,,0,OPERATION_FAILED,
+              at NodePgPreparedQuery.queryWithCache (/workspace/lib/db/node_modules/src/pg-core/session.ts:73:11)
+              at async PostgresEvidenceStore.appendReconciliationObservation (file:///workspace/lib/db/dist/secretariat/postgres-store.js:123:9)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:96:9)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+          caused by: Error: column "updated_at" does not exist
+          
+          🐜 This seems to be an execution error, which means that your request syntax seems okay,
+              but the resulting statement cannot be executed → Probably not a pg-mem error.
+          
+          *️⃣ Failed SQL statement: insert into "reconciliation_observations" ("observation_id", "payment_intent_id", "attempt_id", "rpc_provider_id", "underlying_provider", "observed_at", "block_number", "chain_head", "authorization_state", "valid_before", "result", "staleness_blocks", "error", "created_at","updated_at") values ('op_1791721113278_mx9oem3z9e-1791721113336-evidence-log', '', 'op_1791721113278_mx9oem3z9e-1791721113336', 'evidence-log', '', '2026-10-11T12:18:33.336Z', '0', '0', null, '0', 'OPERATION_FAILED', default, null, default,now());
+          
+          👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:
+          
+          
+              at Alias.getColumn (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/transforms/alias.ts:116:15)
+              at <anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/execution/records-mutations/insert.ts:53:53)
+              at Array.map (<anonymous>)
+              at Insert.visit (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/execution/records-mutations/insert.ts:51:56)
+              at <anonymous> (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/execution/records-mutations/insert.ts:37:40)
+              at StackOf.usingValue (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/parser/context.ts:11:20)
+              at new Insert (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/execution/records-mutations/insert.ts:37:22)
+              at buildWithable (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/execution/select.ts:40:20)
+              at new SelectExec (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/execution/select.ts:269:67)
+              at StatementExec._getExecutor (/workspace/tests/secretariat-sandbox/node_modules/pg-mem/src/execution/statement-exec.ts:84:24)
+      "query": "insert into \"reconciliation_observations\" (\"observation_id\", \"payment_intent_id\", \"attempt_id\", \"rpc_provider_id\", \"underlying_provider\", \"observed_at\", \"block_number\", \"chain_head\", \"authorization_state\", \"valid_before\", \"result\", \"staleness_blocks\", \"error\", \"created_at\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, $12, default)",
+      "params": [
+        "op_1791721113278_mx9oem3z9e-1791721113336-evidence-log",
+        "",
+        "op_1791721113278_mx9oem3z9e-1791721113336",
+        "evidence-log",
+        "",
+        "2026-10-11T12:18:33.336Z",
+        0,
+        0,
+        null,
+        0,
+        "OPERATION_FAILED",
+        null
+      ]
+    }
+[13:00:35.444] [32mINFO[39m (1500): [36m[sandbox] DB dump written[39m
+[13:00:35.444] [32mINFO[39m (1500): [36m[composition] Graceful shutdown initiated[39m
+[13:00:35.445] [32mINFO[39m (1500): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[SBX-DIAG] sql: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload",
+[SBX-DIAG] raw rows: []
+[13:00:41.597] [32mINFO[39m (3926): [36m[composition] ReconciliationWorker started[39m
+[13:00:41.635] [32mINFO[39m (3926): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[13:00:51.268] [32mINFO[39m (3926): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791723650873"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    [35mfailingSql[39m: "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\","
+    [35mfailingParams[39m: "[\"op_1791723651032_6ex1mrqdc0m\",1]"
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[13:00:51.268] [31mERROR[39m (3926): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
