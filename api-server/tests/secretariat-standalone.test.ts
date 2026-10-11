@@ -18,11 +18,12 @@ function fakeComposition(overrides: Partial<SecretariatComposition> = {}): Secre
     secretariat: {
       createRequest: async (request: unknown) => {
         capturedCreateRequest = request;
-        return ({
-        requestId: "req_test",
-        status: "AWAITING_PAYMENT_SIGNATURE",
-        paymentRequired: { amount: "1", asset: "0x0000000000000000000000000000000000000001", network: "eip155:84532", payee: "0x0000000000000000000000000000000000000002", deadline: 9999999999 },
-      });
+        return {
+          requestId: "req_test",
+          status: "AWAITING_PAYMENT_SIGNATURE",
+          paymentRequired: { amount: "1", asset: "0x0000000000000000000000000000000000000001", network: "eip155:84532", payee: "0x0000000000000000000000000000000000000002", deadline: 9999999999 },
+        };
+      },
       getOperationByRequestId: async () => null,
       submitSignedPayment: async () => undefined,
     },
