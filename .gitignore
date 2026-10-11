@@ -1,4 +1,3 @@
-```
 # Build artifacts
 *.tsbuildinfo
 dist/
@@ -100,4 +99,3 @@ build/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```
