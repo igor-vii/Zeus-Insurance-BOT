@@ -115,10 +115,15 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
    * Two concurrent appends will both survive (no lost updates).
    */
   async append(record: EvidenceRecord): Promise<void> {
-    // Use dedicated reconciliation_observations table for durable, concurrent-safe storage
+    // Reconciliation observations are children of an existing payment intent.
+    // A request can fail before an intent is created, so resolve the intent first
+    // and never manufacture an empty paymentIntentId that violates the FK.
+    const intent = await this.getPaymentIntentByOperationId(record.operationId);
+    if (!intent) return;
+
     await this.appendReconciliationObservation({
       attemptId: record.operationId + "-" + record.timestamp,
-      paymentIntentId: "", // Will be resolved by caller context
+      paymentIntentId: intent.paymentIntentId,
       timestamp: record.timestamp,
       rpcProviderId: "evidence-log",
       headBlock: 0,
@@ -128,16 +133,13 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       error: undefined,
     });
 
-    // Also append to intent's JSONB field using atomic concatenation
-    const intent = await this.getPaymentIntentByOperationId(record.operationId);
-    if (intent) {
-      await this.db.execute(sql`
-        UPDATE payment_intents
-        SET reconciliation_observations = COALESCE(reconciliation_observations, '[]'::jsonb) || ${JSON.stringify(record)}::jsonb,
-            updated_at = NOW()
-        WHERE payment_intent_id = ${intent.paymentIntentId}
-      `);
-    }
+    // Also append to the existing intent's JSONB field using atomic concatenation.
+    await this.db.execute(sql`
+      UPDATE payment_intents
+      SET reconciliation_observations = COALESCE(reconciliation_observations, '[]'::jsonb) || ${JSON.stringify(record)}::jsonb,
+          updated_at = NOW()
+      WHERE payment_intent_id = ${intent.paymentIntentId}
+    `);
   }
 
   async getEvidence(operationId: string): Promise<EvidenceRecord[]> {
