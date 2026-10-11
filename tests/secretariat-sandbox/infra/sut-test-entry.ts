@@ -147,7 +147,7 @@ app.get(["/health", "/healthz"], (_req, res) => res.json({ status: "ok" }));
           // TEST-ONLY DIAG (v10): when the failure is a mapper TypeError, log the
           // exact SQL + params that produced the offending row (sandbox adapter).
           ...(thrown && String((thrown as Error)?.message ?? "").includes("getTime")
-            ? { failingSql: lastQueryDiag.text.slice(0, 400), failingParams: JSON.stringify(lastQueryDiag.values).slice(0, 400) }
+            ? { failingSql: lastQueryDiag.text.slice(0, 400), failingParams: JSON.stringify(lastQueryDiag.values).slice(0, 400), selectDiag: (globalThis as unknown as { __sbxSelectDiag?: unknown[] }).__sbxSelectDiag ?? [] }
             : {}),
         },
         "[sandbox-diag] prepareStageA outcome"

@@ -41,6 +41,18 @@ const MIGRATIONS = [
 // targets a column absent from the physical schema. Sandbox remedy: after applying the
 // real migrations verbatim, ALTER the virtual table to match the declared schema.
 // Production files untouched. Recorded as finding F-DB6 (schema drift).
+// TEST-ONLY FIX (v16): live crash in PostgresEvidenceStore.rowToIntent —
+// row.createdAt was undefined for payment_intents rows read back from the virtual DB,
+// even though migration 0005 declares created_at/updated_at with DEFAULT now().
+// Root cause (verified by probe): pg-mem@3.0.14 does not materialize column DEFAULT
+// values when an INSERT omits the column — it stores NULL there while real PostgreSQL
+// would store now(). Remedy: sandbox-level BEFORE INSERT trigger that fills any NULL
+// created_at / updated_at with clock_timestamp(). Applied to every virtual table that
+// has those columns; production schema/migrations untouched. Recorded as F-DB7.
+// NOTE (v16 attempt): pg-mem@3.0.14 does not support CREATE TRIGGER / plpgsql at all
+// ("Not supported: CREATE TRIGGER") — triggers removed. The equivalent remedy lives in
+// the sandbox query adapter layer instead (see forceDefaultsOnUpdate + v17 SELECT
+// hydration below). Production schema/migrations remain untouched.
 const SCHEMA_DRIFT_PATCHES = [
   `ALTER TABLE "reconciliation_observations" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone NOT NULL DEFAULT now()`,
 ];
@@ -186,6 +198,57 @@ async function runQueryAsync(first: unknown, params?: unknown): Promise<{ rows: 
     execText = rewritten.text;
     execVals = rewritten.values;
   }
+  // TEST-ONLY FIX (v16b): pg-mem@3.0.14 does not evaluate the now()/NOW() function at
+  // all on the parameterized Client path — verified live: an INSERT with literal now()
+  // for created_at/updated_at stores NULL, and production raw SQL (`SET updated_at =
+  // NOW()` in postgres-store.js L113/L313/L381/L405; `next_probe_at <= NOW()` in the
+  // reconciliation worker) would silently corrupt timestamps or break job claiming.
+  // Remedy (sandbox adapter only): replace every now()/NOW() occurrence with a bound
+  // Date parameter, for both UPDATE SET clauses and any other statement position.
+  // Semantically identical to real PG. Recorded as F-DB7.
+  if (/\bnow\(\)/i.test(execText)) {
+    execText = execText.replace(/\bnow\(\)/gi, () => {
+      execVals = [...execVals, new Date()];
+      return `$${execVals.length}`;
+    });
+  }
+  // TEST-ONLY FIX (v17): pg-mem@3.0.14 does not support INSERT ... RETURNING on the
+  // parameterized Client path (verified live: createPaymentIntent's returning row came
+  // back as [] while the row WAS inserted). When a RETURNING clause asks for columns we
+  // know exist in the sandbox tables, strip it and re-issue a plain SELECT of the same
+  // projection filtered by equality on all provided placeholder values. Semantically
+  // equivalent for these single-row inserts (PKs are generated per operation). F-DB8.
+  const retM = /\s+returning\s+(.+)$/is.exec(execText);
+  if (retM && /^\s*insert\s+into/i.test(execText)) {
+    const cols = retM[1].split(",").map((s) => s.trim().replace(/^"|"$/g, "")).filter(Boolean);
+    if (cols.every((c) => c !== "*")) {
+      const stripped = execText.slice(0, retM.index);
+      const tblM = /^\s*insert\s+into\s+"?([a-z_]+)"?/i.exec(stripped);
+      const colM = /insert\s+into\s+"?[a-z_]+"?\s*\(([^)]*)\)/i.exec(stripped);
+      let outRows: unknown[] | null = null;
+      if (tblM && colM) {
+        const insCols = colM[2].split(",").map((s) => s.trim().replace(/^"|"$/g, ""));
+        try {
+          await c.query(stripped, execVals);
+          const preds = insCols.map((_c, i) => `"${_c}" = $${i + 1}`).join(" AND ");
+          const sel = await c.query(`SELECT ${cols.map((x) => `"${x}"`).join(", ")} FROM "${tblM[1]}" WHERE ${preds} LIMIT 1`, execVals);
+          outRows = Array.isArray(sel.rows) ? sel.rows : [];
+        } catch (e) {
+          lastQueryDiag.error = `returning-emulation failed: ${String((e as Error).message).split("\n")[0]}`;
+          throw e;
+        }
+        res = { rows: outRows ?? [], rowCount: (outRows ?? []).length };
+      } else {
+        execText = stripped;
+      }
+      if (outRows !== null) {
+        // rows already produced; skip normal execution below
+        lastQueryDiag.text = execText;
+        const hydrated = (res.rows as unknown[]).map((r) => addCamelMirrors(hydrateRowDates(r)));
+        return { rows: hydrated.map(addCamelFromSnake), rowCount: hydrated.length };
+      }
+    }
+  }
   lastQueryDiag.text = execText;
   try {
     res = await c.query(execText, execVals);
@@ -193,8 +256,14 @@ async function runQueryAsync(first: unknown, params?: unknown): Promise<{ rows: 
     lastQueryDiag.error = String((e as Error).message).split("\n")[0];
     throw e;
   }
-  // TEST-ONLY DIAG (v12b): dump raw pg-mem rows for the first SELECT to pinpoint where
-  // values are lost (engine vs adapter vs our wrappers).
+  // TEST-ONLY DIAG (v15): dump raw pg-mem rows for EVERY SELECT-shaped statement so we
+  // can see exactly which query returns [] / missing keys. Ring buffer of last 6.
+  if (/^\s*select/i.test(execText)) {
+    globalThis.__sbxSelectDiag ??= [];
+    const buf = globalThis.__sbxSelectDiag as unknown[];
+    buf.push({ sql: execText.slice(0, 260), rowCount: res.rowCount, rows: JSON.stringify(res.rows ?? []).slice(0, 500) });
+    if (buf.length > 6) buf.shift();
+  }
   if (/^\s*select/i.test(execText) && !globalThis.__sbxDiagDone) {
     globalThis.__sbxDiagDone = true;
     console.error("[SBX-DIAG] sql:", execText.slice(0, 220));
@@ -334,12 +403,31 @@ function hydrateRowDates(row: unknown): unknown {
 // Secretariat tables whose column list lacks created_at/updated_at. Only fires when the
 // table name matches AND both defaults are missing — production SQL semantics otherwise
 // untouched. Recorded as sandbox deviation F-DB4.
+// TEST-ONLY FIX (v18, sandbox adapter only): the defaults list must mirror the REAL
+// migration DDL (lib/db/drizzle/migrations/0005_secretariat_tables.sql), which was
+// verified line-by-line this turn:
+//   payment_intents / nonce_registry / reconciliation_jobs / recovery_jobs:
+//     created_at + updated_at (both NOT NULL DEFAULT now())
+//   execution_attempts / reconciliation_observations:
+//     created_at ONLY (no updated_at column exists in the migration; the v15 drift
+//     patch adds updated_at to reconciliation_observations for schema-declaration
+//     compatibility, so it is kept here as well).
+// The previous list wrongly required updated_at on execution_attempts and
+// next_probe_at on reconciliation_jobs. appendNotNullTimestampDefaults appends
+// `now()` VALUES for EVERY listed missing column, so for reconciliation_jobs it
+// produced a column/value-count mismatch (6 cols vs 7 values) that pg-mem's
+// positional $n substitution silently mis-bound — the last bound Date landed in
+// locked_by and created_at stayed NULL -> production mapper crash
+// (rowToJob createdAt.getTime() TypeError) inside createReconciliationJob, which
+// aborted persistOperation for every request. Fixing the list restores correct
+// arity. Production files untouched. Recorded as finding F-DB9 (sandbox defect,
+// not a Secretariat production defect).
 const INSERT_DEFAULTS_TS: Record<string, string[]> = {
   payment_intents: ["created_at", "updated_at"],
   nonce_registry: ["created_at", "updated_at"],
-  execution_attempts: ["created_at", "updated_at"],
-  reconciliation_observations: ["created_at", "updated_at"],
-  reconciliation_jobs: ["created_at", "updated_at", "next_probe_at"],
+  execution_attempts: ["created_at"],
+  reconciliation_observations: ["created_at", "updated_at"], // updated_at added by F-DB6 drift patch
+  reconciliation_jobs: ["created_at", "updated_at"],
   recovery_jobs: ["created_at", "updated_at"],
 };
 function appendNotNullTimestampDefaults(text: string, values: unknown[]): { text: string; values: unknown[] } {

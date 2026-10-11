@@ -5603,3 +5603,211 @@ nohup: ignoring input
               at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
               at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
     }
+[13:01:47.078] [32mINFO[39m (3926): [36m[sandbox] DB dump written[39m
+[13:01:47.078] [32mINFO[39m (3926): [36m[composition] Graceful shutdown initiated[39m
+[13:01:47.078] [32mINFO[39m (3926): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[SBX-DIAG] sql: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload",
+[SBX-DIAG] raw rows: []
+[13:01:53.392] [32mINFO[39m (4378): [36m[composition] ReconciliationWorker started[39m
+[13:01:53.403] [32mINFO[39m (4378): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[13:02:00.667] [32mINFO[39m (4378): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791723720290"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    [35mfailingSql[39m: "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\","
+    [35mfailingParams[39m: "[\"op_1791723720447_leyfgjkvrk\",1]"
+    [35mselectDiag[39m: [
+      {
+        "sql": "\n      SELECT job_id, payment_intent_id, probe_count\n      FROM reconciliation_jobs\n      WHERE (\n          status = $1 AND next_probe_at <= NOW()\n        ) OR (\n          status = $2 AND locked_until IS NOT NULL AND locked_until < NOW()\n        )\n      ORDER ",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 1,
+        "rows": "[{\"payment_intent_id\":\"pi_1791723720559_al8xwo8jaoo\",\"operation_id\":\"op_1791723720447_leyfgjkvrk\",\"request_id\":\"sbx-ClawRouter-S0-1791723720290\",\"client_id\":\"sandbox-clawrouter\",\"target\":\"http://127.0.0.1:18700/resource?mode=HAPPY\",\"method\":\"POST\",\"payment_policy\":{\"maxPrice\":\"100000\",\"allowedNetworks\":[\"base-sepolia\"],\"allowedAssets\":[\"0x036CbD53842c942c0a9d39f23520231D3dF71be4\"],\"authorizationMode\":\"policy-bound\"},\"authorizer\":\"0x2352acCf764F886bf368415B8e1c8A75439bD74a\",\"pay_to\":\"0x1111111111"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 1,
+        "rows": "[{\"payment_intent_id\":\"pi_1791723720559_al8xwo8jaoo\",\"operation_id\":\"op_1791723720447_leyfgjkvrk\",\"request_id\":\"sbx-ClawRouter-S0-1791723720290\",\"client_id\":\"sandbox-clawrouter\",\"target\":\"http://127.0.0.1:18700/resource?mode=HAPPY\",\"method\":\"POST\",\"payment_policy\":{\"maxPrice\":\"100000\",\"allowedNetworks\":[\"base-sepolia\"],\"allowedAssets\":[\"0x036CbD53842c942c0a9d39f23520231D3dF71be4\"],\"authorizationMode\":\"policy-bound\"},\"authorizer\":\"0x2352acCf764F886bf368415B8e1c8A75439bD74a\",\"pay_to\":\"0x1111111111"
+      }
+    ]
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[13:02:00.668] [31mERROR[39m (4378): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[13:09:55.754] [32mINFO[39m (4378): [36m[sandbox] DB dump written[39m
+[13:09:55.754] [32mINFO[39m (4378): [36m[composition] Graceful shutdown initiated[39m
+[13:09:55.754] [32mINFO[39m (4378): [36m[composition] ReconciliationWorker stopped[39m
+nohup: ignoring input
+[SBX-DIAG] sql: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload",
+[SBX-DIAG] raw rows: []
+[13:10:01.868] [32mINFO[39m (5684): [36m[composition] ReconciliationWorker started[39m
+[13:10:01.883] [32mINFO[39m (5684): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+[13:10:15.038] [32mINFO[39m (5684): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791724214758"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    [35mfailingSql[39m: "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\","
+    [35mfailingParams[39m: "[\"op_1791724214876_c1v0hf795p7\",1]"
+    [35mselectDiag[39m: [
+      {
+        "sql": "\n      SELECT job_id, payment_intent_id, probe_count\n      FROM reconciliation_jobs\n      WHERE (\n          status = $1 AND next_probe_at <= NOW()\n        ) OR (\n          status = $2 AND locked_until IS NOT NULL AND locked_until < NOW()\n        )\n      ORDER ",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 1,
+        "rows": "[{\"payment_intent_id\":\"pi_1791724214945_rjkenancrzp\",\"operation_id\":\"op_1791724214876_c1v0hf795p7\",\"request_id\":\"sbx-ClawRouter-S0-1791724214758\",\"client_id\":\"sandbox-clawrouter\",\"target\":\"http://127.0.0.1:18700/resource?mode=HAPPY\",\"method\":\"POST\",\"payment_policy\":{\"maxPrice\":\"100000\",\"allowedNetworks\":[\"base-sepolia\"],\"allowedAssets\":[\"0x036CbD53842c942c0a9d39f23520231D3dF71be4\"],\"authorizationMode\":\"policy-bound\"},\"authorizer\":\"0x2352acCf764F886bf368415B8e1c8A75439bD74a\",\"pay_to\":\"0x111111111"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 1,
+        "rows": "[{\"payment_intent_id\":\"pi_1791724214945_rjkenancrzp\",\"operation_id\":\"op_1791724214876_c1v0hf795p7\",\"request_id\":\"sbx-ClawRouter-S0-1791724214758\",\"client_id\":\"sandbox-clawrouter\",\"target\":\"http://127.0.0.1:18700/resource?mode=HAPPY\",\"method\":\"POST\",\"payment_policy\":{\"maxPrice\":\"100000\",\"allowedNetworks\":[\"base-sepolia\"],\"allowedAssets\":[\"0x036CbD53842c942c0a9d39f23520231D3dF71be4\"],\"authorizationMode\":\"policy-bound\"},\"authorizer\":\"0x2352acCf764F886bf368415B8e1c8A75439bD74a\",\"pay_to\":\"0x111111111"
+      }
+    ]
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[13:10:15.039] [31mERROR[39m (5684): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+[13:15:14.364] [32mINFO[39m (5684): [36m[sandbox] DB dump written[39m
+[13:15:14.365] [32mINFO[39m (5684): [36m[composition] Graceful shutdown initiated[39m
+[13:15:14.365] [32mINFO[39m (5684): [36m[composition] ReconciliationWorker stopped[39m
+[SBX-DIAG] sql: select "payment_intent_id", "operation_id", "request_id", "client_id", "target", "method", "payment_policy", "authorizer", "pay_to", "value", "asset", "network", "nonce", "valid_after", "valid_before", "payment_payload",
+[SBX-DIAG] raw rows: []
+[13:35:51.337] [32mINFO[39m (9162): [36m[composition] ReconciliationWorker started[39m
+[13:35:51.347] [32mINFO[39m (9162): [36m[secretariat-sandbox-test] Test SUT ready on /v1 (authorizer-injection middleware active)[39m
+    [35mport[39m: 18791
+=== SMOKE ClawRouter S0 2026-10-11T13:35:59Z ===
+[2026-10-11T13:35:59.592Z] START client=ClawRouter scenario=S0 mode=HAPPY
+[13:36:00.035] [32mINFO[39m (9162): [36m[sandbox-diag] prepareStageA outcome[39m
+    [35mdiag[39m: "stage-a"
+    [35mrequestId[39m: "sbx-ClawRouter-S0-1791725759749"
+    [35mstatus[39m: null
+    [35mstate[39m: null
+    [35mlastEvidence[39m: []
+    [35mfailingSql[39m: "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_state\", \"tx_hash\", \"facilitator_http_status\", \"facilitator_response_body\", \"error_reason\", \"submit_attempt_at\", \"settled_at\", \"not_settled_at\","
+    [35mfailingParams[39m: "[\"op_1791725759874_pri37b9uh1i\",1]"
+    [35mselectDiag[39m: [
+      {
+        "sql": "\n      SELECT job_id, payment_intent_id, probe_count\n      FROM reconciliation_jobs\n      WHERE (\n          status = $1 AND next_probe_at <= $3\n        ) OR (\n          status = $2 AND locked_until IS NOT NULL AND locked_until < $4\n        )\n      ORDER BY nex",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 0,
+        "rows": "[]"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 1,
+        "rows": "[{\"payment_intent_id\":\"pi_1791725759933_frgbfx75wbh\",\"operation_id\":\"op_1791725759874_pri37b9uh1i\",\"request_id\":\"sbx-ClawRouter-S0-1791725759749\",\"client_id\":\"sandbox-clawrouter\",\"target\":\"http://127.0.0.1:18700/resource?mode=HAPPY\",\"method\":\"POST\",\"payment_policy\":{\"maxPrice\":\"100000\",\"allowedNetworks\":[\"base-sepolia\"],\"allowedAssets\":[\"0x036CbD53842c942c0a9d39f23520231D3dF71be4\"],\"authorizationMode\":\"policy-bound\"},\"authorizer\":\"0x2352acCf764F886bf368415B8e1c8A75439bD74a\",\"pay_to\":\"0x111111111"
+      },
+      {
+        "sql": "select \"payment_intent_id\", \"operation_id\", \"request_id\", \"client_id\", \"target\", \"method\", \"payment_policy\", \"authorizer\", \"pay_to\", \"value\", \"asset\", \"network\", \"nonce\", \"valid_after\", \"valid_before\", \"payment_payload\", \"payment_payload_hash\", \"settlement_sta",
+        "rowCount": 1,
+        "rows": "[{\"payment_intent_id\":\"pi_1791725759933_frgbfx75wbh\",\"operation_id\":\"op_1791725759874_pri37b9uh1i\",\"request_id\":\"sbx-ClawRouter-S0-1791725759749\",\"client_id\":\"sandbox-clawrouter\",\"target\":\"http://127.0.0.1:18700/resource?mode=HAPPY\",\"method\":\"POST\",\"payment_policy\":{\"maxPrice\":\"100000\",\"allowedNetworks\":[\"base-sepolia\"],\"allowedAssets\":[\"0x036CbD53842c942c0a9d39f23520231D3dF71be4\"],\"authorizationMode\":\"policy-bound\"},\"authorizer\":\"0x2352acCf764F886bf368415B8e1c8A75439bD74a\",\"pay_to\":\"0x111111111"
+      }
+    ]
+    error: "Cannot read properties of undefined (reading 'getTime')"
+[13:36:00.035] [31mERROR[39m (9162): [36mSecretariat request creation failed[39m
+    err: {
+      "type": "TypeError",
+      "message": "Cannot read properties of undefined (reading 'getTime')",
+      "stack":
+          TypeError: Cannot read properties of undefined (reading 'getTime')
+              at PostgresEvidenceStore.rowToIntent (file:///workspace/lib/db/dist/secretariat/postgres-store.js:459:71)
+              at PostgresEvidenceStore.getPaymentIntentByOperationId (file:///workspace/lib/db/dist/secretariat/postgres-store.js:157:48)
+              at async PostgresEvidenceStore.append (file:///workspace/lib/db/dist/secretariat/postgres-store.js:108:24)
+              at async Secretariat.persistOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1361:7)
+              at async Secretariat.failOperation (/workspace/zeus-secretariat/src/core/state-machine.ts:1305:5)
+              at async Secretariat.prepareStageA (/workspace/zeus-secretariat/src/core/state-machine.ts:1589:22)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:112:16)
+              at async Secretariat.s.prepareStageA (/workspace/tests/secretariat-sandbox/infra/sut-test-entry.ts:133:13)
+              at async Secretariat.createRequest (/workspace/zeus-secretariat/src/core/state-machine.ts:291:20)
+              at async <anonymous> (/workspace/api-server/src/routes/requests.ts:223:16)
+    }
+{
+  "client": "ClawRouter",
+  "scenario": "S0",
+  "verdict": "SCENARIO NOT REACHED",
+  "stoppedAt": "STAGE_A"
+}
