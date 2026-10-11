@@ -1,0 +1,58 @@
+{
+  "client": "Franklin",
+  "scenario": "S0",
+  "stoppedAt": "STAGE_A",
+  "stageA": {
+    "status": 500,
+    "headers": {
+      "access-control-allow-origin": "*",
+      "connection": "keep-alive",
+      "content-length": "92",
+      "content-type": "application/json; charset=utf-8",
+      "date": "Sat, 10 Oct 2026 18:10:34 GMT",
+      "etag": "W/\"5c-m2rAjySpZdK0V5NzeVPTdQGrowA\"",
+      "keep-alive": "timeout=5",
+      "ratelimit-limit": "5000",
+      "ratelimit-policy": "5000;w=900",
+      "ratelimit-remaining": "4991",
+      "ratelimit-reset": "644",
+      "x-powered-by": "Express"
+    },
+    "body": {
+      "error": {
+        "code": "SECRETARIAT_REQUEST_FAILED",
+        "message": "The request could not be created"
+      }
+    }
+  },
+  "runLog": [
+    {
+      "ts": "2026-10-10T18:10:34.164Z",
+      "client": "Franklin",
+      "scenario": "S0",
+      "step": "stage-a-response",
+      "status": 500,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "connection": "keep-alive",
+        "content-length": "92",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 10 Oct 2026 18:10:34 GMT",
+        "etag": "W/\"5c-m2rAjySpZdK0V5NzeVPTdQGrowA\"",
+        "keep-alive": "timeout=5",
+        "ratelimit-limit": "5000",
+        "ratelimit-policy": "5000;w=900",
+        "ratelimit-remaining": "4991",
+        "ratelimit-reset": "644",
+        "x-powered-by": "Express"
+      },
+      "body": {
+        "error": {
+          "code": "SECRETARIAT_REQUEST_FAILED",
+          "message": "The request could not be created"
+        }
+      }
+    }
+  ],
+  "verdict": "SCENARIO NOT REACHED"
+}

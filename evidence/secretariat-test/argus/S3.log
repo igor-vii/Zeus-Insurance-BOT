@@ -1,0 +1,14 @@
+
+Run:
+  ID: run_1791487185189_z0zznt9pc
+  Scenario: S3
+  Status: COMPLETED
+  Started: 2026-10-08T19:19:45.189Z
+  Finished: 2026-10-08T19:19:45.190Z
+
+Evidence:
+  Count: 2
+
+Verdict:
+  Result: INCONCLUSIVE
+  Reason: no settlement observed yet
