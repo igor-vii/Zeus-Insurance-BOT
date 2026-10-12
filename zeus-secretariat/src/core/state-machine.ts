@@ -1302,7 +1302,18 @@ export class Secretariat {
       error,
     });
 
-    await this.persistOperation(operation);
+    try {
+      await this.persistOperation(operation);
+    } catch (persistError: unknown) {
+      // Persistence of failure evidence is best-effort: it must not replace the
+      // original operation error or turn a rejected request into a new failure.
+      // This diagnostic remains in the returned in-memory result if the store
+      // itself is unavailable and therefore cannot persist it.
+      this.recordEvidence(operation, 'FINAL', 'EVIDENCE_PERSISTENCE_FAILED', {
+        originalError: error,
+        persistError: persistError instanceof Error ? persistError.message : String(persistError),
+      });
+    }
     return this.buildResult(operation);
   }
 
