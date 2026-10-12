@@ -7,6 +7,7 @@
  * P0-6: Batch reconciliation with correct state column
  */
 
+import { randomUUID } from "node:crypto";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -14,6 +15,7 @@ import {
   nonceRegistryTable,
   reconciliationObservationsTable,
   reconciliationJobsTable,
+  preIntentEvidenceTable,
 } from "@workspace/db/schema";
 import type {
   DurableEvidenceStore, DurablePaymentIntent, SettlementState,
@@ -119,7 +121,18 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     // A request can fail before an intent is created, so resolve the intent first
     // and never manufacture an empty paymentIntentId that violates the FK.
     const intent = await this.getPaymentIntentByOperationId(record.operationId);
-    if (!intent) return;
+    if (!intent) {
+      // Do not discard evidence just because request discovery/validation failed
+      // before a payment intent could be created. This table deliberately has
+      // no FK to payment_intents.
+      await this.db.insert(preIntentEvidenceTable).values({
+        evidenceId: randomUUID(),
+        operationId: record.operationId,
+        observedAt: new Date(record.timestamp),
+        record,
+      });
+      return;
+    }
 
     await this.appendReconciliationObservation({
       attemptId: record.operationId + "-" + record.timestamp,
@@ -143,8 +156,15 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
 
   async getEvidence(operationId: string): Promise<EvidenceRecord[]> {
-    const intent = await this.getPaymentIntentByOperationId(operationId);
-    return ((intent?.reconciliationObservations ?? []) as unknown as EvidenceRecord[]);
+    const [intent, earlyRows] = await Promise.all([
+      this.getPaymentIntentByOperationId(operationId),
+      this.db.select().from(preIntentEvidenceTable)
+        .where(eq(preIntentEvidenceTable.operationId, operationId)),
+    ]);
+    const earlyEvidence = earlyRows.map((row: any) => row.record as EvidenceRecord);
+    const intentEvidence = (intent?.reconciliationObservations ?? []) as unknown as EvidenceRecord[];
+    return [...earlyEvidence, ...intentEvidence]
+      .sort((a, b) => a.timestamp - b.timestamp);
   }
 
   async appendReconciliationObservation(obs: ReconciliationObservation): Promise<void> {
