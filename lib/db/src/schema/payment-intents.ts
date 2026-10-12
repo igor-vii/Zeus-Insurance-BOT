@@ -169,3 +169,25 @@ export const reconciliationJobsTable = pgTable(
     pendingIdx: index("rj_pending_probe_idx").on(table.status, table.nextProbeAt),
   }),
 );
+
+/**
+ * Evidence emitted before a payment intent exists.
+ *
+ * These records intentionally have no FK to payment_intents: discovery and
+ * request validation can fail before the intent is created, but that failure
+ * still needs a durable, queryable evidence trail.
+ */
+export const preIntentEvidenceTable = pgTable(
+  "pre_intent_evidence",
+  {
+    evidenceId: text("evidence_id").primaryKey(),
+    operationId: text("operation_id").notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    record: jsonb("record").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    operationIdx: index("pre_intent_evidence_operation_idx").on(table.operationId),
+    observedAtIdx: index("pre_intent_evidence_observed_at_idx").on(table.operationId, table.observedAt),
+  }),
+);
