@@ -4,6 +4,7 @@ import { createSecretariatApp } from "../src/lib/secretariat-app.js";
 import type { SecretariatComposition } from "../src/lib/secretariat-composition.js";
 
 const calls: string[] = [];
+let capturedCreateRequest: unknown;
 
 function fakeComposition(overrides: Partial<SecretariatComposition> = {}): SecretariatComposition {
   const fake = {
@@ -15,11 +16,14 @@ function fakeComposition(overrides: Partial<SecretariatComposition> = {}): Secre
     postSettlementEngine: {},
     reconciliationWorker: {},
     secretariat: {
-      createRequest: async () => ({
-        requestId: "req_test",
-        status: "AWAITING_PAYMENT_SIGNATURE",
-        paymentRequired: { amount: "1", asset: "0x0000000000000000000000000000000000000001", network: "eip155:84532", payee: "0x0000000000000000000000000000000000000002", deadline: 9999999999 },
-      }),
+      createRequest: async (request: unknown) => {
+        capturedCreateRequest = request;
+        return {
+          requestId: "req_test",
+          status: "AWAITING_PAYMENT_SIGNATURE",
+          paymentRequired: { amount: "1", asset: "0x0000000000000000000000000000000000000001", network: "eip155:84532", payee: "0x0000000000000000000000000000000000000002", deadline: 9999999999 },
+        };
+      },
       getOperationByRequestId: async () => null,
       submitSignedPayment: async () => undefined,
     },
@@ -33,7 +37,10 @@ function fakeComposition(overrides: Partial<SecretariatComposition> = {}): Secre
   return Object.assign(fake, overrides);
 }
 
-beforeEach(() => calls.splice(0));
+beforeEach(() => {
+  calls.splice(0);
+  capturedCreateRequest = undefined;
+});
 
 describe("standalone Secretariat API boundary", () => {
   test("serves the existing /v1 router through the standalone app", async () => {
@@ -57,6 +64,7 @@ describe("standalone Secretariat API boundary", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          authorizer: "0x85a5730F58838455E62Ec0327E908659bC8760db",
           target: "https://seller.example.com/task",
           method: "POST",
           payload: { input: "test" },
@@ -71,6 +79,11 @@ describe("standalone Secretariat API boundary", () => {
       });
       assert.equal(valid.status, 201);
       assert.equal((await valid.json()).requestId, "req_test");
+      assert.equal(
+        (capturedCreateRequest as { authorizer?: string } | undefined)?.authorizer,
+        "0x85a5730F58838455E62Ec0327E908659bC8760db",
+        "authorizer must survive API schema parsing and reach Secretariat.createRequest",
+      );
 
       const missing = await fetch(`${base}/v1/requests/missing`);
       assert.equal(missing.status, 404);
