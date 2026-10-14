@@ -20,6 +20,7 @@ const paymentPolicySchema = z.object({
 });
 
 const createRequestSchema = z.object({
+  authorizer: z.string().min(1),
   target: z.string().url(),
   method: z.string().min(1),
   payload: z.unknown().optional(),
