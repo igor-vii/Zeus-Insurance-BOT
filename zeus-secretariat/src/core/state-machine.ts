@@ -168,6 +168,11 @@ export interface SecretariatConfig {
    * If unavailable, settlement → execution handoff will fail closed.
    */
   atomicSettlementHandoff: AtomicSettlementHandoff;
+  /**
+   * Repair C3: Bounded retry policy for evidence persistence flushes.
+   * Total attempts per flush = max(1, value). Default 3. No infinite retries.
+   */
+  evidencePersistenceRetries?: number;
 }
 
 export type CreateRequestResult =
@@ -218,9 +223,26 @@ export class Secretariat {
   private readonly config: SecretariatConfig;
   private readonly capabilityResolver: SellerCapabilityResolver;
 
+  /**
+   * Repair C3: durable-outbox cursor per operation.
+   * Maps operationId -> count of evidence records confirmed durably persisted
+   * (in sequence order). The cursor only advances on CONFIRMED appends, so a
+   * failed append leaves the record pending for the next flush. A failed call
+   * does NOT prove the DB made no change - the store's append() is idempotent
+   * via stable logical identity (see PostgresEvidenceStore), so re-appending
+   * an ambiguous record cannot create duplicates.
+   */
+  private readonly persistedEvidenceCount = new Map<string, number>();
+
   constructor(config: SecretariatConfig) {
     this.config = config;
     this.capabilityResolver = new SellerCapabilityResolver(config.capabilitySources ?? []);
+  }
+
+  /** Total attempts per evidence flush (bounded; never infinite). */
+  private evidenceFlushAttempts(): number {
+    const n = this.config.evidencePersistenceRetries ?? 3;
+    return Math.max(1, Math.min(10, Math.floor(n)));
   }
 
   // ==========================================================================
@@ -313,6 +335,27 @@ export class Secretariat {
   ): Promise<ExecutionResult> {
     const operation = await this.findExistingOperation(undefined, requestId);
     if (!operation) throw new Error(`REQUEST_NOT_FOUND: ${requestId}`);
+    // Repair C3: the continuation appends NEW evidence with sequence values
+    // derived from the in-memory copy, which may lag the durable store after a
+    // restart. Reconcile: append any durable records missing from memory
+    // (dedup by event+timestamp), then seed the outbox cursor from the now
+    // authoritative durable prefix length.
+    try {
+      const durable = await this.config.evidenceStore.getEvidence(operation.operationId);
+      if (Array.isArray(durable)) {
+        const seen = new Set(operation.evidence.map((e) => `${e.event}|${e.timestamp}|${JSON.stringify(e.payload)}`));
+        for (const rec of durable) {
+          const k = `${rec.event}|${rec.timestamp}|${JSON.stringify(rec.payload)}`;
+          if (!seen.has(k)) {
+            operation.evidence.push(rec);
+            seen.add(k);
+          }
+        }
+        this.persistedEvidenceCount.set(operation.operationId, durable.length);
+      }
+    } catch {
+      /* keep whatever cursor was seeded by findExistingOperation */
+    }
 
     const dpi = await this.getDurableIntent(operation.operationId);
     if (!dpi) {
@@ -1293,6 +1336,9 @@ export class Secretariat {
     error: string
   ): Promise<ExecutionResult> {
     operation.currentState = status;
+    // Repair C3: the ORIGINAL business error must remain visible even when
+    // evidence persistence later fails. Never overwrite it with a persistence
+    // error.
     operation.error = error;
     operation.timestamps.failedAt = now();
     operation.timestamps.updatedAt = now();
@@ -1302,8 +1348,41 @@ export class Secretariat {
       error,
     });
 
-    await this.persistOperation(operation);
-    return this.buildResult(operation);
+    const result = this.buildResult(operation);
+
+    let persistenceFailure: Error | null = null;
+    try {
+      await this.persistOperation(operation);
+    } catch (err) {
+      // Persistence exhausted its bounded retries. Expose BOTH errors:
+      // result.error keeps the business failure; result.persistenceError
+      // carries EVIDENCE_PERSISTENCE_FAILED details.
+      persistenceFailure = err instanceof Error ? err : new Error(String(err));
+    }
+
+    if (!persistenceFailure) {
+      // Best effort: the terminal operation state itself must be durable too.
+      try {
+        await this.config.evidenceStore.saveOperation(operation);
+      } catch {
+        /* saveOperation failure is secondary; evidence flush outcome governs */
+      }
+    }
+
+    if (persistenceFailure) {
+      result.persistenceError = {
+        code: 'EVIDENCE_PERSISTENCE_FAILED',
+        message: persistenceFailure.message,
+        pendingEvidenceCount: Math.max(
+          0,
+          operation.evidence.length -
+            (this.persistedEvidenceCount.get(operation.operationId) ?? 0)
+        ),
+        attempts: this.evidenceFlushAttempts(),
+      };
+    }
+
+    return result;
   }
 
   // ==========================================================================
@@ -1343,6 +1422,11 @@ export class Secretariat {
       timestamp: now(),
       event,
       payload,
+      // Repair C3: deterministic chronological ordering key. Derived from the
+      // operation's own evidence array length at creation time, so it is
+      // stable across retries (the record object is never re-sequenced) and
+      // distinct for every legitimately separate record of the operation.
+      sequence: operation.evidence.length,
     };
 
     operation.evidence.push(record);
@@ -1354,12 +1438,68 @@ export class Secretariat {
 
   private async persistOperation(operation: Operation): Promise<void> {
     await this.config.evidenceStore.saveOperation(operation);
-    
-    // Also append latest evidence
-    if (operation.evidence.length > 0) {
-      const latestEvidence = operation.evidence[operation.evidence.length - 1];
-      await this.config.evidenceStore.append(latestEvidence);
+    await this.flushPendingEvidence(operation);
+  }
+
+  /**
+   * Repair C3: durable-outbox flush.
+   *
+   * Appends EVERY evidence record not yet confirmed durably persisted, in
+   * deterministic sequence order (sequence assigned at recordEvidence() time;
+   * falls back to array index for legacy/reconstructed records without one).
+   *
+   * Cursor rules:
+   *  - Advances only on a CONFIRMED successful append.
+   *  - A failed append does NOT prove the DB made no change (ambiguous write).
+   *    Re-appending is safe because store implementations key writes by a
+   *    stable record-derived identity with conflict-safe insertion (see
+   *    PostgresEvidenceStore), so an already-committed record cannot be
+   *    duplicated by the retry.
+   *  - Bounded attempts (config.evidencePersistenceRetries, default 3, clamped
+   *    1..10). No infinite retries.
+   *
+   * On exhaustion throws Error('EVIDENCE_PERSISTENCE_FAILED: ...'). Callers
+   * preserve the ORIGINAL business error separately; this error never
+   * replaces it.
+   */
+  private async flushPendingEvidence(operation: Operation): Promise<void> {
+    const store = this.config.evidenceStore;
+    const opId = operation.operationId;
+    const maxAttempts = this.evidenceFlushAttempts();
+    let lastError: unknown = null;
+
+    // Deterministic chronological order: sequence first, timestamp tiebreak.
+    const ordered = operation.evidence
+      .map((record, idx) => ({ record, key: record.sequence ?? idx }))
+      .sort((a, b) => a.key - b.key || a.record.timestamp - b.record.timestamp);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let cursor = this.persistedEvidenceCount.get(opId) ?? 0;
+      let hitFailure = false;
+
+      for (const { record, key } of ordered) {
+        if (key < cursor) continue; // already confirmed persisted
+        try {
+          await store.append(record);
+          cursor = key + 1;
+          this.persistedEvidenceCount.set(opId, cursor);
+        } catch (err) {
+          lastError = err;
+          hitFailure = true;
+          break; // stop flushing; retry remaining batch from this record
+        }
+      }
+
+      if (!hitFailure) return; // full flush confirmed
     }
+
+    const confirmed = this.persistedEvidenceCount.get(opId) ?? 0;
+    const pending = Math.max(0, operation.evidence.length - confirmed);
+    const msg =
+      lastError instanceof Error ? lastError.message : String(lastError ?? 'unknown');
+    throw new Error(
+      `EVIDENCE_PERSISTENCE_FAILED: ${pending} evidence record(s) unpersisted after ${maxAttempts} attempt(s); last error: ${msg}`
+    );
   }
 
   // ==========================================================================
@@ -1531,6 +1671,8 @@ export class Secretariat {
     }
 
     const operation = this.createOperation(generateOperationId(), requestId, request);
+    // Repair C3: fresh operation starts with an empty durable-evidence cursor.
+    this.persistedEvidenceCount.set(operation.operationId, 0);
 
     try {
       // The DB unique constraint remains the final arbiter for concurrent
@@ -1602,12 +1744,37 @@ export class Secretariat {
     const store = this.config.evidenceStore as EvidenceStore & Partial<DurableEvidenceStore>;
     if (clientId && typeof store.getOperationByClientAndRequestId === 'function') {
       const operation = await store.getOperationByClientAndRequestId(clientId, requestId);
-      if (operation) return operation;
+      if (operation) return await this.seedEvidenceCursor(operation);
     }
     if (typeof store.getOperationByRequestId === 'function') {
-      return store.getOperationByRequestId(requestId);
+      const operation = await store.getOperationByRequestId(requestId);
+      return operation ? await this.seedEvidenceCursor(operation) : null;
     }
     return null;
+  }
+
+  /**
+   * Repair C3: after restart/reload, seed the durable-outbox cursor from the
+   * evidence that is ACTUALLY persisted in the store (not the in-memory
+   * operation copy). Records already durable are never re-appended blindly;
+   * only the suffix beyond the durable prefix is flushed. If the durable read
+   * itself fails, fall back to cursor=full-length ONLY for stores whose
+   * append is idempotent... safer default: cursor=0 so nothing is lost; the
+   * idempotent store-side identity prevents duplicates either way.
+   */
+  private async seedEvidenceCursor(operation: Operation): Promise<Operation> {
+    if (this.persistedEvidenceCount.has(operation.operationId)) {
+      return operation; // already tracked in this process
+    }
+    let durableCount = 0;
+    try {
+      const durable = await this.config.evidenceStore.getEvidence(operation.operationId);
+      durableCount = durable?.length ?? 0;
+    } catch {
+      durableCount = 0; // treat as nothing confirmed persisted; idempotent appends make replay safe
+    }
+    this.persistedEvidenceCount.set(operation.operationId, durableCount);
+    return operation;
   }
 
   private async getDurableIntent(operationId: string): Promise<DurablePaymentIntent | null> {

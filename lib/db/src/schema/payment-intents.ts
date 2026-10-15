@@ -124,9 +124,12 @@ export const reconciliationObservationsTable = pgTable(
   "reconciliation_observations",
   {
     observationId: text("observation_id").primaryKey(),
-    paymentIntentId: text("payment_intent_id")
-      .notNull()
-      .references(() => paymentIntentsTable.paymentIntentId, { onDelete: "cascade" }),
+    // Repair C3 (migration 0009): nullable so evidence can be persisted
+    // BEFORE a payment intent exists (pre-intent durable outbox rows).
+    paymentIntentId: text("payment_intent_id").references(
+      () => paymentIntentsTable.paymentIntentId,
+      { onDelete: "cascade" }
+    ),
     attemptId: text("attempt_id").notNull(),
     rpcProviderId: text("rpc_provider_id").notNull(),
     underlyingProvider: text("underlying_provider").notNull(),
@@ -143,6 +146,11 @@ export const reconciliationObservationsTable = pgTable(
   (table) => ({
     intentIdx: index("ro_payment_intent_id_idx").on(table.paymentIntentId),
     providerIdx: index("ro_rpc_provider_id_idx").on(table.rpcProviderId),
+    // Repair C3 (migration 0009): deterministic chronological retrieval of
+    // evidence-log rows by owning operation.
+    evidenceLogIdx: index("ro_evidence_log_operation_idx")
+      .on(table.attemptId, table.observedAt)
+      .where(sql`rpc_provider_id = 'evidence-log'`),
   }),
 );
 
