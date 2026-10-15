@@ -10,6 +10,7 @@ import {
   AgreementStatus,
 } from "../src/index.js";
 import { CONTRACT_ADDRESSES } from "../../frontend/src/lib/contracts.js";
+import { assertDepositReceiptSuccess } from "../../frontend/src/lib/escrow-receipt.js";
 
 const MOCK_ADDRESS = "0x1234567890123456789012345678901234567890";
 const MOCK_EXECUTOR = "0xAbCdEf0123456789AbCdEf0123456789AbCdEf01";
@@ -294,5 +295,18 @@ describe("BOT Chain (677) escrow address", () => {
     const deployed = "0x04DbB961817B94EE99e1eAa7cc5c07E1BD042364";
     assert.equal(NETWORKS["bot-chain-mainnet"].escrowAddress, deployed);
     assert.equal(CONTRACT_ADDRESSES[677].escrow, deployed);
+  });
+});
+
+// ─── Escrow deposit receipt (frontend) ───────────────────────────────────────
+
+describe("Escrow deposit receipt", () => {
+  it("accepts a success receipt and rejects a reverted one", () => {
+    const transactionHash = `0x${"ab".repeat(32)}` as const;
+    assert.doesNotThrow(() => assertDepositReceiptSuccess({ status: "success", transactionHash }));
+    assert.throws(
+      () => assertDepositReceiptSuccess({ status: "reverted", transactionHash }),
+      /Transaction reverted on-chain .*No agreement was created/,
+    );
   });
 });
