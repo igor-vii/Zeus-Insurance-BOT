@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAccount, useSendTransaction, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, usePublicClient, useSendTransaction, useWaitForTransactionReceipt } from "wagmi";
 import { parseUnits } from "viem";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -39,6 +39,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Loader2, KeyRound, ShieldCheck, Copy, Check, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { WalletModal } from "@/components/wallet-modal";
+import { botChainMainnet } from "@/lib/wagmi";
+import { assertDepositReceiptSuccess } from "@/lib/escrow-receipt";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -129,6 +131,7 @@ function SignInGate() {
 function CreateAgreementForm({ onSuccess }: { onSuccess: () => void }) {
   const { toast } = useToast();
   const { sendTransactionAsync } = useSendTransaction();
+  const publicClient = usePublicClient({ chainId: botChainMainnet.id });
   const [executor, setExecutor] = useState("");
   const [amount, setAmount] = useState("");
   const [timeout, setTimeout_] = useState("86400");
@@ -144,7 +147,10 @@ function CreateAgreementForm({ onSuccess }: { onSuccess: () => void }) {
         amount: amountRaw,
         timeoutSeconds: Number(timeout),
       });
-      await sendTransactionAsync({ to, data });
+      if (!publicClient) throw new Error("No BOT Chain RPC client available to confirm the transaction.");
+      const hash = await sendTransactionAsync({ to, data, chainId: botChainMainnet.id });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      assertDepositReceiptSuccess(receipt);
       toast({ title: "Agreement created", description: "Funds locked in escrow." });
       setExecutor(""); setAmount(""); setTimeout_("86400");
       onSuccess();
