@@ -60,6 +60,12 @@ export type { ReconciliationOutcome } from './core/reconciliation-engine.js';
 export { ReconciliationWorker } from './core/reconciliation-worker.js';
 export type { ReconciliationWorkerConfig } from './core/reconciliation-worker.js';
 
+// A1 repair: production execution worker + FSM feedback for execution results
+export { ExecutionWorker } from './core/execution-worker.js';
+export type { ExecutionWorkerConfig } from './core/execution-worker.js';
+export { ExecutionFeedbackService, planExecutionTransitions } from './core/execution-feedback-service.js';
+export type { OperationPersistence } from './core/execution-feedback-service.js';
+
 // Multi-RPC checker (required by ReconciliationEngine)
 export { MultiRpcChecker } from './core/multi-rpc-checker.js';
 

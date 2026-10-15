@@ -21,6 +21,8 @@ import {
   PostSettlementEngine,
   HttpSellerExecutionAdapter,
   Secretariat,
+  ExecutionWorker,
+  ExecutionFeedbackService,
   DEFAULT_RECONCILIATION_SCHEDULE,
   DEFAULT_FINALITY_POLICY,
 } from "zeus-secretariat";
@@ -47,6 +49,8 @@ export interface SecretariatComposition {
   readonly secretariat: InstanceType<typeof Secretariat>;
   readonly paymentVerifier: InstanceType<typeof Eip3009PaymentVerifier>;
   readonly reconciliationWorker: InstanceType<typeof ReconciliationWorker>;
+  /** A1-A: production polling consumer for recovery_jobs(EXECUTION, PENDING). */
+  readonly executionWorker: InstanceType<typeof ExecutionWorker>;
 
   /** Run startup recovery (call BEFORE startWorker). */
   recover(): Promise<void>;
@@ -195,6 +199,22 @@ export function createSecretariatComposition(): SecretariatComposition {
     },
   );
 
+  // 11. A1-B: FSM feedback service — uses the SAME shared Secretariat instance
+  // (getOperation/saveOperation is the only durable path to connect A1-A with
+  // the Operation FSM). No new persistence mechanism.
+  const executionFeedbackService = new ExecutionFeedbackService(secretariat);
+
+  // 12. A1-A: Production execution worker — permanent polling consumer for
+  // recovery_jobs(EXECUTION, PENDING) created by settlement. Uses the existing
+  // claim/lease/fencing infrastructure via the SAME shared postSettlementEngine
+  // and stores.executionStore instances. No new queue/schema/execution mechanism.
+  const executionWorker = new ExecutionWorker(postSettlementEngine, stores.executionStore, {
+    pollIntervalMs: config.reconciliation.pollIntervalMs,
+    batchSize: config.reconciliation.batchSize,
+    workerId: `exec-worker-${process.pid}`,
+    feedbackService: executionFeedbackService,
+  });
+
   // --- Lifecycle methods ---
 
   let shutdownCalled = false;
@@ -221,6 +241,9 @@ export function createSecretariatComposition(): SecretariatComposition {
   function startWorker(): void {
     reconciliationWorker.start();
     logger.info("[composition] ReconciliationWorker started");
+    // A1-A: start the production execution consumer for recovery_jobs(EXECUTION, PENDING)
+    executionWorker.start();
+    logger.info("[composition] ExecutionWorker started");
   }
 
   async function shutdown(): Promise<void> {
@@ -230,6 +253,8 @@ export function createSecretariatComposition(): SecretariatComposition {
     logger.info("[composition] Graceful shutdown initiated");
     await reconciliationWorker.stop();
     logger.info("[composition] ReconciliationWorker stopped");
+    await executionWorker.stop();
+    logger.info("[composition] ExecutionWorker stopped");
   }
 
   return {
@@ -242,6 +267,7 @@ export function createSecretariatComposition(): SecretariatComposition {
     secretariat,
     paymentVerifier,
     reconciliationWorker,
+    executionWorker,
     recover,
     startWorker,
     shutdown,
