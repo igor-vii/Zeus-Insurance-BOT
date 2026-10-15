@@ -1350,23 +1350,24 @@ export class Secretariat {
 
     const result = this.buildResult(operation);
 
+    // Repair C3: the terminal operation snapshot must be durable BEFORE we
+    // attempt the evidence flush, so a reload/restart can find the FAILED
+    // operation. Snapshot failure is best-effort here — the evidence flush
+    // outcome governs the persistenceError below.
+    try {
+      await this.config.evidenceStore.saveOperation(operation);
+    } catch {
+      /* secondary to the evidence-flush outcome handled below */
+    }
+
     let persistenceFailure: Error | null = null;
     try {
-      await this.persistOperation(operation);
+      await this.flushPendingEvidence(operation);
     } catch (err) {
       // Persistence exhausted its bounded retries. Expose BOTH errors:
       // result.error keeps the business failure; result.persistenceError
       // carries EVIDENCE_PERSISTENCE_FAILED details.
       persistenceFailure = err instanceof Error ? err : new Error(String(err));
-    }
-
-    if (!persistenceFailure) {
-      // Best effort: the terminal operation state itself must be durable too.
-      try {
-        await this.config.evidenceStore.saveOperation(operation);
-      } catch {
-        /* saveOperation failure is secondary; evidence flush outcome governs */
-      }
     }
 
     if (persistenceFailure) {
@@ -1437,8 +1438,13 @@ export class Secretariat {
   // ==========================================================================
 
   private async persistOperation(operation: Operation): Promise<void> {
-    await this.config.evidenceStore.saveOperation(operation);
+    // Repair C3: flush evidence FIRST. The durable outbox is the critical
+    // artifact; saveOperation snapshots terminal state afterwards. If the
+    // snapshot write fails (e.g. an intermediate state has no durable row
+    // yet), pending evidence was already flushed and the cursor advanced,
+    // so a later flush retries only the remainder without duplication.
     await this.flushPendingEvidence(operation);
+    await this.config.evidenceStore.saveOperation(operation);
   }
 
   /**

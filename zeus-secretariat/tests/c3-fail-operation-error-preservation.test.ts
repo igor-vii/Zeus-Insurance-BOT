@@ -217,19 +217,40 @@ describe('Repair C3: durable-outbox evidence flush', () => {
 
   it('case 4: failOperation preserves the ORIGINAL business error and exposes EVIDENCE_PERSISTENCE_FAILED', async () => {
     const inner = new InMemoryEvidenceStore();
-    const flaky = new FlakyEvidenceStore(inner, { failAlways: ['FINAL'] });
+    // Fail every evidence event EXCEPT the ones already flushed before the
+    // terminal failure (OPERATION_CREATED / STATE_TRANSITION), so the flush
+    // genuinely exhausts its retries on the failure path.
+    const alwaysFailingEvents = new Set([
+      'DISCOVERY_STARTED',
+      'DISCOVERY_ERROR',
+      'PAYMENT_REQUIREMENT_RECEIVED',
+      'SELLER_CAPABILITIES_DISCOVERED',
+      'POLICY_VALIDATED',
+      'OPERATION_FAILED',
+    ]);
+    const flaky = new FlakyEvidenceStore(inner, { failAlways: [...alwaysFailingEvents] });
     const sm = newSecretariat(flaky, 2);
 
-    const result = await sm.execute({
-      target: 'https://api.example.com/endpoint',
-      method: 'POST',
-      policy: {
-        maxPrice: '10',
-        allowedNetworks: ['mock-network'],
-        allowedAssets: ['MOCK'],
-        authorizationMode: 'policy-bound',
-      },
-    } as any).catch((e: any) => e);
+    // Deterministic business failure without network access: fetch rejects.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error('injected business failure');
+    }) as unknown as typeof fetch;
+    let result: any;
+    try {
+      result = await sm.execute({
+        target: 'https://api.example.com/endpoint',
+        method: 'POST',
+        policy: {
+          maxPrice: '10',
+          allowedNetworks: ['mock-network'],
+          allowedAssets: ['MOCK'],
+          authorizationMode: 'policy-bound',
+        },
+      } as any).catch((e: any) => e);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
 
     // The state machine's fail path must not throw away the business error.
     // If execute() itself rejected due to persistence exhaustion we still
