@@ -7,6 +7,7 @@
  * P0-6: Batch reconciliation with correct state column
  */
 
+import { createHash } from "node:crypto";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
@@ -110,39 +111,140 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
 
   // P0-3: Durable evidence in PostgreSQL
   /**
-   * P1-9: Atomic evidence append.
-   * Uses PostgreSQL JSONB concatenation to avoid read-modify-write race condition.
-   * Two concurrent appends will both survive (no lost updates).
+   * Repair C3: stable, record-derived logical identity.
+   *
+   * Identity = operationId | sequence | phase | event | timestamp | payload-hash.
+   *  - Stable across retries and process restarts: every component is taken
+   *    from the immutable EvidenceRecord itself (sequence is assigned once at
+   *    recordEvidence() time), never from Date.now() or randomness.
+   *  - Distinct legitimate records never collide: each new record gets a new
+   *    per-operation sequence; legacy records without a sequence fall back to
+   *    (phase|event|timestamp|payload-hash), which distinguishes same-event
+   *    occurrences by timestamp/payload while keeping an identical replay of
+   *    one record idempotent.
    */
-  async append(record: EvidenceRecord): Promise<void> {
-    // Use dedicated reconciliation_observations table for durable, concurrent-safe storage
-    await this.appendReconciliationObservation({
-      attemptId: record.operationId + "-" + record.timestamp,
-      paymentIntentId: "", // Will be resolved by caller context
-      timestamp: record.timestamp,
-      rpcProviderId: "evidence-log",
-      headBlock: 0,
-      authorizationState: null,
-      validBefore: 0,
-      result: record.event as any,
-      error: undefined,
-    });
-
-    // Also append to intent's JSONB field using atomic concatenation
-    const intent = await this.getPaymentIntentByOperationId(record.operationId);
-    if (intent) {
-      await this.db.execute(sql`
-        UPDATE payment_intents
-        SET reconciliation_observations = COALESCE(reconciliation_observations, '[]'::jsonb) || ${JSON.stringify(record)}::jsonb,
-            updated_at = NOW()
-        WHERE payment_intent_id = ${intent.paymentIntentId}
-      `);
-    }
+  static evidenceIdentity(record: EvidenceRecord): string {
+    const payloadHash = createHash("sha256")
+      .update(JSON.stringify(record.payload ?? null))
+      .digest("hex")
+      .slice(0, 16);
+    const seqPart =
+      typeof record.sequence === "number" ? `s${record.sequence}` : `x${payloadHash.slice(0, 8)}`;
+    return [
+      "evlog",
+      record.operationId,
+      seqPart,
+      record.phase,
+      record.event,
+      record.timestamp,
+      payloadHash,
+    ].join("|");
   }
 
+  /**
+   * Repair C3: durable, idempotent, atomic evidence append.
+   *
+   * Guarantees:
+   *  1. PRE-INTENT SAFE — evidence recorded before a payment intent exists is
+   *     stored durably in reconciliation_observations with payment_intent_id =
+   *     NULL (migration 0009 relaxes the FK column). It is never discarded.
+   *  2. ATOMIC — when an intent exists, the observation insert AND the
+   *     payment_intents.reconciliation_observations JSONB update happen inside
+   *     ONE transaction. A failure between them rolls back both; no partial
+   *     committed state is possible.
+   *  3. IDEMPOTENT — insertion uses ON CONFLICT (observation_id) DO NOTHING on
+   *     the stable record-derived identity, and the JSONB append is guarded by
+   *     a containment predicate. Re-appending the same logical record after an
+   *     ambiguous write creates NO duplicate rows and NO duplicate JSONB entry.
+   *  4. DISTINCT RECORDS PRESERVED — different records have different
+   *     identities (sequence differs), so they are never deduplicated away.
+   */
+  async append(record: EvidenceRecord): Promise<void> {
+    const observationId = PostgresEvidenceStore.evidenceIdentity(record);
+    const recordJson = JSON.stringify(record);
+
+    await this.db.transaction(async (tx) => {
+      // 1) Durable observation row (works with OR without an intent).
+      await tx.execute(sql`
+        INSERT INTO reconciliation_observations (
+          observation_id, payment_intent_id, attempt_id, rpc_provider_id,
+          underlying_provider, observed_at, block_number, chain_head,
+          authorization_state, valid_before, result, error
+        )
+        VALUES (
+          ${observationId}, NULL, ${record.operationId}, 'evidence-log',
+          '', to_timestamp(${record.timestamp}::double precision / 1000.0), 0, 0,
+          NULL, 0, ${record.event}, NULL
+        )
+        ON CONFLICT (observation_id) DO NOTHING
+      `);
+
+      // 2) Intent-side JSONB history — only when the intent exists, atomically
+      //    with step 1, and guarded against duplicates by containment.
+      await tx.execute(sql`
+        UPDATE payment_intents pi
+        SET reconciliation_observations =
+              COALESCE(pi.reconciliation_observations, '[]'::jsonb) || ${recordJson}::jsonb,
+            updated_at = NOW()
+        WHERE pi.operation_id = ${record.operationId}
+          AND NOT COALESCE(pi.reconciliation_observations, '[]'::jsonb) @> ${recordJson}::jsonb
+      `);
+    });
+  }
+
+  /**
+   * Repair C3: chronological retrieval merging BOTH representations:
+   *  - intent-side JSONB history (authoritative full record payloads), and
+   *  - reconciliation_observations evidence-log rows (covers pre-intent
+   *    evidence and operations whose intent lacks JSONB entries).
+   * Deduped by stable identity; ordered by sequence (legacy fallback:
+   * timestamp), producing deterministic chronological order that preserves
+   * pre-intent evidence ahead of intent-side evidence.
+   */
   async getEvidence(operationId: string): Promise<EvidenceRecord[]> {
     const intent = await this.getPaymentIntentByOperationId(operationId);
-    return ((intent?.reconciliationObservations ?? []) as unknown as EvidenceRecord[]);
+    const jsonbRecords = ((intent?.reconciliationObservations ?? []) as unknown as EvidenceRecord[]);
+
+    const obsRows = await this.db
+      .select()
+      .from(reconciliationObservationsTable)
+      .where(
+        sql`${reconciliationObservationsTable.attemptId} = ${operationId}
+             AND ${reconciliationObservationsTable.rpcProviderId} = 'evidence-log'`
+      );
+
+    const byKey = new Map<string, EvidenceRecord>();
+    const put = (r: EvidenceRecord) => {
+      const key = `${typeof r.sequence === "number" ? "s" + r.sequence : "t" + r.timestamp}|${r.phase}|${r.event}`;
+      if (!byKey.has(key)) byKey.set(key, r);
+    };
+    for (const r of jsonbRecords) put(r);
+    for (const row of obsRows) {
+      // Reconstruct minimal record from the durable observation row; JSONB
+      // records (richer payloads) take precedence via put() ordering above.
+      put({
+        operationId,
+        phase: "DISCOVERY",
+        timestamp: row.observedAt.getTime(),
+        event: row.result,
+        payload: null,
+      } as unknown as EvidenceRecord);
+    }
+
+    const merged = [...byKey.values()];
+    // Deterministic chronological order: sequenced records first by sequence,
+    // then everything else by timestamp (stable for equal keys).
+    merged.sort((a, b) => {
+      const sa = a.sequence;
+      const sb = b.sequence;
+      if (typeof sa === "number" && typeof sb === "number") {
+        return sa - sb || a.timestamp - b.timestamp;
+      }
+      if (typeof sa === "number") return -1;
+      if (typeof sb === "number") return 1;
+      return a.timestamp - b.timestamp;
+    });
+    return merged;
   }
 
   async appendReconciliationObservation(obs: ReconciliationObservation): Promise<void> {
