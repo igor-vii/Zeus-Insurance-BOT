@@ -630,7 +630,16 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
           ) AS present
         `;
         const checkRows = await this.db.execute(alreadyPresent);
-        const present = (Array.isArray(checkRows) ? checkRows : [])[0] as { present?: boolean } | undefined;
+        // A1-R D-2 (dedup-guard): db.execute() under drizzle node-postgres
+        // returns a QueryResult object ({ rows: [...] }), NOT a bare array.
+        // The previous `Array.isArray(checkRows) ? checkRows : []` yielded []
+        // on the real driver, so `present` was always undefined and the guard
+        // appended duplicates even when the record was already durable. Same
+        // normalization pattern as getOperation() above (D-2b / REPAIR-3K).
+        const normalizedCheckRows = Array.isArray(checkRows)
+          ? checkRows
+          : ((checkRows as unknown as { rows?: unknown[] })?.rows ?? []);
+        const present = normalizedCheckRows[0] as { present?: boolean } | undefined;
         if (!present?.present) {
           await this.db.execute(sql`
             UPDATE payment_intents

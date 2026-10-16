@@ -1,17 +1,29 @@
 /**
  * A1-R Stage 1 — D-2 forensic reproduction test (TEST FILE ONLY, no prod changes)
  *
- * Hypothesis under test: PostgresEvidenceStore.getOperationByRequestId() and
- * getOperationByClientAndRequestId() return stale lossy state
- * (executionState/deliveryState hardcoded "NOT_STARTED", currentState mapped
- * straight from settlement_state), while getOperation(operationId) performs
- * full durable reconstruction. Consequently the public polling route
- * (api-server GET /requests/:requestId → secretariat.getOperationByRequestId →
- * publicStatusForOperation) reports PROCESSING for an operation whose durable
- * execution actually succeeded.
+ * ORIGINAL PURPOSE (Stage 1, pre-fix HEAD c991e71): document that
+ * getOperationByRequestId()/getOperationByClientAndRequestId() returned stale
+ * lossy state (hardcoded "NOT_STARTED" axes, settlement-passthrough
+ * currentState) while getOperation(operationId) performed full reconstruction,
+ * making the public polling route report PROCESSING for durably SUCCESSFUL
+ * operations. That defective behavior was REPRODUCED at Stage 1 and is FIXED
+ * in Stage 2A (canonical delegation to getOperation(opId)).
+ *
+ * CURRENT CONTRACT (post-D-2 fix, verified here): all three lookup paths must
+ * agree on paymentState / executionState / deliveryState / currentState, a
+ * durably SUCCESSFUL operation must NOT be reconstructed as NOT_STARTED via
+ * request-ID lookup, and the public status mapping must yield COMPLETED.
+ *
+ * UNIQUE COVERAGE vs a1r-d2-canonical-reconstruction.test.ts (preserved):
+ *  - the FAILED-via-request-ID regression with the FULL durable chain
+ *    (EXECUTION_PENDING -> EXECUTION_UNKNOWN -> RECOVERY_PENDING evidence +
+ *    UNRESOLVABLE attempt), which canonical suite B does not exercise;
+ *  - explicit assertion that the legacy hardcoded-shape fields (target/method/
+ *    paymentPolicy) survive the canonical delegation through both getters.
  *
  * Uses the REAL production PostgresEvidenceStore against an isolated disposable
  * PostgreSQL database (DATABASE_URL). No mocking of the method under test.
+ * Skipped when DATABASE_URL is unset — never substituted with FakeDb.
  */
 
 import type { Operation } from "../src/core/types";
@@ -77,7 +89,7 @@ describeIfDb("A1-R D-2: request-ID reconstruction vs operation-ID reconstruction
     return { operationId, phase: "EXECUTION", timestamp: ts, event: "STATE_TRANSITION", payload: { from, to } };
   }
 
-  test("D-2 reproduction: SUCCESS terminal outcome is visible via getOperation but STALE via both request-ID getters", async () => {
+  test("D-2 fixed contract: SUCCESS terminal outcome is reconstructed identically via all three lookup paths", async () => {
     const id = makeIdentity("success");
     await insertSettledDpi(id);
 
@@ -114,24 +126,36 @@ describeIfDb("A1-R D-2: request-ID reconstruction vs operation-ID reconstruction
     expect(byOpId.deliveryState).toBe("DELIVERED");
 
     // ---- Retrieval by REQUEST ID (public polling path) ----
+    // Stage 1 asserted the DEFECTIVE behavior here (currentState "SETTLED",
+    // hardcoded NOT_STARTED axes). Post-D-2 fix the getter delegates to the
+    // canonical getOperation(opId) reconstruction, so it must agree with the
+    // operation-ID path on every state axis and on operation identity.
     const byReqId = await store.getOperationByRequestId(id.requestId);
     expect(byReqId).not.toBeNull();
-    // Suspected defect assertions — these document ACTUAL behavior:
-    expect(byReqId.currentState).toBe("SETTLED"); // stale: settlement passthrough, not "SUCCESS"
-    expect(byReqId.executionState).toBe("NOT_STARTED"); // stale: hardcoded, not "CONFIRMED"
-    expect(byReqId.deliveryState).toBe("NOT_STARTED"); // stale: hardcoded, not "DELIVERED"
+    expect(byReqId.operationId).toBe(id.operationId);
+    expect(byReqId.currentState).toBe("SUCCESS");
+    expect(byReqId.executionState).toBe("CONFIRMED");
+    expect(byReqId.deliveryState).toBe("DELIVERED");
+    expect(byReqId.paymentState).toBe(byOpId.paymentState);
+    expect(byReqId.evidence.length).toBe(byOpId.evidence.length);
+    // Legacy lossy-shape fields survive canonical delegation (they come from
+    // the payment_intents row inside getOperation):
+    expect(byReqId.target).toBe("https://seller.example.com/api/v1/execute");
+    expect(byReqId.method).toBe("POST");
 
     // ---- Retrieval by CLIENT ID + REQUEST ID (idempotency path) ----
     const byClientReq = await store.getOperationByClientAndRequestId(id.clientId, id.requestId);
     expect(byClientReq).not.toBeNull();
-    expect(byClientReq.currentState).toBe("SETTLED");
-    expect(byClientReq.executionState).toBe("NOT_STARTED");
-    expect(byClientReq.deliveryState).toBe("NOT_STARTED");
+    expect(byClientReq.operationId).toBe(id.operationId);
+    expect(byClientReq.currentState).toBe("SUCCESS");
+    expect(byClientReq.executionState).toBe("CONFIRMED");
+    expect(byClientReq.deliveryState).toBe("DELIVERED");
 
     // ---- Public API mapping consequence ----
     // Copy of publicStatusForOperation decision logic from
     // api-server/src/routes/requests.ts:122-165 (route cannot be imported
-    // without express wiring; logic replicated verbatim):
+    // without express wiring; logic replicated verbatim — the REAL route is
+    // exercised in a1r-d2-canonical-reconstruction.test.ts suite C):
     const publicStatusFor = (operation: Operation): string => {
       const state = String(operation.currentState);
       if (state === "AWAITING_SIGNATURE" || state === "PENDING_SIGNATURE") return "AWAITING_PAYMENT_SIGNATURE";
@@ -142,14 +166,15 @@ describeIfDb("A1-R D-2: request-ID reconstruction vs operation-ID reconstruction
       return "PROCESSING";
     };
 
-    // Correct path yields COMPLETED:
+    // All three paths now yield the same correct public status:
     expect(publicStatusFor(byOpId)).toBe("COMPLETED");
-    // Defective path yields stale PROCESSING for a durably SUCCESSFUL operation:
-    expect(publicStatusFor(byReqId)).toBe("PROCESSING");
-    expect(publicStatusFor(byClientReq)).toBe("PROCESSING");
+    // Regression guard: a durably SUCCESSFUL operation must NEVER again be
+    // reported PROCESSING merely because lookup used request ID:
+    expect(publicStatusFor(byReqId)).toBe("COMPLETED");
+    expect(publicStatusFor(byClientReq)).toBe("COMPLETED");
   });
 
-  test("D-2 variant: FAILED durable outcome also misreported via request-ID lookup", async () => {
+  test("D-2 fixed contract: FAILED durable outcome is visible via request-ID lookup (no stale PROCESSING)", async () => {
     const id = makeIdentity("failed");
     await insertSettledDpi(id);
     await insertAttempt(id.operationId, "HTTP_FAILURE");
@@ -163,9 +188,10 @@ describeIfDb("A1-R D-2: request-ID reconstruction vs operation-ID reconstruction
     expect(byOpId.executionState).toBe("FAILED"); // mapAttemptStatusToExecutionState(HTTP_FAILURE)
 
     const byReqId = await store.getOperationByRequestId(id.requestId);
-    // Request-ID getter ignores attempts AND evidence for state axes:
-    expect(byReqId.currentState).toBe("SETTLED"); // stale — not FAILED
-    expect(byReqId.executionState).toBe("NOT_STARTED"); // stale — not FAILED
+    // Post-D-2 fix: request-ID getter reconstructs the SAME durable state
+    // (Stage 1 documented the defect: currentState "SETTLED" / NOT_STARTED).
+    expect(byReqId.currentState).toBe("FAILED"); // canonical — not stale SETTLED
+    expect(byReqId.executionState).toBe("FAILED"); // canonical — not stale NOT_STARTED
 
     const publicStatusFor = (operation: Operation): string => {
       const state = String(operation.currentState);
@@ -177,7 +203,39 @@ describeIfDb("A1-R D-2: request-ID reconstruction vs operation-ID reconstruction
       return "PROCESSING";
     };
     expect(publicStatusFor(byOpId)).toBe("FAILED");
-    // Defective path: durably FAILED operation reported as PROCESSING forever:
-    expect(publicStatusFor(byReqId)).toBe("PROCESSING");
+    // Regression guard: a durably FAILED operation must no longer be reported
+    // PROCESSING forever via the request-ID polling path:
+    expect(publicStatusFor(byReqId)).toBe("FAILED");
+  });
+
+  test("D-2 fixed contract: UNRESOLVABLE recovery-terminal outcome via request-ID lookup keeps existing semantics", async () => {
+    // UNIQUE coverage preserved from the Stage 1 scenario set: full durable
+    // unknown-execution chain (attempt UNRESOLVABLE + recovery evidence).
+    // Semantics are NOT redefined here — this locks in the CURRENT mapping so
+    // the D-2 delegation change cannot silently alter UNRESOLVABLE behavior.
+    const id = makeIdentity("unresolvable");
+    await insertSettledDpi(id);
+    await insertAttempt(id.operationId, "UNRESOLVABLE");
+    await store.append(stateTransitionEvidence(id.operationId, "SETTLED", "EXECUTION_PENDING", 1000) as any);
+    await store.append(stateTransitionEvidence(id.operationId, "EXECUTION_PENDING", "EXECUTION_UNKNOWN", 2000) as any);
+    await store.append(stateTransitionEvidence(id.operationId, "EXECUTION_UNKNOWN", "RECOVERY_PENDING", 3000) as any);
+
+    const byOpId = await store.getOperation(id.operationId);
+    const byReqId = await store.getOperationByRequestId(id.requestId);
+    expect(byReqId).not.toBeNull();
+
+    // Canonical agreement across lookup paths (the D-2 contract):
+    expect(byReqId.currentState).toBe(byOpId.currentState);
+    expect(byReqId.executionState).toBe(byOpId.executionState);
+    expect(byReqId.deliveryState).toBe(byOpId.deliveryState);
+
+    // Existing contract values (unchanged by Stage 2A):
+    //  - deriveDeliveryState maps latest payload.to RECOVERY_PENDING -> NOT_STARTED
+    //    (only EXECUTION_UNKNOWN/UNRESOLVABLE as `to` produce UNKNOWN);
+    //  - mapAttemptStatusToExecutionState("UNRESOLVABLE") -> CONFIRMED
+    //    ("seller call was definitely made" — historical semantic preserved).
+    expect(String(byReqId.currentState)).not.toBe("SUCCESS");
+    expect(byReqId.executionState).toBe("CONFIRMED");
+    expect(byReqId.deliveryState).toBe("NOT_STARTED");
   });
 });
