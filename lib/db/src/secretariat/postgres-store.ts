@@ -532,7 +532,17 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       ORDER BY attempt_number DESC
       LIMIT 1
     `);
-    const firstAttempt = (Array.isArray(attemptRows) ? attemptRows : [])[0] as { status?: string } | undefined;
+    // A1-R D-2b: db.execute() under drizzle node-postgres returns a
+    // QueryResult object ({ rows: [...] }), NOT a bare array. The previous
+    // `Array.isArray(...) ? ... : []` silently discarded the real driver
+    // result, so latestAttemptStatus was always null and executionState
+    // always reconstructed as NOT_STARTED even for durable SUCCESS attempts.
+    // Same normalization pattern as postgres-execution-store.ts L173
+    // (R2.1-FIX-5-REPAIR-3K).
+    const attemptRecords = Array.isArray(attemptRows)
+      ? attemptRows
+      : ((attemptRows as unknown as { rows?: unknown[] })?.rows ?? []);
+    const firstAttempt = attemptRecords[0] as { status?: string } | undefined;
     const latestAttemptStatus = firstAttempt?.status ?? null;
 
     // Step 3: evidence — full JSONB array from reconciliation_observations.
@@ -634,10 +644,17 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
   // B8-001: Durable idempotency lookup.
   // Queries payment_intents (not a separate operations table) because that is where
-  // client_id and request_id are persisted. Reconstructs a minimal Operation from the intent.
+  // client_id and request_id are persisted. A1-R D-2: after locating the row by
+  // (clientId, requestId) we delegate to the canonical full reconstruction in
+  // getOperation(operationId) so all three lookup paths agree on
+  // paymentState / executionState / deliveryState / currentState. The previous
+  // lossy shape hardcoded executionState/deliveryState="NOT_STARTED" and mapped
+  // currentState straight from settlement_state, which made durably SUCCESSFUL
+  // (or FAILED) operations look permanently PROCESSING via the public polling
+  // route and the FSM idempotency path. Not-found behavior is unchanged (null).
   async getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null> {
     const rows = await this.db
-      .select()
+      .select({ operationId: paymentIntentsTable.operationId })
       .from(paymentIntentsTable)
       .where(and(
         eq(paymentIntentsTable.clientId, clientId),
@@ -645,54 +662,19 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       ))
       .limit(1);
     if (rows.length === 0) return null;
-    const row = rows[0];
-    // Reconstruct minimal Operation from the persisted intent.
-    // This mirrors the existing getOperation() pattern at L232-234.
-    return {
-      operationId: row.operationId,
-      requestId: row.requestId ?? "",
-      clientId: row.clientId ?? undefined,
-      target: row.target ?? "",
-      method: row.method ?? "",
-      paymentPolicy: (row.paymentPolicy as any) ?? {},
-      paymentState: row.settlementState as any,
-      executionState: "NOT_STARTED" as any,
-      deliveryState: "NOT_STARTED",
-      currentState: row.settlementState === "PENDING_SIGNATURE"
-        ? "AWAITING_SIGNATURE"
-        : row.settlementState as any,
-      timestamps: {
-        createdAt: row.createdAt.getTime(),
-        updatedAt: row.updatedAt.getTime(),
-      },
-      evidence: (row.reconciliationObservations as any) ?? [],
-    } as Operation;
+    return this.getOperation(rows[0].operationId);
   }
 
+  // A1-R D-2: same canonical delegation as getOperationByClientAndRequestId —
+  // locate by request_id, then reconstruct via getOperation(operationId).
   async getOperationByRequestId(requestId: string): Promise<Operation | null> {
     const rows = await this.db
-      .select()
+      .select({ operationId: paymentIntentsTable.operationId })
       .from(paymentIntentsTable)
       .where(eq(paymentIntentsTable.requestId, requestId))
       .limit(1);
     if (rows.length === 0) return null;
-    const row = rows[0];
-    return {
-      operationId: row.operationId,
-      requestId: row.requestId ?? requestId,
-      clientId: row.clientId ?? undefined,
-      target: row.target ?? "",
-      method: row.method ?? "",
-      paymentPolicy: (row.paymentPolicy as any) ?? {},
-      paymentState: row.settlementState as any,
-      executionState: "NOT_STARTED",
-      deliveryState: "NOT_STARTED",
-      currentState: row.settlementState === "PENDING_SIGNATURE"
-        ? "AWAITING_SIGNATURE"
-        : row.settlementState as any,
-      timestamps: { createdAt: row.createdAt.getTime(), updatedAt: row.updatedAt.getTime() },
-      evidence: (row.reconciliationObservations as any) ?? [],
-    };
+    return this.getOperation(rows[0].operationId);
   }
 
   async getOperationsByStatus(status: OperationStatus): Promise<Operation[]> {
