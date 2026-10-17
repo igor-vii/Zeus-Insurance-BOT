@@ -270,6 +270,14 @@ export interface EvidenceRecord {
     readonly timestamp: number;
     readonly event: string;
     readonly payload: unknown;
+    /**
+     * Repair C3: Deterministic per-operation sequence (0-based). Assigned by
+     * recordEvidence() at creation time and preserved through persistence +
+     * reconstruction. Provides a stable chronological ordering key that does
+     * not depend on wall-clock collisions, and is part of the logical identity
+     * used for idempotent evidence appends.
+     */
+    readonly sequence?: number;
 }
 export interface ExecutionResult<T = unknown> {
     /**
@@ -308,6 +316,17 @@ export interface ExecutionResult<T = unknown> {
      * Error message (if failed)
      */
     error?: string;
+    /**
+     * Repair C3: Set when evidence persistence ultimately fails after the
+     * bounded retry policy. The ORIGINAL business error remains in `error`;
+     * this field carries the persistence failure so both are visible.
+     */
+    persistenceError?: {
+        code: 'EVIDENCE_PERSISTENCE_FAILED';
+        message: string;
+        pendingEvidenceCount: number;
+        attempts: number;
+    };
 }
 export interface EvidenceStore {
     /**

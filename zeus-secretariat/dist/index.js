@@ -26,6 +26,9 @@ export { ReconciliationEngine } from './core/reconciliation-engine.js';
 // ReconciliationScheduleConfig and FinalityPolicy are exported from ./core/types
 // Reconciliation worker (B.3-B2: durable polling worker)
 export { ReconciliationWorker } from './core/reconciliation-worker.js';
+// A1 repair: production execution worker + FSM feedback for execution results
+export { ExecutionWorker } from './core/execution-worker.js';
+export { ExecutionFeedbackService, planExecutionTransitions } from './core/execution-feedback-service.js';
 // Multi-RPC checker (required by ReconciliationEngine)
 export { MultiRpcChecker } from './core/multi-rpc-checker.js';
 //# sourceMappingURL=index.js.map
