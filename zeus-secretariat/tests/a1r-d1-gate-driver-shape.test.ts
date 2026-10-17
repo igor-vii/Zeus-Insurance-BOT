@@ -204,14 +204,27 @@ describeIfDb("D-1 gate: actual db.execute() result shape (real PG)", () => {
 });
 
 // ===========================================================================
-// Gate tests that run WITHOUT a PG server: they execute the REAL production
-// saveOperation() code against a driver-faithful QueryResult double (shape
-// empirically established on real PG in Stage 2A at HEAD c991e71). These
-// prove/disprove the dedup-guard claims deterministically; the real-PG suite
-// above remains the authoritative confirmation when DATABASE_URL is present.
+// Historical DEFECT-REPRODUCTION DIAGNOSTIC (intentionally fails on fixed code)
+//
+// These tests execute the REAL production saveOperation() code against a
+// driver-faithful QueryResult double (shape empirically established on real PG
+// in Stage 2A at HEAD c991e71 and re-proven by the describeIfDb suite above).
+// They assert the PRE-FIX behavior of postgres-store.ts L633
+// (`Array.isArray(checkRows) ? checkRows : []`), which misread the genuine
+// { rows: [...] } QueryResult, making the dedup guard blind and appending
+// duplicates.
+//
+// Therefore this block PASSES only on the unfixed baseline (fd8c65d or earlier)
+// and FAILS on repaired code — by design. It is NOT part of the passing
+// regression gate; the normal green gate for the repaired sequential behavior
+// lives in a1r-d2-dedup-guard-regression.test.ts (real PG, verified both
+// directions: PASS on f845868, FAIL-on-baseline with duplicate observations).
+// Verified executed results at HEAD f845868 (fixed): "REPRODUCES" test fails
+// (obs length 1, dedup works); at detached worktree fd8c65d (unfixed): all 5
+// gate tests pass. Do not weaken these assertions to force green.
 // ===========================================================================
 
-describe("D-1 gate: saveOperation dedup guard under driver-faithful result shape", () => {
+describe.skip("D-1 gate [HISTORICAL DIAGNOSTIC — expected to fail on fixed code]: saveOperation dedup guard under driver-faithful result shape", () => {
   // Direct module import (bypasses @workspace/db barrel, which eagerly
   // constructs a pg pool and throws without DATABASE_URL). This loads the
   // REAL production PostgresEvidenceStore class — no mocking of the method

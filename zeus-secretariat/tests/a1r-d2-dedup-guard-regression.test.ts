@@ -1,15 +1,27 @@
 /**
- * A1-R D-2 — saveOperation() dedup-guard regression (real PostgreSQL).
+ * A1-R D-2 — saveOperation() dedup-guard regression (sequential semantics).
  *
- * Proves the repaired behavior end-to-end against a live PG server:
+ * Role: the NORMAL PASSING GATE. It verifies the REPAIRED production code
+ * (postgres-store.ts saveOperation() QueryResult normalization) end-to-end
+ * against a live disposable PostgreSQL server:
  *   1. Repeated saves of an operation whose last evidence record is already
- *      durable do NOT append duplicate STATE_TRANSITION observations.
- *   2. A genuinely NEW record IS appended exactly once.
- *   3. Concurrent identical saves on real PG do not duplicate (best-effort:
- *      reports what actually happens; no fabricated guarantees).
+ *      durable do NOT append a duplicate observation.
+ *   2. A genuinely NEW tail record IS appended exactly once.
+ *   3. Saving that same tail again appends NOTHING further.
  *
- * Uses the REAL PostgresEvidenceStore over drizzle node-postgres. No mocking
- * of the method under test. Skips (never fakes) when DATABASE_URL is unset.
+ * The historical defect-reproduction diagnostic lives separately in
+ * a1r-d1-gate-driver-shape.test.ts (driver-faithful double proving the broken
+ * Array.isArray guard pre-fix). Do not merge those roles: this file must stay
+ * green on the fixed code; the gate file documents the unfixed behavior.
+ *
+ * CONCURRENCY IS DELIBERATELY NOT TESTED HERE. The repaired guard is still an
+ * unlocked check-then-append with no transaction and no UNIQUE constraint on
+ * JSONB elements, so concurrent identical saves may duplicate. No concurrency
+ * guarantee is claimed or asserted by this suite.
+ *
+ * Uses the REAL PostgresEvidenceStore over drizzle node-postgres against
+ * DATABASE_URL. No mocking of the method under test. Skips (never fakes) when
+ * DATABASE_URL is unset.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
@@ -49,28 +61,36 @@ function baseOp(opId: string, evidence: unknown[]) {
   } as any;
 }
 
-const recA = () => ({
-  operationId: "op-ddup", phase: "EXECUTION", timestamp: 1_700_000_000_500,
+const recA = (opId: string) => ({
+  operationId: opId, phase: "EXECUTION", timestamp: 1_700_000_000_500,
   event: "STATE_TRANSITION", payload: { from: "SETTLED", to: "EXECUTION_PENDING" },
 });
-const recB = () => ({
-  operationId: "op-ddup", phase: "EXECUTION", timestamp: 1_700_000_000_900,
+const recB = (opId: string) => ({
+  operationId: opId, phase: "EXECUTION", timestamp: 1_700_000_000_900,
   event: "STATE_TRANSITION", payload: { from: "EXECUTION_PENDING", to: "EXECUTION_CONFIRMED" },
 });
 
-describeIfDb("D-2 dedup-guard regression (REAL PostgreSQL)", () => {
+describeIfDb("D-2 dedup-guard regression (REAL PostgreSQL, sequential)", () => {
   beforeAll(async () => {
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const client = await freshClient();
-    // Isolated per-run rows only for OUR op ids; truncate nothing global.
+    // Isolation: touch ONLY our own per-suite rows; never truncate shared tables.
     await client.query(
-      `DELETE FROM payment_intents WHERE operation_id LIKE 'op-ddup%' OR operation_id LIKE 'op-conc%'`,
+      `DELETE FROM payment_intents WHERE operation_id LIKE 'op-a1rd2%'`,
     );
     h = { db: drizzle(client), client };
   });
 
   afterAll(async () => {
-    if (h?.client) await h.client.end();
+    if (h?.client) {
+      try {
+        await h.client.query(
+          `DELETE FROM payment_intents WHERE operation_id LIKE 'op-a1rd2%'`,
+        );
+      } finally {
+        await h.client.end();
+      }
+    }
   });
 
   async function seedIntent(opId: string, obs: unknown[]) {
@@ -80,15 +100,15 @@ describeIfDb("D-2 dedup-guard regression (REAL PostgreSQL)", () => {
          payment_intent_id, operation_id, request_id, client_id,
          target, method, payment_policy, authorizer, pay_to, value, asset, network,
          nonce, valid_after, valid_before, payment_payload, payment_payload_hash,
-         settlement_state, submit_attempt_at, reconciliation_observations,
+         settlement_state, submit_attempt_at, settled_at, reconciliation_observations,
          probe_count, version, created_at, updated_at
        ) VALUES ($1,$2,$3,$4,$5,$6,'{}'::jsonb,$7,$8,'1',$9,$10,$11,0,9999999999,$12,$13,
-         'SETTLED',$14,$15::jsonb,0,1,$16,$16)
-       ON CONFLICT (payment_intent_id) DO NOTHING`,
+         'SETTLED',$14,$14,$15::jsonb,0,1,$14,$14)
+       ON CONFLICT (payment_intent_id) DO UPDATE SET reconciliation_observations = EXCLUDED.reconciliation_observations`,
       [
         `pi-${opId}`, opId, `req-${opId}`, `client-${opId}`,
         "https://seller.example/api", "POST", "0xa", "0xb", "0xc", "base-sepolia",
-        "0xn", "p", "h", now, JSON.stringify(obs), now,
+        "0xn", "p", "h", now, JSON.stringify(obs),
       ],
     );
   }
@@ -102,61 +122,37 @@ describeIfDb("D-2 dedup-guard regression (REAL PostgreSQL)", () => {
   }
 
   it("repeated saveOperation with an already-present last record appends NO duplicates", async () => {
-    await seedIntent("op-ddup", [recA()]);
+    const opId = "op-a1rd2-dedup";
+    await seedIntent(opId, [recA(opId)]);
     const store = new PostgresEvidenceStore(h!.db as never);
 
-    await store.saveOperation(baseOp("op-ddup", [recA()]));
-    await store.saveOperation(baseOp("op-ddup", [recA()]));
-    await store.saveOperation(baseOp("op-ddup", [recA()]));
+    await store.saveOperation(baseOp(opId, [recA(opId)]));
+    await store.saveOperation(baseOp(opId, [recA(opId)]));
+    await store.saveOperation(baseOp(opId, [recA(opId)]));
 
-    const obs = await readObs("op-ddup");
-    // Pre-fix on real PG this produced 4 entries (guard misread {rows}).
+    const obs = await readObs(opId);
+    // Pre-fix on real PG this produced 4 entries (guard misread {rows:[...]}
+    // as an empty array, so present was always undefined). Post-fix: 1.
     expect(obs).toHaveLength(1);
-    expect(obs[0]).toEqual(recA());
+    expect(obs[0]).toEqual(recA(opId));
   });
 
   it("a genuinely new last record is appended exactly once, then deduped on retry", async () => {
-    await seedIntent("op-ddup-b", []);
+    const opId = "op-a1rd2-tail";
+    await seedIntent(opId, []);
     const store = new PostgresEvidenceStore(h!.db as never);
 
-    await store.saveOperation(baseOp("op-ddup-b", [recA()])); // fresh append
-    let obs = await readObs("op-ddup-b");
+    await store.saveOperation(baseOp(opId, [recA(opId)])); // fresh append
+    let obs = await readObs(opId);
     expect(obs).toHaveLength(1);
 
-    await store.saveOperation(baseOp("op-ddup-b", [recA(), recB()])); // new tail → +1
-    obs = await readObs("op-ddup-b");
+    await store.saveOperation(baseOp(opId, [recA(opId), recB(opId)])); // new tail → +1
+    obs = await readObs(opId);
     expect(obs).toHaveLength(2);
 
-    await store.saveOperation(baseOp("op-ddup-b", [recA(), recB()])); // same tail → +0
-    obs = await readObs("op-ddup-b");
+    await store.saveOperation(baseOp(opId, [recA(opId), recB(opId)])); // same tail → +0
+    obs = await readObs(opId);
     expect(obs).toHaveLength(2);
-  });
-
-  it("concurrent identical saves on real PG: report actual duplication outcome", async () => {
-    await seedIntent("op-conc", []);
-    const store = new PostgresEvidenceStore(h!.db as never);
-    const op = baseOp("op-conc", [recA()]);
-
-    // Two separate connections racing the guard+append pair (no transaction /
-    // no unique constraint exists for this JSONB element). This test REPORTS
-    // reality; it does not assert a guarantee the schema cannot provide.
-    const c2 = await freshClient();
-    const { drizzle } = await import("drizzle-orm/node-postgres");
-    const store2 = new PostgresEvidenceStore(drizzle(c2) as never);
-
-    await Promise.all([store.saveOperation(op), store2.saveOperation(op)]);
-    const obs = await readObs("op-conc");
-    await c2.end();
-
-    // Observed truth at this HEAD: guard is check-then-insert without lock, so
-    // a race MAY yield 2 identical entries. We assert the weaker, honest bound:
-    // at most one append per call, and every entry is the intended record.
-    expect(obs.length).toBeGreaterThanOrEqual(1);
-    expect(obs.length).toBeLessThanOrEqual(2);
-    for (const e of obs) expect(e).toEqual(recA());
-    if (obs.length === 2) {
-      // Documenting the residual race honestly (NOT claimed fixed here).
-      console.warn("CONCURRENT RACE OBSERVED: duplicate JSONB entry from unlocked check-then-append");
-    }
+    expect(obs[1]).toEqual(recB(opId));
   });
 });
