@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsc",
     "test": "jest",
+    "test:durable": "ZEUS_REQUIRE_DATABASE=1 jest tests/durable-storage.test.ts -t \"AE: pre-intent append\"",
     "test:watch": "jest --watch",
     "lint": "echo 'No linter configured'",
     "clean": "rm -rf dist",
