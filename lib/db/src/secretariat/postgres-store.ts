@@ -613,11 +613,12 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     // Append the LAST evidence record (STATE_TRANSITION) so currentState is
     // durable and reconstructible by getOperation() after restart.
     //
-    // Audit finding #2 — idempotency by existing event identity
+    // Audit finding #2 — best-effort deduplication by existing event identity
     // (operationId + timestamp + event + JSON payload). The in-memory chain
-    // (getOperation → transitions → save) already prevents re-appending on
-    // duplicate polls; this guard makes a concurrent/retried save safe without
-    // any new table/column/format change.
+    // (getOperation → transitions → save) normally avoids re-appending on
+    // sequential duplicate polls. This read-then-append guard is NOT atomic:
+    // concurrent saves can still race and append duplicates. No new
+    // table/column/format change is introduced here.
     const last = op.evidence[op.evidence.length - 1];
     if (last) {
       const intent = await this.getPaymentIntentByOperationId(op.operationId);
