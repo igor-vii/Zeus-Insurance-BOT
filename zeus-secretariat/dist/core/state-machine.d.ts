@@ -50,6 +50,11 @@ export interface SecretariatConfig {
      * If unavailable, settlement → execution handoff will fail closed.
      */
     atomicSettlementHandoff: AtomicSettlementHandoff;
+    /**
+     * Repair C3: Bounded retry policy for evidence persistence flushes.
+     * Total attempts per flush = max(1, value). Default 3. No infinite retries.
+     */
+    evidencePersistenceRetries?: number;
 }
 export type CreateRequestResult = {
     status: 'AWAITING_PAYMENT_SIGNATURE';
@@ -64,7 +69,19 @@ export type CreateRequestResult = {
 export declare class Secretariat {
     private readonly config;
     private readonly capabilityResolver;
+    /**
+     * Repair C3: durable-outbox cursor per operation.
+     * Maps operationId -> count of evidence records confirmed durably persisted
+     * (in sequence order). The cursor only advances on CONFIRMED appends, so a
+     * failed append leaves the record pending for the next flush. A failed call
+     * does NOT prove the DB made no change - the store's append() is idempotent
+     * via stable logical identity (see PostgresEvidenceStore), so re-appending
+     * an ambiguous record cannot create duplicates.
+     */
+    private readonly persistedEvidenceCount;
     constructor(config: SecretariatConfig);
+    /** Total attempts per evidence flush (bounded; never infinite). */
+    private evidenceFlushAttempts;
     execute(request: ExecuteRequest): Promise<ExecutionResult>;
     /**
      * Stage A of the non-custodial payment boundary.
@@ -98,6 +115,28 @@ export declare class Secretariat {
     private transitionState;
     private recordEvidence;
     private persistOperation;
+    /**
+     * Repair C3: durable-outbox flush.
+     *
+     * Appends EVERY evidence record not yet confirmed durably persisted, in
+     * deterministic sequence order (sequence assigned at recordEvidence() time;
+     * falls back to array index for legacy/reconstructed records without one).
+     *
+     * Cursor rules:
+     *  - Advances only on a CONFIRMED successful append.
+     *  - A failed append does NOT prove the DB made no change (ambiguous write).
+     *    Re-appending is safe because store implementations key writes by a
+     *    stable record-derived identity with conflict-safe insertion (see
+     *    PostgresEvidenceStore), so an already-committed record cannot be
+     *    duplicated by the retry.
+     *  - Bounded attempts (config.evidencePersistenceRetries, default 3, clamped
+     *    1..10). No infinite retries.
+     *
+     * On exhaustion throws Error('EVIDENCE_PERSISTENCE_FAILED: ...'). Callers
+     * preserve the ORIGINAL business error separately; this error never
+     * replaces it.
+     */
+    private flushPendingEvidence;
     /**
      * TASK 3+4+5: Atomically persist SETTLED state + execution obligation.
      *
@@ -134,6 +173,16 @@ export declare class Secretariat {
      */
     private prepareStageA;
     private findExistingOperation;
+    /**
+     * Repair C3: after restart/reload, seed the durable-outbox cursor from the
+     * evidence that is ACTUALLY persisted in the store (not the in-memory
+     * operation copy). Records already durable are never re-appended blindly;
+     * only the suffix beyond the durable prefix is flushed. If the durable read
+     * itself fails, fall back to cursor=full-length ONLY for stores whose
+     * append is idempotent... safer default: cursor=0 so nothing is lost; the
+     * idempotent store-side identity prevents duplicates either way.
+     */
+    private seedEvidenceCursor;
     private getDurableIntent;
     private createPendingPaymentIntent;
     private buildAwaitingSignatureResult;

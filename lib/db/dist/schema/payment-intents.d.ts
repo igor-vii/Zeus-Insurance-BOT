@@ -716,7 +716,7 @@ export declare const reconciliationObservationsTable: import("drizzle-orm/pg-cor
             columnType: "PgText";
             data: string;
             driverParam: string;
-            notNull: true;
+            notNull: false;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
