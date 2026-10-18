@@ -34,6 +34,7 @@ import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliati
 import type { RecoveryJob, ExecutionAttempt, AtomicSettlementHandoff } from './post-settlement-engine.js';
 import type { PaymentAuthorizationRequest, PaymentSignatureResult } from './payment-types.js';
 import { CryptoNonceGenerator } from './nonce-generator.js';
+import { sameExactAmount } from './payment-amount.js';
 import { keccak256, toBytes } from 'viem';
 
 // Legacy types used internally by StateMachine (Phase 2.1 payment flow)
@@ -690,11 +691,17 @@ export class Secretariat {
         throw new Error("Canonical V2 payment flow requires durable payment intent persistence");
       }
       if (existingIntent) {
+        // Amount consistency: exact string identity covers abstract mock decimals
+        // (e.g. "0.5" vs "0.5"); sameExactAmount covers equivalent atomic-amount
+        // representations (e.g. persisted numeric(38,6) "1000.000000" vs challenge "1000").
+        const amountConsistent =
+          existingIntent.value === requirement.amount ||
+          sameExactAmount(existingIntent.value, requirement.amount);
         if (
           existingIntent.authorizer !== canonicalAuthorizer ||
           existingIntent.payTo !== payTo ||
           existingIntent.nonce !== canonicalNonce ||
-          existingIntent.value !== requirement.amount
+          !amountConsistent
         ) {
           throw new Error(`Payment intent binding mismatch for operation ${operation.operationId}`);
         }
@@ -1899,17 +1906,17 @@ export class Secretariat {
     if (
       !equal(payload.accepted.network, intent.network) ||
       !equal(payload.accepted.asset, intent.asset) ||
-      !equal(payload.accepted.amount, intent.value) ||
+      !sameExactAmount(payload.accepted.amount, intent.value) ||
       !equal(payload.accepted.payTo, intent.payTo) ||
       !equal(authorization.from, intent.authorizer) ||
       !equal(authorization.to, intent.payTo) ||
-      !equal(authorization.value, intent.value) ||
+      !sameExactAmount(authorization.value, intent.value) ||
       !equal(authorization.nonce, intent.nonce) ||
       Number(authorization.validAfter) !== intent.validAfter ||
       Number(authorization.validBefore) !== intent.validBefore ||
       !equal(requirement.network, intent.network) ||
       !equal(requirement.asset, intent.asset) ||
-      !equal(requirement.amount, intent.value) ||
+      !sameExactAmount(requirement.amount, intent.value) ||
       !equal(requirement.payee, intent.payTo)
     ) {
       throw new Error('PAYMENT_PAYLOAD_BINDING_MISMATCH');

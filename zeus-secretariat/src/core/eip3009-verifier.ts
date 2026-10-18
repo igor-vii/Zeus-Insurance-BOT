@@ -5,6 +5,7 @@ import {
 } from "viem";
 import type { DurablePaymentIntent } from "./types.js";
 import type { PaymentPayload } from "../adapters/x402-facilitator-client.js";
+import { sameExactAmount } from "./payment-amount.js";
 
 /**
  * EIP-3009 TransferWithAuthorization typed-data definition.
@@ -165,7 +166,7 @@ function checkBinding(
   if (!same(payload.accepted.payTo, intent.payTo)) {
     return invalid(requestId, "PAY_TO_MISMATCH", "accepted.payTo is not bound to the persisted payTo", "payTo");
   }
-  if (!same(payload.accepted.amount, intent.value)) {
+  if (!sameExactAmount(payload.accepted.amount, intent.value)) {
     return invalid(requestId, "VALUE_MISMATCH", "accepted.amount is not bound to the persisted value", "value");
   }
   if (!same(authorization.from, intent.authorizer)) {
@@ -174,7 +175,7 @@ function checkBinding(
   if (!same(authorization.to, intent.payTo)) {
     return invalid(requestId, "PAY_TO_MISMATCH", "authorization.to is not bound to the persisted payTo", "payTo");
   }
-  if (!same(authorization.value, intent.value)) {
+  if (!sameExactAmount(authorization.value, intent.value)) {
     return invalid(requestId, "VALUE_MISMATCH", "authorization.value is not bound to the persisted value", "value");
   }
   if (!same(authorization.nonce, intent.nonce)) {

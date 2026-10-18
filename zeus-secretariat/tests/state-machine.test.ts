@@ -641,6 +641,83 @@ describe('Zeus Secretariat V0 - State Machine Tests', () => {
   });
 
   // ==========================================================================
+  // S-VERIFY-1 — narrow coverage for the existing-intent amount binding check
+  // (state-machine.ts, canonical-V2 pre-created intent consistency guard).
+  // Infrastructure emulation only: a durable store that mirrors the real
+  // Postgres numeric(38,6) round-trip by padding `value` with fixed-scale
+  // zeros on read-back. Does not replace any behavior under test.
+  // ==========================================================================
+  function withPaddedIntentReads(store: InMemoryEvidenceStore, mutateStoredValue?: (v: string) => string): InMemoryEvidenceStore {
+    const s = withDurableIntents(store) as any;
+    const innerGet = s.getPaymentIntentByOperationId;
+    s.getPaymentIntentByOperationId = async (opId: string) => {
+      const it = await innerGet(opId);
+      if (it && typeof it.value === 'string' && !it.value.includes('.')) {
+        // pg returns numeric(38,6) as "1000.000000" for stored "1000".
+        const padded = `${it.value}.000000`;
+        return { ...it, value: mutateStoredValue ? mutateStoredValue(padded) : padded };
+      }
+      return it;
+    };
+    return s as InMemoryEvidenceStore;
+  }
+
+  describe('S-VERIFY-1 - existing-intent amount binding', () => {
+    const bindingRequest = (target: string): ExecuteRequest => ({
+      target,
+      method: 'POST',
+      payload: { data: 'x' },
+      policy: {
+        maxPrice: '2000',
+        allowedNetworks: ['mock-network'],
+        allowedAssets: ['MOCK'],
+        authorizationMode: 'policy-bound',
+      },
+    });
+
+    function rebuildSecretariat() {
+      secretariat = new Secretariat({
+        evidenceStore: store,
+        signer,
+        adapters: new Map([['mock-network', adapter]]),
+        settlementAdapter: doubles.settlementAdapter as any,
+        reconciliationEngine: doubles.reconciliationEngine as any,
+        atomicSettlementHandoff: doubles.atomicSettlementHandoff as any,
+      });
+    }
+
+    it('accepts an equivalent padded atomic value ("1000.000000" vs "1000")', async () => {
+      store = withPaddedIntentReads(new InMemoryEvidenceStore());
+      rebuildSecretariat();
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce(fourOhTwoResponse({ amount: '1000', recoveryCapability: 'EXECUTION_IDEMPOTENT' }))
+        .mockResolvedValue(fourOhTwoResponse({ amount: '1000', recoveryCapability: 'EXECUTION_IDEMPOTENT' }));
+
+      const result = await secretariat.execute(bindingRequest('https://api.example.com/binding-padded'));
+
+      // Binding accepted: flow proceeds past Stage-A into signing/payment.
+      expect(result.persistenceError).toBeUndefined();
+      expect(result.paymentStatus).not.toBe('NOT_STARTED');
+    });
+
+    it('rejects a mismatched atomic value ("1001.000000" vs "1000") and fails closed', async () => {
+      store = withPaddedIntentReads(
+        new InMemoryEvidenceStore(),
+        (padded) => `${Number(padded) + 1}${padded.slice(padded.indexOf('.'))}`,
+      );
+      rebuildSecretariat();
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce(fourOhTwoResponse({ amount: '1000', recoveryCapability: 'EXECUTION_IDEMPOTENT' }))
+        .mockResolvedValue(fourOhTwoResponse({ amount: '1000', recoveryCapability: 'EXECUTION_IDEMPOTENT' }));
+
+      const result = await secretariat.execute(bindingRequest('https://api.example.com/binding-mismatch'));
+
+      // Fail-closed: no payment started when the persisted amount cannot bind.
+      expect(result.paymentStatus).toBe('NOT_STARTED');
+    });
+  });
+
+  // ==========================================================================
   // TASK 4D — Mapper-semantics regression (narrowly scoped)
   // Pins the CURRENT behavior at the durable-handoff boundary without
   // claiming that FAILED is a successful terminal business outcome. The

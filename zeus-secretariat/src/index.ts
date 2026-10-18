@@ -36,6 +36,7 @@ export {
 // State machine
 export * from './core/state-machine.js';
 export * from './core/eip3009-verifier.js';
+export * from './core/payment-amount.js';
 
 // Evidence store
 export * from './store/index.js';

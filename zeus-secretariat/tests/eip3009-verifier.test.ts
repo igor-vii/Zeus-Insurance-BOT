@@ -209,3 +209,44 @@ describe("EIP-3009 external payment verification primitive", () => {
     expect(store.getPaymentIntentByRequestId).toHaveBeenCalledWith(INTENT.requestId);
   });
 });
+describe("TASK S-VERIFY-1: exact amount binding against PostgreSQL numeric(38,6) form", () => {
+  test("accepts signed payload with canonical integer amount while persisted intent carries fixed-scale decimal", async () => {
+    const store = makeStore();
+    const numericIntent: DurablePaymentIntent = { ...INTENT, value: "1000000.000000" };
+    (store.getPaymentIntentByRequestId as jest.Mock).mockImplementation(async (requestId: string) =>
+      requestId === INTENT.requestId ? numericIntent : null,
+    );
+
+    // Client signs the canonical atomic-unit integer "1000000" (uint256 domain).
+    const result = await verifier(store).verify(INTENT.requestId!, await makePayload());
+    expect(result.status).toBe("VALID");
+  });
+
+  test("rejects authorization.value with a non-zero fractional part even if numerically equal to persisted padded value", async () => {
+    const store = makeStore();
+    const numericIntent: DurablePaymentIntent = { ...INTENT, value: "1000000.000000" };
+    (store.getPaymentIntentByRequestId as jest.Mock).mockImplementation(async (requestId: string) =>
+      requestId === INTENT.requestId ? numericIntent : null,
+    );
+
+    // A fractional uint256 field cannot be EIP-712 signed at all; sign the
+    // canonical integer and inject the malformed fractional value afterwards,
+    // so the verifier's binding check (not the test harness) rejects it.
+    const payload = await makePayload();
+    payload.accepted.amount = "1000000.5";
+    payload.payload.authorization.value = "1000000.5";
+    const result = await verifier(store).verify(INTENT.requestId!, payload);
+    expect(result).toMatchObject({ status: "INVALID", code: "VALUE_MISMATCH" });
+  });
+
+  test("still rejects off-by-one amounts across formats", async () => {
+    const store = makeStore();
+    const numericIntent: DurablePaymentIntent = { ...INTENT, value: "1000001.000000" };
+    (store.getPaymentIntentByRequestId as jest.Mock).mockImplementation(async (requestId: string) =>
+      requestId === INTENT.requestId ? numericIntent : null,
+    );
+
+    const result = await verifier(store).verify(INTENT.requestId!, await makePayload());
+    expect(result).toMatchObject({ status: "INVALID", code: "VALUE_MISMATCH" });
+  });
+});
