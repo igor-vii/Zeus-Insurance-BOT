@@ -1,12 +1,32 @@
 /**
  * ZeusEscrowBOT contract constants for the API server.
  *
- * Deploy the contract and set ZEUS_ESCROW_BOT_ADDRESS in your environment.
- * Until then, escrow calldata endpoints will return a 503 with a clear message.
+ * Deploy the contract and set ZEUS_ESCROW_BOT_ADDRESS (or the network-suffixed
+ * ZEUS_ESCROW_BOT_ADDRESS_XLAYER / _X_LAYER / _BOT_CHAIN documented in
+ * .env.example) in your environment. Until then, escrow calldata endpoints
+ * will return a 503 with a clear message.
+ *
+ * R2 repair: .env.example documents the suffixed ZEUS_ESCROW_BOT_ADDRESS_XLAYER
+ * key but this module only read the unsuffixed one — an operator following the
+ * documented env file got the base-sepolia escrow (or an empty address) on the
+ * X Layer deployment. Resolution order: suffixed (ACTIVE_NETWORK) → unsuffixed.
  */
-export const ZEUS_ESCROW_BOT_ADDRESS = (
-  process.env["ZEUS_ESCROW_BOT_ADDRESS"] ?? ""
-) as `0x${string}`;
+function resolveEscrowAddress(): `0x${string}` {
+  const prefix = "ZEUS_ESCROW_BOT_ADDRESS";
+  const network = process.env["ZEUS_INSURANCE_NETWORK"] ?? process.env["ZEUS_NETWORK"] ?? "x-layer";
+  const upper = network.toUpperCase();
+  const candidates =
+    network === "base-sepolia"
+      ? [prefix]
+      : [`${prefix}_${upper.replace("-", "_")}`, `${prefix}_${upper.replace(/-/g, "")}`, prefix];
+  for (const key of candidates) {
+    const val = process.env[key];
+    if (val) return val as `0x${string}`;
+  }
+  return "" as `0x${string}`;
+}
+
+export const ZEUS_ESCROW_BOT_ADDRESS = resolveEscrowAddress();
 
 export const ZEUS_ESCROW_BOT_ABI = [
   {

@@ -112,5 +112,9 @@ export const ACTIVE_NETWORK: SupportedNetwork =
 export const ZEUS_INSURANCE_ADDRESS = getAddr(ACTIVE_NETWORK, "insurance");
 export const ZEUS_RESERVE_ADDRESS = getAddr(ACTIVE_NETWORK, "reserve");
 
-export const publicClient = getClient(677);
+// R2 repair: the default client was pinned to BOT Chain (677) while the
+// resolved addresses follow ACTIVE_NETWORK — e.g. /reserve multicalls read the
+// X Layer reserve address through the BOT Chain client. Route reads through
+// the client of the SAME chain the addresses belong to.
+export const publicClient = getClient(SUPPORTED_NETWORKS[ACTIVE_NETWORK].chainId);
 
