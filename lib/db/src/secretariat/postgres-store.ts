@@ -8,7 +8,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, asc } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   paymentIntentsTable,
@@ -537,21 +537,34 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
    * (EXECUTION) row, leaving the seller permanently un-paid-out/un-delivered.
    */
   async getSettledIntentsWithoutObligation(limit = 100): Promise<DurablePaymentIntent[]> {
-    const result = await this.db.execute(sql`
-      SELECT pi.* FROM payment_intents pi
-      WHERE pi.settlement_state = ${"SETTLED"}
-        AND NOT EXISTS (
+    // R6 repair: this scanner previously used a raw `db.execute(sql...)` whose
+    // result rows carry snake_case keys, while rowToIntent() expects the
+    // drizzle-mapped camelCase shape — every scan threw
+    // "Cannot read properties of undefined (reading 'getTime')" and the
+    // caller's catch{} swallowed it, so SETTLED intents never received an
+    // EXECUTION obligation (seller never called, client never served).
+    // Re-expressed through the typed query builder so rowToIntent() receives
+    // exactly the shape it maps.
+    const rows = await this.db.select().from(paymentIntentsTable)
+      .where(and(
+        eq(paymentIntentsTable.settlementState, "SETTLED"),
+        sql`NOT EXISTS (
           SELECT 1 FROM recovery_jobs rj
-          WHERE rj.operation_id = pi.operation_id
+          WHERE rj.operation_id = ${paymentIntentsTable.operationId}
             AND rj.job_type = ${"EXECUTION"}
-        )
-      ORDER BY pi.updated_at ASC
-      LIMIT ${limit}
-    `);
-    const records = Array.isArray(result)
-      ? result
-      : ((result as unknown as { rows?: unknown[] })?.rows ?? []);
-    return records.map((r) => this.rowToIntent(r as PaymentIntentRow));
+        )`,
+        // R6: also exclude intents whose execution ATTEMPT already exists.
+        // The ensureExecutionObligations() guard skips those, so without this
+        // clause legacy rows with attempts-but-no-job permanently occupy the
+        // LIMIT window and freshly settled intents never surface.
+        sql`NOT EXISTS (
+          SELECT 1 FROM execution_attempts ea
+          WHERE ea.operation_id = ${paymentIntentsTable.operationId}
+        )`,
+      ))
+      .orderBy(asc(paymentIntentsTable.updatedAt))
+      .limit(limit);
+    return rows.map((r) => this.rowToIntent(r as PaymentIntentRow));
   }
 
   // Nonce registry

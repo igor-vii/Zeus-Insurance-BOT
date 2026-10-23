@@ -76,8 +76,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  windowMs: Number(process.env["RATE_LIMIT_WINDOW_MS"] ?? 15 * 60 * 1000),
+  // R6: configurable ceiling — the adversarial E2E legitimately exceeds 100
+  // requests in a short window; production keeps the safe default.
+  max: Number(process.env["RATE_LIMIT_MAX"] ?? 100),
   standardHeaders: true,
   legacyHeaders: false,
   message: "Too many requests from this IP, please try again later.",

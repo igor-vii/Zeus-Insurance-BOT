@@ -120,8 +120,12 @@ describe("Step 2B: public Secretariat request route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
+    // R6 contract update: the 201 response EXPOSES the persisted intent binding
+    // (operationId + paymentIntent with nonce/validity window). Without it an
+    // external client cannot build the EIP-3009 signature for Stage B.
     expect(body).toEqual({
       requestId: "req-public-2b",
+      operationId: "internal-operation-id",
       status: "AWAITING_PAYMENT_SIGNATURE",
       paymentRequired: {
         amount: "1000000",
@@ -129,9 +133,19 @@ describe("Step 2B: public Secretariat request route", () => {
         network: "base-sepolia",
         payee: "0x00000000000000000000000000000000000000b2",
       },
+      paymentIntent: {
+        paymentIntentId: "internal-payment-intent-id",
+        authorizer: "0x00000000000000000000000000000000000000a1",
+        payTo: "0x00000000000000000000000000000000000000b2",
+        value: "1000000",
+        asset: "0xUSDC",
+        network: "base-sepolia",
+        nonce: "0x01",
+        validAfter: 0,
+        validBefore: 1,
+        settlementState: "PENDING_SIGNATURE",
+      },
     });
-    expect(body.operationId).toBeUndefined();
-    expect(body.paymentIntent).toBeUndefined();
     expect(createRequest).toHaveBeenCalledWith({
       target: "https://seller.example.com/resource",
       method: "POST",

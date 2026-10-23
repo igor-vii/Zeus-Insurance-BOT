@@ -12,7 +12,7 @@
  * It MUST NOT be used for reconciliation (which uses reconciliation_jobs).
  */
 
-import { eq, and, sql, asc } from "drizzle-orm";
+import { eq, and, or, sql, asc, desc } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   executionAttemptsTable,
@@ -485,14 +485,23 @@ export class PostgresExecutionStore {
    * Ordered by priority DESC, then createdAt ASC for fairness.
    */
   async getPendingJobs(): Promise<RecoveryJob[]> {
-    const rows = await this.db.execute(sql`
-      SELECT * FROM recovery_jobs
-      WHERE status = ${"PENDING"}
-         OR (status = ${"RUNNING"} AND locked_until < NOW())
-      ORDER BY priority DESC, created_at ASC
-      LIMIT 100
-    `);
-    return (Array.isArray(rows) ? rows : []).map((r: any) => this.rowToJob(r as RecoveryJobRow));
+    // R6 repair: was a raw db.execute() whose rows carry snake_case keys while
+    // rowToJob() maps camelCase — every worker cycle threw
+    // "Cannot read properties of undefined (reading 'getTime')" inside the
+    // batch loop, so PENDING jobs were never claimed or processed.
+    const rows = await this.db
+      .select()
+      .from(recoveryJobsTable)
+      .where(or(
+        eq(recoveryJobsTable.status, "PENDING"),
+        and(
+          eq(recoveryJobsTable.status, "RUNNING"),
+          sql`${recoveryJobsTable.lockedUntil} < NOW()`,
+        ),
+      ))
+      .orderBy(desc(recoveryJobsTable.priority), asc(recoveryJobsTable.createdAt))
+      .limit(100);
+    return rows.map((r: any) => this.rowToJob(r as RecoveryJobRow));
   }
 
   /**
