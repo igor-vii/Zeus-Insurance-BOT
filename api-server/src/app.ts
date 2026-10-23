@@ -7,7 +7,7 @@ import router from "./routes/index.js";
 import { logger } from "./lib/logger";
 import { startBackgroundSync } from "./lib/background-sync";
 import { startEventListener } from "./lib/event-listener";
-import { ZEUS_TREASURY, x402Routes } from "./config/x402.js";
+import { ZEUS_TREASURY, X402_FACILITATOR_URL, x402Routes } from "./config/x402.js";
 import { connectMCPServer } from "./mcp-server/index.js";
 import llmsTxtRouter from "./routes/llms-txt.js";
 import { createRequestsRouter } from "./routes/requests.js";
@@ -86,8 +86,19 @@ app.use(limiter);
 
 // x402 payment middleware — guards selected /api/insurance/* routes.
 // Disabled gracefully if ZEUS_TREASURY is not configured.
+// The facilitator is Zeus-operated (X402_FACILITATOR_URL / ZEUS_FACILITATOR_URL):
+// the default public facilitator does not support eip155:196 (X Layer).
 if (ZEUS_TREASURY) {
-  app.use(paymentMiddleware(ZEUS_TREASURY, x402Routes));
+  const facilitator = X402_FACILITATOR_URL
+    ? { url: X402_FACILITATOR_URL }
+    : undefined;
+  if (!facilitator) {
+    logger.warn(
+      "X402_FACILITATOR_URL not set — falling back to default facilitator " +
+        "(does NOT support eip155:196; protected routes will fail settlement)",
+    );
+  }
+  app.use(paymentMiddleware(ZEUS_TREASURY, x402Routes, facilitator));
 } else {
   logger.warn("ZEUS_TREASURY not set — x402 payment middleware disabled");
 }

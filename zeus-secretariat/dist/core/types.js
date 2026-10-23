@@ -14,6 +14,17 @@
 export function allowNewPayment(state) {
     return state === "NOT_SETTLED";
 }
+/** §19/§21: Terminal economic states. Once reached, a state transition out is
+ *  forbidden for ANY worker (fencing/monotonicity). */
+export const TERMINAL_SETTLEMENT_STATES = [
+    "SETTLED",
+    "NOT_SETTLED",
+    "UNRESOLVED_MANUAL",
+];
+/** §19/§21: true if `state` is terminal (irreversible). */
+export function isTerminalSettlementState(state) {
+    return TERMINAL_SETTLEMENT_STATES.includes(state);
+}
 /** All states that BLOCK new payment creation. */
 export const PAYMENT_BLOCKED_STATES = [
     "PENDING_SIGNATURE",

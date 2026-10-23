@@ -39,7 +39,8 @@ export class InMemoryNonceRegistry {
     // against the exported canonical error always failed.
     if (this.nonceMap.has(nonce)) {
       throw new NonceAlreadyUsedError(
-        `Nonce ${nonce} already reserved for operation ${this.nonceMap.get(nonce)}`
+        `Nonce ${nonce} already reserved for operation ${this.nonceMap.get(nonce)}`,
+        nonce,
       );
     }
     this.nonceMap.set(nonce, operationId);

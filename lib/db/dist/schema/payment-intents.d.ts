@@ -432,6 +432,23 @@ export declare const paymentIntentsTable: import("drizzle-orm/pg-core").PgTableW
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        extraFields: import("drizzle-orm/pg-core").PgColumn<{
+            name: "extra_fields";
+            tableName: "payment_intents";
+            dataType: "json";
+            columnType: "PgJsonb";
+            data: unknown;
+            driverParam: unknown;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         settledEvidenceBundle: import("drizzle-orm/pg-core").PgColumn<{
             name: "settled_evidence_bundle";
             tableName: "payment_intents";

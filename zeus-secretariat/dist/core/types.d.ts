@@ -429,6 +429,11 @@ export type SettlementState = "PENDING_SIGNATURE" | "AUTHORIZED" | "SUBMITTING" 
  * This is enforced at DB level via allowNewPayment() guard.
  */
 export declare function allowNewPayment(state: SettlementState): boolean;
+/** §19/§21: Terminal economic states. Once reached, a state transition out is
+ *  forbidden for ANY worker (fencing/monotonicity). */
+export declare const TERMINAL_SETTLEMENT_STATES: readonly SettlementState[];
+/** §19/§21: true if `state` is terminal (irreversible). */
+export declare function isTerminalSettlementState(state: SettlementState): boolean;
 /** All states that BLOCK new payment creation. */
 export declare const PAYMENT_BLOCKED_STATES: readonly SettlementState[];
 /**
@@ -445,6 +450,9 @@ export interface DurablePaymentIntent {
     readonly requestId?: string;
     readonly clientId?: string;
     readonly authorizer: string;
+    /** Canonical alias of `authorizer` (state-machine: authorizer = signed.payer).
+     *  Surfaced by durable stores on round-trip so consumers can read it back. */
+    readonly payer?: string;
     readonly payTo: string;
     readonly value: string;
     readonly asset: string;
@@ -582,6 +590,9 @@ export interface DurableEvidenceStore {
     createPaymentIntent(intent: DurablePaymentIntent): Promise<void>;
     getPaymentIntentByOperationId(operationId: string): Promise<DurablePaymentIntent | null>;
     getPaymentIntentByRequestId?(requestId: string): Promise<DurablePaymentIntent | null>;
+    /** R0 repair: optional scanner for PostSettlementEngine.ensureExecutionObligations().
+     *  Returns SETTLED intents that have no durable EXECUTION obligation. */
+    getSettledIntentsWithoutObligation?(limit?: number): Promise<DurablePaymentIntent[]>;
     updatePaymentIntentAuthorization?: (paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">) => Promise<void>;
     updatePaymentIntentStatus(intentId: string, status: SettlementState, extra?: Partial<Pick<DurablePaymentIntent, "txHash" | "facilitatorHttpStatus" | "facilitatorResponseBody" | "errorReason">>): Promise<void>;
     reserveNonce(nonce: string, operationId: string, payer: string): Promise<void>;
