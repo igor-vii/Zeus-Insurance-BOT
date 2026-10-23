@@ -17,6 +17,28 @@ function generateOperationId() {
 function generateRequestId() {
     return `req_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
+/**
+ * S1/S5 live-matrix repair (2026-10-23, Argus Agent Test Lab vs real
+ * Secretariat): when the client does not supply a requestId, the previous
+ * code generated a FRESH one on every create call. The idempotency lookup
+ * (client_id, request_id) and the 0006 partial unique index therefore never
+ * matched for retries — a duplicate create (client retry after a network
+ * timeout) or a concurrent duplicate created a NEW operation and could
+ * settle TWICE for one logical request (observed live: S1 → 2 settled
+ * intents, S5 → 5, all with the same clientId).
+ *
+ * B8-001 contract: clientId is the idempotency identity of the logical
+ * request. Derive the requestId deterministically from it when the client
+ * omits its own, so duplicate creates resolve to the SAME operation through
+ * the existing lookup + 0006 unique index arbiter.
+ */
+function resolveLogicalRequestId(request) {
+    if (request.requestId)
+        return request.requestId;
+    if (request.clientId)
+        return `cid:${request.clientId}`;
+    return generateRequestId();
+}
 function generatePaymentIntentId() {
     return `pi_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
@@ -87,7 +109,7 @@ export class Secretariat {
     // MAIN ENTRY POINT: Execute an operation
     // ==========================================================================
     async execute(request) {
-        const requestId = request.requestId ?? generateRequestId();
+        const requestId = resolveLogicalRequestId(request);
         const canonicalV2 = Boolean(this.config.settlementAdapter);
         let stageARequest = request;
         // The Stage-A primitive never consults a signer. The existing signer-based
@@ -1322,7 +1344,7 @@ export class Secretariat {
      * reachable from this primitive.
      */
     async prepareStageA(request, options = { persistPendingIntent: true }) {
-        const requestId = request.requestId ?? generateRequestId();
+        const requestId = resolveLogicalRequestId(request);
         const existing = await this.findExistingOperation(request.clientId, requestId);
         if (existing) {
             if (existing.currentState === 'AWAITING_SIGNATURE') {

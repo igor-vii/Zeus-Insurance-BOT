@@ -94,15 +94,46 @@ export class HttpSellerExecutionAdapter implements SellerExecutionAdapter {
       });
 
       clearTimeout(timeoutId);
+
+      // S7 live-matrix repair (2026-10-23, Argus Agent Test Lab vs real
+      // Secretariat): the previous `await response.json().catch(() => undefined)`
+      // swallowed a broken body stream, so a 2xx response whose body was LOST
+      // mid-flight (truncated chunked stream, socket destroyed after the
+      // status line) was classified as SUCCESS — the delivery trail claimed
+      // the resource was delivered when the client never received it. A lost
+      // body is not a delivered body: fall back to text(); if the stream
+      // itself is broken, classify DELIVERY_UNKNOWN/RESPONSE_STREAM_FAILED
+      // (same vocabulary the catch-path uses) instead of SUCCESS.
+      let responseBody: unknown;
+      let streamBroken = false;
+      try {
+        responseBody = await response.json();
+      } catch {
+        try {
+          const raw = await response.text();
+          responseBody = raw.length > 0 ? { raw: raw.slice(0, 2000) } : undefined;
+        } catch {
+          streamBroken = true;
+        }
+      }
+
       const durationMs = Date.now() - startTime;
 
-      const responseBody = await response.json().catch(() => undefined);
       const responseHeaders: Record<string, string> = {};
       response.headers.forEach((value, key) => {
         responseHeaders[key] = value;
       });
 
       // INV-13: Store raw evidence BEFORE classification
+      if (streamBroken) {
+        return {
+          kind: "DELIVERY_UNKNOWN",
+          reason: "RESPONSE_STREAM_FAILED",
+          error: `2xx status received but the response body stream failed (status ${response.status})`,
+          durationMs,
+        };
+      }
+
       if (response.ok) {
         return {
           kind: "SUCCESS",
