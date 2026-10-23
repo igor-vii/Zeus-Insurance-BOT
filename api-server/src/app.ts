@@ -1,12 +1,12 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import pinoHttp from "pino-http";
+import { pinoHttp } from "pino-http";
 import { paymentMiddleware } from "x402-express";
 import router from "./routes/index.js";
-import { logger } from "./lib/logger";
-import { startBackgroundSync } from "./lib/background-sync";
-import { startEventListener } from "./lib/event-listener";
+import { logger } from "./lib/logger.js";
+import { startBackgroundSync } from "./lib/background-sync.js";
+import { startEventListener } from "./lib/event-listener.js";
 import { ZEUS_TREASURY, X402_FACILITATOR_URL, x402Routes } from "./config/x402.js";
 import { connectMCPServer } from "./mcp-server/index.js";
 import llmsTxtRouter from "./routes/llms-txt.js";

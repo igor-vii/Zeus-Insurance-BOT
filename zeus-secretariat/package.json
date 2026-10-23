@@ -13,6 +13,10 @@
     "./adapters/local-eoa-signer": {
       "types": "./dist/adapters/local-eoa-signer.d.ts",
       "default": "./dist/adapters/local-eoa-signer.js"
+    },
+    "./core/types": {
+      "types": "./dist/core/types.d.ts",
+      "default": "./dist/core/types.js"
     }
   },
   "directories": {
