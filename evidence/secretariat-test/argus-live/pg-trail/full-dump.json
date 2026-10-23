@@ -1,0 +1,4193 @@
+{
+  "run_stamp": "1792779852",
+  "generated_at": "2026-10-23T18:25:19.270Z",
+  "scenarios": {
+    "S1": {
+      "intents": [
+        {
+          "payment_intent_id": "pi_1792779855821_9de9adfnqq7",
+          "operation_id": "op_1792779855778_4baprdmdwqj",
+          "request_id": "cid:argus-live-1792779852-S1-req-1",
+          "client_id": "argus-live-1792779852-S1-req-1",
+          "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "pay_to": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "value": "10000.000000",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "network": "base-sepolia",
+          "nonce": "0x3c8e585b15cc96ba773ee681b95c39f49c80eb5a86a9ccb7135a636b37901cfe",
+          "valid_after": "1792779855",
+          "valid_before": "1792780155",
+          "payment_payload": "{\"x402Version\":2,\"accepted\":{\"scheme\":\"exact\",\"network\":\"base-sepolia\",\"amount\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"payTo\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"maxTimeoutSeconds\":300,\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"}},\"payload\":{\"signature\":\"0x88a8596f4e91d0d87098cbdc610ff4450af80bee4d2e9aa93c76db9b3f547eb147580bc26ec1a4ab43e147c50e576492367a24785fb9b53fbc7fd5db154997951b\",\"authorization\":{\"from\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"to\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"value\":\"10000\",\"validAfter\":\"1792779855\",\"validBefore\":\"1792780155\",\"nonce\":\"0x3c8e585b15cc96ba773ee681b95c39f49c80eb5a86a9ccb7135a636b37901cfe\"}}}",
+          "payment_payload_hash": "0x7322b4e939e36181d59f910849592983aef12dd9438db42ace76be2ac57c86df",
+          "settlement_state": "SETTLED",
+          "tx_hash": "0xsettle1a16a01a82be3e2",
+          "facilitator_http_status": 200,
+          "facilitator_response_body": {
+            "network": "base-sepolia",
+            "success": true,
+            "transactionHash": "0xsettle1a16a01a82be3e2"
+          },
+          "error_reason": null,
+          "submit_attempt_at": "2026-10-23T18:24:15.923Z",
+          "settled_at": "2026-10-23T18:24:15.977Z",
+          "not_settled_at": null,
+          "settled_evidence_bundle": {
+            "receipt": {
+              "status": 1,
+              "gasUsed": "0",
+              "blockNumber": 256
+            },
+            "transfer": {
+              "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+              "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+              "value": "10000",
+              "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            },
+            "confirmations": 16,
+            "finalityReached": true,
+            "rpcObservations": [],
+            "authorizationUsed": {
+              "logIndex": 1,
+              "blockNumber": 256,
+              "transactionHash": "0xsettle1a16a01a82be3e2"
+            }
+          },
+          "not_settled_evidence_bundle": null,
+          "reconciliation_observations": [
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "DISCOVERING",
+                "from": "CREATED"
+              },
+              "sequence": 1,
+              "timestamp": 1792779855791,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "target": "http://127.0.0.1:9977/resource"
+              },
+              "sequence": 2,
+              "timestamp": 1792779855791,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_REQUIRED",
+                "from": "DISCOVERING"
+              },
+              "sequence": 3,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "requirement": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                  "amount": "10000",
+                  "network": "base-sepolia",
+                  "deadline": 1792780155820
+                }
+              },
+              "sequence": 4,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "capabilities": {
+                  "recoveryCapability": "NONE"
+                }
+              },
+              "sequence": 5,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "POLICY",
+              "payload": {},
+              "sequence": 6,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "POLICY",
+              "payload": {
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                "amount": "10000",
+                "network": "base-sepolia"
+              },
+              "sequence": 7,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AWAITING_SIGNATURE",
+                "from": "PAYMENT_REQUIRED"
+              },
+              "sequence": 8,
+              "timestamp": 1792779855824,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "FINAL",
+              "payload": {
+                "method": "POST",
+                "target": "http://127.0.0.1:9977/resource",
+                "requestId": "cid:argus-live-1792779852-S1-req-1"
+              },
+              "sequence": 0,
+              "timestamp": 1792779855778,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "PAYMENT",
+              "payload": {
+                "source": "eip3009-verifier",
+                "requestId": "cid:argus-live-1792779852-S1-req-1",
+                "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "paymentIntentId": "pi_1792779855821_9de9adfnqq7"
+              },
+              "timestamp": 1792779855880,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AUTHORIZED",
+                "from": "AWAITING_SIGNATURE"
+              },
+              "sequence": 20,
+              "timestamp": 1792779855893,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "PAYMENT_AUTHORIZED",
+              "phase": "PAYMENT",
+              "payload": {
+                "intent": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount": "10000",
+                  "status": "AUTHORIZED",
+                  "network": "base-sepolia",
+                  "createdAt": 1792779855824,
+                  "operationId": "op_1792779855778_4baprdmdwqj",
+                  "requirement": {
+                    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                    "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "amount": "10000",
+                    "network": "base-sepolia",
+                    "deadline": 1792780155820
+                  },
+                  "authorization": {
+                    "payTo": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "value": "10000",
+                    "scheme": "exact",
+                    "context": {
+                      "nonce": "0x3c8e585b15cc96ba773ee681b95c39f49c80eb5a86a9ccb7135a636b37901cfe",
+                      "operationId": "op_1792779855778_4baprdmdwqj",
+                      "requirement": {
+                        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                        "amount": "10000",
+                        "network": "base-sepolia",
+                        "deadline": 1792780155820
+                      }
+                    },
+                    "signature": "0x88a8596f4e91d0d87098cbdc610ff4450af80bee4d2e9aa93c76db9b3f547eb147580bc26ec1a4ab43e147c50e576492367a24785fb9b53fbc7fd5db154997951b",
+                    "timestamp": 1792779855893,
+                    "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    "validAfter": 1792779855,
+                    "validBefore": 1792780155
+                  }
+                },
+                "source": "EXTERNAL_SIGNED_PAYMENT_PAYLOAD"
+              },
+              "sequence": 21,
+              "timestamp": 1792779855893,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855778,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855791,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855791,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855820,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855824,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779855880,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_SUBMITTED",
+                "from": "AUTHORIZED"
+              },
+              "sequence": 22,
+              "timestamp": 1792779855909,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "PAYMENT_SUBMITTED",
+              "phase": "PAYMENT",
+              "payload": {
+                "rawData": {
+                  "network": "base-sepolia",
+                  "success": true,
+                  "transactionHash": "0xsettle1a16a01a82be3e2"
+                },
+                "transactionHash": "0xsettle1a16a01a82be3e2"
+              },
+              "sequence": 23,
+              "timestamp": 1792779855926,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "RECONCILIATION_STARTED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "paymentIntentId": "pi_1792779855821_9de9adfnqq7"
+              },
+              "sequence": 24,
+              "timestamp": 1792779855927,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "SETTLED",
+                "from": "PAYMENT_SUBMITTED"
+              },
+              "sequence": 25,
+              "timestamp": 1792779855981,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "SETTLEMENT_CONFIRMED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "evidenceBundle": {
+                  "receipt": {
+                    "status": 1,
+                    "gasUsed": "0",
+                    "blockNumber": 256
+                  },
+                  "transfer": {
+                    "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "value": "10000",
+                    "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                  },
+                  "confirmations": 16,
+                  "finalityReached": true,
+                  "rpcObservations": [],
+                  "authorizationUsed": {
+                    "logIndex": 1,
+                    "blockNumber": 256,
+                    "transactionHash": "0xsettle1a16a01a82be3e2"
+                  }
+                },
+                "paymentIntentId": "pi_1792779855821_9de9adfnqq7"
+              },
+              "sequence": 26,
+              "timestamp": 1792779855981,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "SETTLEMENT_ALREADY_PERSISTED",
+              "phase": "EXECUTION",
+              "payload": {
+                "note": "CAS failed — settlement already persisted by another worker",
+                "paymentIntentId": "pi_1792779855821_9de9adfnqq7"
+              },
+              "sequence": 27,
+              "timestamp": 1792779855987,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "EXECUTION_INITIATED",
+              "phase": "EXECUTION",
+              "payload": {
+                "jobId": "job-1792779859406-ijynt22uo0j",
+                "attemptId": "attempt-1792779859406-w1chchxkk7i",
+                "capability": "EXECUTION_IDEMPOTENT",
+                "executionId": "op_1792779855778_4baprdmdwqj"
+              },
+              "timestamp": 1792779859409,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "body": {
+                    "echo": {},
+                    "result": "delivered"
+                  },
+                  "kind": "SUCCESS",
+                  "headers": {
+                    "date": "Fri, 23 Oct 2026 18:24:19 GMT",
+                    "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+                    "connection": "keep-alive",
+                    "keep-alive": "timeout=5",
+                    "content-type": "application/json; charset=utf-8",
+                    "x-powered-by": "Express",
+                    "content-length": "32"
+                  },
+                  "durationMs": 3,
+                  "statusCode": 200
+                },
+                "attemptId": "attempt-1792779859406-w1chchxkk7i"
+              },
+              "timestamp": 1792779859419,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "EXECUTION_SUCCESS",
+              "phase": "EXECUTION",
+              "payload": {
+                "attemptId": "attempt-1792779859406-w1chchxkk7i",
+                "statusCode": 200
+              },
+              "timestamp": 1792779859423,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_PENDING",
+                "from": "SETTLED",
+                "jobId": "job-1792779859406-ijynt22uo0j",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779859426,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_CONFIRMED",
+                "from": "EXECUTION_PENDING",
+                "jobId": "job-1792779859406-ijynt22uo0j",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779859426,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "DELIVERED",
+                "from": "EXECUTION_CONFIRMED",
+                "jobId": "job-1792779859406-ijynt22uo0j",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779859426,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "SUCCESS",
+                "from": "DELIVERED",
+                "jobId": "job-1792779859406-ijynt22uo0j",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779859426,
+              "operationId": "op_1792779855778_4baprdmdwqj"
+            }
+          ],
+          "next_probe_at": null,
+          "probe_count": 0,
+          "version": 4,
+          "created_at": "2026-10-23T18:24:15.824Z",
+          "updated_at": "2026-10-23T18:24:19.434Z",
+          "target": "http://127.0.0.1:9977/resource",
+          "method": "POST",
+          "payment_policy": {
+            "maxPrice": "100000",
+            "allowedAssets": [
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+            ],
+            "allowedSellers": [
+              "0xcccccccccccccccccccccccccccccccccccccccc"
+            ],
+            "allowedNetworks": [
+              "base-sepolia"
+            ],
+            "authorizationMode": "explicit"
+          },
+          "extra_fields": null
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "recon-1792779855928-wkgqrsln7dr-mock-a",
+          "payment_intent_id": "pi_1792779855821_9de9adfnqq7",
+          "attempt_id": "recon-1792779855928-wkgqrsln7dr",
+          "rpc_provider_id": "mock-a",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:15.969Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780155",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:15.972Z"
+        },
+        {
+          "observation_id": "recon-1792779855928-wkgqrsln7dr-mock-b",
+          "payment_intent_id": "pi_1792779855821_9de9adfnqq7",
+          "attempt_id": "recon-1792779855928-wkgqrsln7dr",
+          "rpc_provider_id": "mock-b",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:15.972Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780155",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:15.977Z"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "attempt-1792779859406-w1chchxkk7i",
+          "operation_id": "op_1792779855778_4baprdmdwqj",
+          "execution_id": "op_1792779855778_4baprdmdwqj",
+          "attempt_number": 1,
+          "status": "SUCCESS",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": 200,
+          "response_body": {
+            "echo": {},
+            "result": "delivered"
+          },
+          "response_headers": {
+            "date": "Fri, 23 Oct 2026 18:24:19 GMT",
+            "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+            "connection": "keep-alive",
+            "keep-alive": "timeout=5",
+            "content-type": "application/json; charset=utf-8",
+            "x-powered-by": "Express",
+            "content-length": "32"
+          },
+          "error_reason": null,
+          "idempotency_key": "op_1792779855778_4baprdmdwqj",
+          "started_at": "2026-10-23T18:24:19.415Z",
+          "completed_at": "2026-10-23T18:24:19.422Z",
+          "created_at": "2026-10-23T18:24:19.407Z"
+        }
+      ],
+      "recovery": [
+        {
+          "job_id": "job-1792779859406-ijynt22uo0j",
+          "operation_id": "op_1792779855778_4baprdmdwqj",
+          "job_type": "EXECUTION",
+          "status": "COMPLETED",
+          "priority": 0,
+          "max_attempts": 3,
+          "current_attempt": 1,
+          "fence_generation": 1,
+          "locked_by": null,
+          "locked_until": null,
+          "last_error": null,
+          "metadata": {
+            "capability": "EXECUTION_IDEMPOTENT"
+          },
+          "created_at": "2026-10-23T18:24:19.408Z",
+          "updated_at": "2026-10-23T18:24:19.423Z"
+        }
+      ],
+      "nonces": [
+        {
+          "nonce": "0x3c8e585b15cc96ba773ee681b95c39f49c80eb5a86a9ccb7135a636b37901cfe",
+          "operation_id": "op_1792779855778_4baprdmdwqj",
+          "status": "SETTLED",
+          "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "created_at": "2026-10-23T18:24:15.822Z",
+          "updated_at": "2026-10-23T18:24:15.980Z"
+        }
+      ]
+    },
+    "S2": {
+      "intents": [
+        {
+          "payment_intent_id": "pi_1792779860786_ueip88fvyqi",
+          "operation_id": "op_1792779860780_wzo6rfoa7uc",
+          "request_id": "cid:argus-live-1792779852-S2-req-2",
+          "client_id": "argus-live-1792779852-S2-req-2",
+          "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "pay_to": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "value": "10000.000000",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "network": "base-sepolia",
+          "nonce": "0xeaf7d8712495896a0973237ca1c68eddcf7d4c89334d3d2023b3a943b29935d1",
+          "valid_after": "1792779860",
+          "valid_before": "1792780160",
+          "payment_payload": "{\"x402Version\":2,\"accepted\":{\"scheme\":\"exact\",\"network\":\"base-sepolia\",\"amount\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"payTo\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"maxTimeoutSeconds\":300,\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"}},\"payload\":{\"signature\":\"0xe61fe2718c7eeeea30b02b85d2bcd5ad4cc86590e0919437620fa7b740bfe87951d72ce5f27d8beb471abe378824d4e952084bde8d2265d6e555479736cb8c881c\",\"authorization\":{\"from\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"to\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"value\":\"10000\",\"validAfter\":\"1792779860\",\"validBefore\":\"1792780160\",\"nonce\":\"0xeaf7d8712495896a0973237ca1c68eddcf7d4c89334d3d2023b3a943b29935d1\"}}}",
+          "payment_payload_hash": "0xc9b0d134bc4c7cd8c72fe10443c2a99df6b0bdf19c7af070ebd6f9be7959852f",
+          "settlement_state": "SETTLED",
+          "tx_hash": "0xsettle1a16a01bb8b2f75",
+          "facilitator_http_status": 200,
+          "facilitator_response_body": {
+            "network": "base-sepolia",
+            "success": true,
+            "transactionHash": "0xsettle1a16a01bb8b2f75"
+          },
+          "error_reason": null,
+          "submit_attempt_at": "2026-10-23T18:24:20.875Z",
+          "settled_at": "2026-10-23T18:24:20.890Z",
+          "not_settled_at": null,
+          "settled_evidence_bundle": {
+            "receipt": {
+              "status": 1,
+              "gasUsed": "0",
+              "blockNumber": 256
+            },
+            "transfer": {
+              "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+              "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+              "value": "10000",
+              "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            },
+            "confirmations": 16,
+            "finalityReached": true,
+            "rpcObservations": [],
+            "authorizationUsed": {
+              "logIndex": 1,
+              "blockNumber": 256,
+              "transactionHash": "0xsettle1a16a01bb8b2f75"
+            }
+          },
+          "not_settled_evidence_bundle": null,
+          "reconciliation_observations": [
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "DISCOVERING",
+                "from": "CREATED"
+              },
+              "sequence": 1,
+              "timestamp": 1792779860783,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "target": "http://127.0.0.1:9977/resource"
+              },
+              "sequence": 2,
+              "timestamp": 1792779860783,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_REQUIRED",
+                "from": "DISCOVERING"
+              },
+              "sequence": 3,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "requirement": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                  "amount": "10000",
+                  "network": "base-sepolia",
+                  "deadline": 1792780160786
+                }
+              },
+              "sequence": 4,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "capabilities": {
+                  "recoveryCapability": "NONE"
+                }
+              },
+              "sequence": 5,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "POLICY",
+              "payload": {},
+              "sequence": 6,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "POLICY",
+              "payload": {
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                "amount": "10000",
+                "network": "base-sepolia"
+              },
+              "sequence": 7,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AWAITING_SIGNATURE",
+                "from": "PAYMENT_REQUIRED"
+              },
+              "sequence": 8,
+              "timestamp": 1792779860788,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "FINAL",
+              "payload": {
+                "method": "POST",
+                "target": "http://127.0.0.1:9977/resource",
+                "requestId": "cid:argus-live-1792779852-S2-req-2"
+              },
+              "sequence": 0,
+              "timestamp": 1792779860780,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "PAYMENT",
+              "payload": {
+                "source": "eip3009-verifier",
+                "requestId": "cid:argus-live-1792779852-S2-req-2",
+                "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "paymentIntentId": "pi_1792779860786_ueip88fvyqi"
+              },
+              "timestamp": 1792779860832,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AUTHORIZED",
+                "from": "AWAITING_SIGNATURE"
+              },
+              "sequence": 19,
+              "timestamp": 1792779860855,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "PAYMENT_AUTHORIZED",
+              "phase": "PAYMENT",
+              "payload": {
+                "intent": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount": "10000",
+                  "status": "AUTHORIZED",
+                  "network": "base-sepolia",
+                  "createdAt": 1792779860788,
+                  "operationId": "op_1792779860780_wzo6rfoa7uc",
+                  "requirement": {
+                    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                    "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "amount": "10000",
+                    "network": "base-sepolia",
+                    "deadline": 1792780160786
+                  },
+                  "authorization": {
+                    "payTo": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "value": "10000",
+                    "scheme": "exact",
+                    "context": {
+                      "nonce": "0xeaf7d8712495896a0973237ca1c68eddcf7d4c89334d3d2023b3a943b29935d1",
+                      "operationId": "op_1792779860780_wzo6rfoa7uc",
+                      "requirement": {
+                        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                        "amount": "10000",
+                        "network": "base-sepolia",
+                        "deadline": 1792780160786
+                      }
+                    },
+                    "signature": "0xe61fe2718c7eeeea30b02b85d2bcd5ad4cc86590e0919437620fa7b740bfe87951d72ce5f27d8beb471abe378824d4e952084bde8d2265d6e555479736cb8c881c",
+                    "timestamp": 1792779860855,
+                    "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    "validAfter": 1792779860,
+                    "validBefore": 1792780160
+                  }
+                },
+                "source": "EXTERNAL_SIGNED_PAYMENT_PAYLOAD"
+              },
+              "sequence": 20,
+              "timestamp": 1792779860855,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860780,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860783,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860783,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860786,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860788,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779860832,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_SUBMITTED",
+                "from": "AUTHORIZED"
+              },
+              "sequence": 21,
+              "timestamp": 1792779860871,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "PAYMENT_SUBMITTED",
+              "phase": "PAYMENT",
+              "payload": {
+                "rawData": {
+                  "network": "base-sepolia",
+                  "success": true,
+                  "transactionHash": "0xsettle1a16a01bb8b2f75"
+                },
+                "transactionHash": "0xsettle1a16a01bb8b2f75"
+              },
+              "sequence": 22,
+              "timestamp": 1792779860877,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "RECONCILIATION_STARTED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "paymentIntentId": "pi_1792779860786_ueip88fvyqi"
+              },
+              "sequence": 23,
+              "timestamp": 1792779860878,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "SETTLED",
+                "from": "PAYMENT_SUBMITTED"
+              },
+              "sequence": 24,
+              "timestamp": 1792779860891,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "SETTLEMENT_CONFIRMED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "evidenceBundle": {
+                  "receipt": {
+                    "status": 1,
+                    "gasUsed": "0",
+                    "blockNumber": 256
+                  },
+                  "transfer": {
+                    "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "value": "10000",
+                    "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                  },
+                  "confirmations": 16,
+                  "finalityReached": true,
+                  "rpcObservations": [],
+                  "authorizationUsed": {
+                    "logIndex": 1,
+                    "blockNumber": 256,
+                    "transactionHash": "0xsettle1a16a01bb8b2f75"
+                  }
+                },
+                "paymentIntentId": "pi_1792779860786_ueip88fvyqi"
+              },
+              "sequence": 25,
+              "timestamp": 1792779860891,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "SETTLEMENT_ALREADY_PERSISTED",
+              "phase": "EXECUTION",
+              "payload": {
+                "note": "CAS failed — settlement already persisted by another worker",
+                "paymentIntentId": "pi_1792779860786_ueip88fvyqi"
+              },
+              "sequence": 26,
+              "timestamp": 1792779860893,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "EXECUTION_INITIATED",
+              "phase": "EXECUTION",
+              "payload": {
+                "jobId": "job-1792779864438-lafg2d4zzff",
+                "attemptId": "attempt-1792779864438-yptipdmusgr",
+                "capability": "EXECUTION_IDEMPOTENT",
+                "executionId": "op_1792779860780_wzo6rfoa7uc"
+              },
+              "timestamp": 1792779864439,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "body": {
+                    "echo": {},
+                    "result": "delivered"
+                  },
+                  "kind": "SUCCESS",
+                  "headers": {
+                    "date": "Fri, 23 Oct 2026 18:24:24 GMT",
+                    "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+                    "connection": "keep-alive",
+                    "keep-alive": "timeout=5",
+                    "content-type": "application/json; charset=utf-8",
+                    "x-powered-by": "Express",
+                    "content-length": "32"
+                  },
+                  "durationMs": 2,
+                  "statusCode": 200
+                },
+                "attemptId": "attempt-1792779864438-yptipdmusgr"
+              },
+              "timestamp": 1792779864450,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "EXECUTION_SUCCESS",
+              "phase": "EXECUTION",
+              "payload": {
+                "attemptId": "attempt-1792779864438-yptipdmusgr",
+                "statusCode": 200
+              },
+              "timestamp": 1792779864452,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_PENDING",
+                "from": "SETTLED",
+                "jobId": "job-1792779864438-lafg2d4zzff",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779864454,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_CONFIRMED",
+                "from": "EXECUTION_PENDING",
+                "jobId": "job-1792779864438-lafg2d4zzff",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779864454,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "DELIVERED",
+                "from": "EXECUTION_CONFIRMED",
+                "jobId": "job-1792779864438-lafg2d4zzff",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779864454,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "SUCCESS",
+                "from": "DELIVERED",
+                "jobId": "job-1792779864438-lafg2d4zzff",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779864454,
+              "operationId": "op_1792779860780_wzo6rfoa7uc"
+            }
+          ],
+          "next_probe_at": null,
+          "probe_count": 0,
+          "version": 4,
+          "created_at": "2026-10-23T18:24:20.788Z",
+          "updated_at": "2026-10-23T18:24:24.460Z",
+          "target": "http://127.0.0.1:9977/resource",
+          "method": "POST",
+          "payment_policy": {
+            "maxPrice": "100000",
+            "allowedAssets": [
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+            ],
+            "allowedSellers": [
+              "0xcccccccccccccccccccccccccccccccccccccccc"
+            ],
+            "allowedNetworks": [
+              "base-sepolia"
+            ],
+            "authorizationMode": "explicit"
+          },
+          "extra_fields": null
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "recon-1792779860878-gtetsv6sj7d-mock-a",
+          "payment_intent_id": "pi_1792779860786_ueip88fvyqi",
+          "attempt_id": "recon-1792779860878-gtetsv6sj7d",
+          "rpc_provider_id": "mock-a",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:20.889Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780160",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:20.889Z"
+        },
+        {
+          "observation_id": "recon-1792779860878-gtetsv6sj7d-mock-b",
+          "payment_intent_id": "pi_1792779860786_ueip88fvyqi",
+          "attempt_id": "recon-1792779860878-gtetsv6sj7d",
+          "rpc_provider_id": "mock-b",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:20.889Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780160",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:20.890Z"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "attempt-1792779864438-yptipdmusgr",
+          "operation_id": "op_1792779860780_wzo6rfoa7uc",
+          "execution_id": "op_1792779860780_wzo6rfoa7uc",
+          "attempt_number": 1,
+          "status": "SUCCESS",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": 200,
+          "response_body": {
+            "echo": {},
+            "result": "delivered"
+          },
+          "response_headers": {
+            "date": "Fri, 23 Oct 2026 18:24:24 GMT",
+            "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+            "connection": "keep-alive",
+            "keep-alive": "timeout=5",
+            "content-type": "application/json; charset=utf-8",
+            "x-powered-by": "Express",
+            "content-length": "32"
+          },
+          "error_reason": null,
+          "idempotency_key": "op_1792779860780_wzo6rfoa7uc",
+          "started_at": "2026-10-23T18:24:24.446Z",
+          "completed_at": "2026-10-23T18:24:24.451Z",
+          "created_at": "2026-10-23T18:24:24.438Z"
+        }
+      ],
+      "recovery": [
+        {
+          "job_id": "job-1792779864438-lafg2d4zzff",
+          "operation_id": "op_1792779860780_wzo6rfoa7uc",
+          "job_type": "EXECUTION",
+          "status": "COMPLETED",
+          "priority": 0,
+          "max_attempts": 3,
+          "current_attempt": 1,
+          "fence_generation": 1,
+          "locked_by": null,
+          "locked_until": null,
+          "last_error": null,
+          "metadata": {
+            "capability": "EXECUTION_IDEMPOTENT"
+          },
+          "created_at": "2026-10-23T18:24:24.439Z",
+          "updated_at": "2026-10-23T18:24:24.452Z"
+        }
+      ],
+      "nonces": [
+        {
+          "nonce": "0xeaf7d8712495896a0973237ca1c68eddcf7d4c89334d3d2023b3a943b29935d1",
+          "operation_id": "op_1792779860780_wzo6rfoa7uc",
+          "status": "SETTLED",
+          "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "created_at": "2026-10-23T18:24:20.786Z",
+          "updated_at": "2026-10-23T18:24:20.891Z"
+        }
+      ]
+    },
+    "S3": {
+      "intents": [
+        {
+          "payment_intent_id": "pi_1792779865707_j9mvr6ryevb",
+          "operation_id": "op_1792779865703_4zre0gxlwpk",
+          "request_id": "cid:argus-live-1792779852-S3-req-3",
+          "client_id": "argus-live-1792779852-S3-req-3",
+          "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "pay_to": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "value": "10000.000000",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "network": "base-sepolia",
+          "nonce": "0x50de6d1f6770ec91a7c88ad3a5d9c192eaaa129a0308ec412af46fd555aab4e3",
+          "valid_after": "1792779865",
+          "valid_before": "1792780165",
+          "payment_payload": "{\"x402Version\":2,\"accepted\":{\"scheme\":\"exact\",\"network\":\"base-sepolia\",\"amount\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"payTo\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"maxTimeoutSeconds\":300,\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"}},\"payload\":{\"signature\":\"0xc086476ace16a19e5fadb9aec3198974f51a2e54f73994eeb2874d0ef0441739109744d27c23978d16d605ec6befce410745fd4f0b6c2258c359927b837f46c31c\",\"authorization\":{\"from\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"to\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"value\":\"10000\",\"validAfter\":\"1792779865\",\"validBefore\":\"1792780165\",\"nonce\":\"0x50de6d1f6770ec91a7c88ad3a5d9c192eaaa129a0308ec412af46fd555aab4e3\"}}}",
+          "payment_payload_hash": "0x2a44f577e45daa7b1d8cb6c921cc4568d8bedf40a8deed87c4b5d35b220a2b01",
+          "settlement_state": "SETTLED",
+          "tx_hash": "0xsettle1a16a01cf2627d4",
+          "facilitator_http_status": 200,
+          "facilitator_response_body": {
+            "network": "base-sepolia",
+            "success": true,
+            "transactionHash": "0xsettle1a16a01cf2627d4"
+          },
+          "error_reason": null,
+          "submit_attempt_at": "2026-10-23T18:24:25.895Z",
+          "settled_at": "2026-10-23T18:24:25.907Z",
+          "not_settled_at": null,
+          "settled_evidence_bundle": {
+            "receipt": {
+              "status": 1,
+              "gasUsed": "0",
+              "blockNumber": 256
+            },
+            "transfer": {
+              "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+              "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+              "value": "10000",
+              "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            },
+            "confirmations": 16,
+            "finalityReached": true,
+            "rpcObservations": [],
+            "authorizationUsed": {
+              "logIndex": 1,
+              "blockNumber": 256,
+              "transactionHash": "0xsettle1a16a01cf2627d4"
+            }
+          },
+          "not_settled_evidence_bundle": null,
+          "reconciliation_observations": [
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "DISCOVERING",
+                "from": "CREATED"
+              },
+              "sequence": 1,
+              "timestamp": 1792779865705,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "target": "http://127.0.0.1:9977/resource"
+              },
+              "sequence": 2,
+              "timestamp": 1792779865705,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_REQUIRED",
+                "from": "DISCOVERING"
+              },
+              "sequence": 3,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "requirement": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                  "amount": "10000",
+                  "network": "base-sepolia",
+                  "deadline": 1792780165707
+                }
+              },
+              "sequence": 4,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "capabilities": {
+                  "recoveryCapability": "NONE"
+                }
+              },
+              "sequence": 5,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "POLICY",
+              "payload": {},
+              "sequence": 6,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "POLICY",
+              "payload": {
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                "amount": "10000",
+                "network": "base-sepolia"
+              },
+              "sequence": 7,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AWAITING_SIGNATURE",
+                "from": "PAYMENT_REQUIRED"
+              },
+              "sequence": 8,
+              "timestamp": 1792779865708,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "FINAL",
+              "payload": {
+                "method": "POST",
+                "target": "http://127.0.0.1:9977/resource",
+                "requestId": "cid:argus-live-1792779852-S3-req-3"
+              },
+              "sequence": 0,
+              "timestamp": 1792779865703,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "PAYMENT",
+              "payload": {
+                "source": "eip3009-verifier",
+                "requestId": "cid:argus-live-1792779852-S3-req-3",
+                "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "paymentIntentId": "pi_1792779865707_j9mvr6ryevb"
+              },
+              "timestamp": 1792779865864,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AUTHORIZED",
+                "from": "AWAITING_SIGNATURE"
+              },
+              "sequence": 20,
+              "timestamp": 1792779865873,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "PAYMENT_AUTHORIZED",
+              "phase": "PAYMENT",
+              "payload": {
+                "intent": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount": "10000",
+                  "status": "AUTHORIZED",
+                  "network": "base-sepolia",
+                  "createdAt": 1792779865708,
+                  "operationId": "op_1792779865703_4zre0gxlwpk",
+                  "requirement": {
+                    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                    "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "amount": "10000",
+                    "network": "base-sepolia",
+                    "deadline": 1792780165707
+                  },
+                  "authorization": {
+                    "payTo": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "value": "10000",
+                    "scheme": "exact",
+                    "context": {
+                      "nonce": "0x50de6d1f6770ec91a7c88ad3a5d9c192eaaa129a0308ec412af46fd555aab4e3",
+                      "operationId": "op_1792779865703_4zre0gxlwpk",
+                      "requirement": {
+                        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                        "amount": "10000",
+                        "network": "base-sepolia",
+                        "deadline": 1792780165707
+                      }
+                    },
+                    "signature": "0xc086476ace16a19e5fadb9aec3198974f51a2e54f73994eeb2874d0ef0441739109744d27c23978d16d605ec6befce410745fd4f0b6c2258c359927b837f46c31c",
+                    "timestamp": 1792779865873,
+                    "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    "validAfter": 1792779865,
+                    "validBefore": 1792780165
+                  }
+                },
+                "source": "EXTERNAL_SIGNED_PAYMENT_PAYLOAD"
+              },
+              "sequence": 21,
+              "timestamp": 1792779865873,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865703,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865705,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865705,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865707,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865708,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779865864,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_SUBMITTED",
+                "from": "AUTHORIZED"
+              },
+              "sequence": 22,
+              "timestamp": 1792779865890,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "PAYMENT_SUBMITTED",
+              "phase": "PAYMENT",
+              "payload": {
+                "rawData": {
+                  "network": "base-sepolia",
+                  "success": true,
+                  "transactionHash": "0xsettle1a16a01cf2627d4"
+                },
+                "transactionHash": "0xsettle1a16a01cf2627d4"
+              },
+              "sequence": 23,
+              "timestamp": 1792779865898,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "RECONCILIATION_STARTED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "paymentIntentId": "pi_1792779865707_j9mvr6ryevb"
+              },
+              "sequence": 24,
+              "timestamp": 1792779865899,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "SETTLED",
+                "from": "PAYMENT_SUBMITTED"
+              },
+              "sequence": 25,
+              "timestamp": 1792779865909,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "SETTLEMENT_CONFIRMED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "evidenceBundle": {
+                  "receipt": {
+                    "status": 1,
+                    "gasUsed": "0",
+                    "blockNumber": 256
+                  },
+                  "transfer": {
+                    "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "value": "10000",
+                    "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                  },
+                  "confirmations": 16,
+                  "finalityReached": true,
+                  "rpcObservations": [],
+                  "authorizationUsed": {
+                    "logIndex": 1,
+                    "blockNumber": 256,
+                    "transactionHash": "0xsettle1a16a01cf2627d4"
+                  }
+                },
+                "paymentIntentId": "pi_1792779865707_j9mvr6ryevb"
+              },
+              "sequence": 26,
+              "timestamp": 1792779865909,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "SETTLEMENT_ALREADY_PERSISTED",
+              "phase": "EXECUTION",
+              "payload": {
+                "note": "CAS failed — settlement already persisted by another worker",
+                "paymentIntentId": "pi_1792779865707_j9mvr6ryevb"
+              },
+              "sequence": 27,
+              "timestamp": 1792779865910,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "EXECUTION_INITIATED",
+              "phase": "EXECUTION",
+              "payload": {
+                "jobId": "job-1792779869538-go8t7aqedmf",
+                "attemptId": "attempt-1792779869538-6z3l4p5884",
+                "capability": "EXECUTION_IDEMPOTENT",
+                "executionId": "op_1792779865703_4zre0gxlwpk"
+              },
+              "timestamp": 1792779869542,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "body": {
+                    "echo": {},
+                    "result": "delivered"
+                  },
+                  "kind": "SUCCESS",
+                  "headers": {
+                    "date": "Fri, 23 Oct 2026 18:24:29 GMT",
+                    "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+                    "connection": "keep-alive",
+                    "keep-alive": "timeout=5",
+                    "content-type": "application/json; charset=utf-8",
+                    "x-powered-by": "Express",
+                    "content-length": "32"
+                  },
+                  "durationMs": 28,
+                  "statusCode": 200
+                },
+                "attemptId": "attempt-1792779869538-6z3l4p5884"
+              },
+              "timestamp": 1792779869586,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "EXECUTION_SUCCESS",
+              "phase": "EXECUTION",
+              "payload": {
+                "attemptId": "attempt-1792779869538-6z3l4p5884",
+                "statusCode": 200
+              },
+              "timestamp": 1792779869591,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_PENDING",
+                "from": "SETTLED",
+                "jobId": "job-1792779869538-go8t7aqedmf",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779869594,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_CONFIRMED",
+                "from": "EXECUTION_PENDING",
+                "jobId": "job-1792779869538-go8t7aqedmf",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779869594,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "DELIVERED",
+                "from": "EXECUTION_CONFIRMED",
+                "jobId": "job-1792779869538-go8t7aqedmf",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779869594,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "SUCCESS",
+                "from": "DELIVERED",
+                "jobId": "job-1792779869538-go8t7aqedmf",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779869594,
+              "operationId": "op_1792779865703_4zre0gxlwpk"
+            }
+          ],
+          "next_probe_at": null,
+          "probe_count": 0,
+          "version": 4,
+          "created_at": "2026-10-23T18:24:25.708Z",
+          "updated_at": "2026-10-23T18:24:29.603Z",
+          "target": "http://127.0.0.1:9977/resource",
+          "method": "POST",
+          "payment_policy": {
+            "maxPrice": "100000",
+            "allowedAssets": [
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+            ],
+            "allowedSellers": [
+              "0xcccccccccccccccccccccccccccccccccccccccc"
+            ],
+            "allowedNetworks": [
+              "base-sepolia"
+            ],
+            "authorizationMode": "explicit"
+          },
+          "extra_fields": null
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "recon-1792779865900-kztqgmxa1s-mock-a",
+          "payment_intent_id": "pi_1792779865707_j9mvr6ryevb",
+          "attempt_id": "recon-1792779865900-kztqgmxa1s",
+          "rpc_provider_id": "mock-a",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:25.905Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780165",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:25.906Z"
+        },
+        {
+          "observation_id": "recon-1792779865900-kztqgmxa1s-mock-b",
+          "payment_intent_id": "pi_1792779865707_j9mvr6ryevb",
+          "attempt_id": "recon-1792779865900-kztqgmxa1s",
+          "rpc_provider_id": "mock-b",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:25.906Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780165",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:25.907Z"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "attempt-1792779869538-6z3l4p5884",
+          "operation_id": "op_1792779865703_4zre0gxlwpk",
+          "execution_id": "op_1792779865703_4zre0gxlwpk",
+          "attempt_number": 1,
+          "status": "SUCCESS",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": 200,
+          "response_body": {
+            "echo": {},
+            "result": "delivered"
+          },
+          "response_headers": {
+            "date": "Fri, 23 Oct 2026 18:24:29 GMT",
+            "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+            "connection": "keep-alive",
+            "keep-alive": "timeout=5",
+            "content-type": "application/json; charset=utf-8",
+            "x-powered-by": "Express",
+            "content-length": "32"
+          },
+          "error_reason": null,
+          "idempotency_key": "op_1792779865703_4zre0gxlwpk",
+          "started_at": "2026-10-23T18:24:29.557Z",
+          "completed_at": "2026-10-23T18:24:29.589Z",
+          "created_at": "2026-10-23T18:24:29.539Z"
+        }
+      ],
+      "recovery": [
+        {
+          "job_id": "job-1792779869538-go8t7aqedmf",
+          "operation_id": "op_1792779865703_4zre0gxlwpk",
+          "job_type": "EXECUTION",
+          "status": "COMPLETED",
+          "priority": 0,
+          "max_attempts": 3,
+          "current_attempt": 1,
+          "fence_generation": 1,
+          "locked_by": null,
+          "locked_until": null,
+          "last_error": null,
+          "metadata": {
+            "capability": "EXECUTION_IDEMPOTENT"
+          },
+          "created_at": "2026-10-23T18:24:29.541Z",
+          "updated_at": "2026-10-23T18:24:29.590Z"
+        }
+      ],
+      "nonces": [
+        {
+          "nonce": "0x50de6d1f6770ec91a7c88ad3a5d9c192eaaa129a0308ec412af46fd555aab4e3",
+          "operation_id": "op_1792779865703_4zre0gxlwpk",
+          "status": "SETTLED",
+          "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "created_at": "2026-10-23T18:24:25.707Z",
+          "updated_at": "2026-10-23T18:24:25.908Z"
+        }
+      ]
+    },
+    "S4": {
+      "intents": [
+        {
+          "payment_intent_id": "pi_1792779871094_g4e8m5mxnep",
+          "operation_id": "op_1792779871078_5psy47kokk8",
+          "request_id": "cid:argus-live-1792779852-S4-req-4",
+          "client_id": "argus-live-1792779852-S4-req-4",
+          "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "pay_to": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "value": "10000.000000",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "network": "base-sepolia",
+          "nonce": "0x68e69a5b8950322cf5250017ab773459a6b3e5116a5eb7d94784df2cd061c095",
+          "valid_after": "1792779871",
+          "valid_before": "1792780171",
+          "payment_payload": "{\"x402Version\":2,\"accepted\":{\"scheme\":\"exact\",\"network\":\"base-sepolia\",\"amount\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"payTo\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"maxTimeoutSeconds\":300,\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"}},\"payload\":{\"signature\":\"0x492ac6684062bf33321ad6001215cbb6905746e185ed57bc720226f6ce1ec8514e0af5b25b8bfdd543f176b2334b19be54ec99c54aba3d25f7a2d07a47ee10e51c\",\"authorization\":{\"from\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"to\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"value\":\"10000\",\"validAfter\":\"1792779871\",\"validBefore\":\"1792780171\",\"nonce\":\"0x68e69a5b8950322cf5250017ab773459a6b3e5116a5eb7d94784df2cd061c095\"}}}",
+          "payment_payload_hash": "0x7b7c56e2d1e6f31e11b0175a40bb6fb407fa6d01067af505715eba42d2bedbfb",
+          "settlement_state": "SETTLED",
+          "tx_hash": "0xsettle1a16a01e3ed9640",
+          "facilitator_http_status": 200,
+          "facilitator_response_body": {
+            "network": "base-sepolia",
+            "success": true,
+            "transactionHash": "0xsettle1a16a01e3ed9640"
+          },
+          "error_reason": null,
+          "submit_attempt_at": "2026-10-23T18:24:31.214Z",
+          "settled_at": "2026-10-23T18:24:31.230Z",
+          "not_settled_at": null,
+          "settled_evidence_bundle": {
+            "receipt": {
+              "status": 1,
+              "gasUsed": "0",
+              "blockNumber": 256
+            },
+            "transfer": {
+              "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+              "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+              "value": "10000",
+              "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            },
+            "confirmations": 16,
+            "finalityReached": true,
+            "rpcObservations": [],
+            "authorizationUsed": {
+              "logIndex": 1,
+              "blockNumber": 256,
+              "transactionHash": "0xsettle1a16a01e3ed9640"
+            }
+          },
+          "not_settled_evidence_bundle": null,
+          "reconciliation_observations": [
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "DISCOVERING",
+                "from": "CREATED"
+              },
+              "sequence": 1,
+              "timestamp": 1792779871089,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "target": "http://127.0.0.1:9977/resource"
+              },
+              "sequence": 2,
+              "timestamp": 1792779871089,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_REQUIRED",
+                "from": "DISCOVERING"
+              },
+              "sequence": 3,
+              "timestamp": 1792779871093,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "requirement": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                  "amount": "10000",
+                  "network": "base-sepolia",
+                  "deadline": 1792780171094
+                }
+              },
+              "sequence": 4,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "capabilities": {
+                  "recoveryCapability": "NONE"
+                }
+              },
+              "sequence": 5,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "POLICY",
+              "payload": {},
+              "sequence": 6,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "POLICY",
+              "payload": {
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                "amount": "10000",
+                "network": "base-sepolia"
+              },
+              "sequence": 7,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AWAITING_SIGNATURE",
+                "from": "PAYMENT_REQUIRED"
+              },
+              "sequence": 8,
+              "timestamp": 1792779871100,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "FINAL",
+              "payload": {
+                "method": "POST",
+                "target": "http://127.0.0.1:9977/resource",
+                "requestId": "cid:argus-live-1792779852-S4-req-4"
+              },
+              "sequence": 0,
+              "timestamp": 1792779871078,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "PAYMENT",
+              "payload": {
+                "source": "eip3009-verifier",
+                "requestId": "cid:argus-live-1792779852-S4-req-4",
+                "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "paymentIntentId": "pi_1792779871094_g4e8m5mxnep"
+              },
+              "timestamp": 1792779871181,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AUTHORIZED",
+                "from": "AWAITING_SIGNATURE"
+              },
+              "sequence": 20,
+              "timestamp": 1792779871193,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "PAYMENT_AUTHORIZED",
+              "phase": "PAYMENT",
+              "payload": {
+                "intent": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount": "10000",
+                  "status": "AUTHORIZED",
+                  "network": "base-sepolia",
+                  "createdAt": 1792779871100,
+                  "operationId": "op_1792779871078_5psy47kokk8",
+                  "requirement": {
+                    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                    "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "amount": "10000",
+                    "network": "base-sepolia",
+                    "deadline": 1792780171094
+                  },
+                  "authorization": {
+                    "payTo": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "value": "10000",
+                    "scheme": "exact",
+                    "context": {
+                      "nonce": "0x68e69a5b8950322cf5250017ab773459a6b3e5116a5eb7d94784df2cd061c095",
+                      "operationId": "op_1792779871078_5psy47kokk8",
+                      "requirement": {
+                        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                        "amount": "10000",
+                        "network": "base-sepolia",
+                        "deadline": 1792780171094
+                      }
+                    },
+                    "signature": "0x492ac6684062bf33321ad6001215cbb6905746e185ed57bc720226f6ce1ec8514e0af5b25b8bfdd543f176b2334b19be54ec99c54aba3d25f7a2d07a47ee10e51c",
+                    "timestamp": 1792779871193,
+                    "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    "validAfter": 1792779871,
+                    "validBefore": 1792780171
+                  }
+                },
+                "source": "EXTERNAL_SIGNED_PAYMENT_PAYLOAD"
+              },
+              "sequence": 21,
+              "timestamp": 1792779871193,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871078,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871089,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871089,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871093,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871094,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871100,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779871181,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_SUBMITTED",
+                "from": "AUTHORIZED"
+              },
+              "sequence": 22,
+              "timestamp": 1792779871209,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "PAYMENT_SUBMITTED",
+              "phase": "PAYMENT",
+              "payload": {
+                "rawData": {
+                  "network": "base-sepolia",
+                  "success": true,
+                  "transactionHash": "0xsettle1a16a01e3ed9640"
+                },
+                "transactionHash": "0xsettle1a16a01e3ed9640"
+              },
+              "sequence": 23,
+              "timestamp": 1792779871216,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "RECONCILIATION_STARTED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "paymentIntentId": "pi_1792779871094_g4e8m5mxnep"
+              },
+              "sequence": 24,
+              "timestamp": 1792779871217,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "SETTLED",
+                "from": "PAYMENT_SUBMITTED"
+              },
+              "sequence": 25,
+              "timestamp": 1792779871232,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "SETTLEMENT_CONFIRMED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "evidenceBundle": {
+                  "receipt": {
+                    "status": 1,
+                    "gasUsed": "0",
+                    "blockNumber": 256
+                  },
+                  "transfer": {
+                    "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "value": "10000",
+                    "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                  },
+                  "confirmations": 16,
+                  "finalityReached": true,
+                  "rpcObservations": [],
+                  "authorizationUsed": {
+                    "logIndex": 1,
+                    "blockNumber": 256,
+                    "transactionHash": "0xsettle1a16a01e3ed9640"
+                  }
+                },
+                "paymentIntentId": "pi_1792779871094_g4e8m5mxnep"
+              },
+              "sequence": 26,
+              "timestamp": 1792779871232,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "SETTLEMENT_ALREADY_PERSISTED",
+              "phase": "EXECUTION",
+              "payload": {
+                "note": "CAS failed — settlement already persisted by another worker",
+                "paymentIntentId": "pi_1792779871094_g4e8m5mxnep"
+              },
+              "sequence": 27,
+              "timestamp": 1792779871253,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "EXECUTION_INITIATED",
+              "phase": "EXECUTION",
+              "payload": {
+                "jobId": "job-1792779874608-x5h6742euea",
+                "attemptId": "attempt-1792779874608-21xd6dq8bom",
+                "capability": "EXECUTION_IDEMPOTENT",
+                "executionId": "op_1792779871078_5psy47kokk8"
+              },
+              "timestamp": 1792779874609,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "kind": "DELIVERY_UNKNOWN",
+                  "error": "This operation was aborted",
+                  "reason": "TIMEOUT",
+                  "durationMs": 6003
+                },
+                "attemptId": "attempt-1792779874608-21xd6dq8bom"
+              },
+              "timestamp": 1792779880617,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_PENDING",
+                "from": "SETTLED",
+                "jobId": "job-1792779874608-x5h6742euea",
+                "reason": "TIMEOUT",
+                "finalStatus": "DELIVERY_UNKNOWN"
+              },
+              "timestamp": 1792779880626,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_UNKNOWN",
+                "from": "EXECUTION_PENDING",
+                "jobId": "job-1792779874608-x5h6742euea",
+                "reason": "TIMEOUT",
+                "finalStatus": "DELIVERY_UNKNOWN"
+              },
+              "timestamp": 1792779880626,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "kind": "DELIVERY_UNKNOWN",
+                  "error": "This operation was aborted",
+                  "reason": "TIMEOUT",
+                  "durationMs": 6001
+                },
+                "attemptId": "attempt-retry-1792779880622-vvy2zqblfro"
+              },
+              "timestamp": 1792779891637,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "kind": "DELIVERY_UNKNOWN",
+                  "error": "This operation was aborted",
+                  "reason": "TIMEOUT",
+                  "durationMs": 6001
+                },
+                "attemptId": "attempt-retry-1792779891640-taw0j4j618"
+              },
+              "timestamp": 1792779902651,
+              "operationId": "op_1792779871078_5psy47kokk8"
+            }
+          ],
+          "next_probe_at": null,
+          "probe_count": 0,
+          "version": 4,
+          "created_at": "2026-10-23T18:24:31.100Z",
+          "updated_at": "2026-10-23T18:25:02.651Z",
+          "target": "http://127.0.0.1:9977/resource",
+          "method": "POST",
+          "payment_policy": {
+            "maxPrice": "100000",
+            "allowedAssets": [
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+            ],
+            "allowedSellers": [
+              "0xcccccccccccccccccccccccccccccccccccccccc"
+            ],
+            "allowedNetworks": [
+              "base-sepolia"
+            ],
+            "authorizationMode": "explicit"
+          },
+          "extra_fields": null
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "recon-1792779871218-thsqrq1lpbg-mock-a",
+          "payment_intent_id": "pi_1792779871094_g4e8m5mxnep",
+          "attempt_id": "recon-1792779871218-thsqrq1lpbg",
+          "rpc_provider_id": "mock-a",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:31.228Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780171",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:31.229Z"
+        },
+        {
+          "observation_id": "recon-1792779871218-thsqrq1lpbg-mock-b",
+          "payment_intent_id": "pi_1792779871094_g4e8m5mxnep",
+          "attempt_id": "recon-1792779871218-thsqrq1lpbg",
+          "rpc_provider_id": "mock-b",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:24:31.228Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780171",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:24:31.230Z"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "attempt-1792779874608-21xd6dq8bom",
+          "operation_id": "op_1792779871078_5psy47kokk8",
+          "execution_id": "op_1792779871078_5psy47kokk8",
+          "attempt_number": 1,
+          "status": "DELIVERY_UNKNOWN",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": null,
+          "response_body": null,
+          "response_headers": null,
+          "error_reason": "TIMEOUT",
+          "idempotency_key": "op_1792779871078_5psy47kokk8",
+          "started_at": "2026-10-23T18:24:34.613Z",
+          "completed_at": "2026-10-23T18:24:40.621Z",
+          "created_at": "2026-10-23T18:24:34.609Z"
+        },
+        {
+          "attempt_id": "attempt-retry-1792779880622-vvy2zqblfro",
+          "operation_id": "op_1792779871078_5psy47kokk8",
+          "execution_id": "op_1792779871078_5psy47kokk8",
+          "attempt_number": 2,
+          "status": "DELIVERY_UNKNOWN",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": null,
+          "response_body": null,
+          "response_headers": null,
+          "error_reason": "TIMEOUT",
+          "idempotency_key": "op_1792779871078_5psy47kokk8",
+          "started_at": "2026-10-23T18:24:45.635Z",
+          "completed_at": "2026-10-23T18:24:51.639Z",
+          "created_at": "2026-10-23T18:24:40.622Z"
+        },
+        {
+          "attempt_id": "attempt-retry-1792779891640-taw0j4j618",
+          "operation_id": "op_1792779871078_5psy47kokk8",
+          "execution_id": "op_1792779871078_5psy47kokk8",
+          "attempt_number": 3,
+          "status": "DELIVERY_UNKNOWN",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": null,
+          "response_body": null,
+          "response_headers": null,
+          "error_reason": "TIMEOUT",
+          "idempotency_key": "op_1792779871078_5psy47kokk8",
+          "started_at": "2026-10-23T18:24:56.649Z",
+          "completed_at": "2026-10-23T18:25:02.653Z",
+          "created_at": "2026-10-23T18:24:51.640Z"
+        }
+      ],
+      "recovery": [
+        {
+          "job_id": "job-1792779874608-x5h6742euea",
+          "operation_id": "op_1792779871078_5psy47kokk8",
+          "job_type": "EXECUTION",
+          "status": "UNRESOLVABLE",
+          "priority": 0,
+          "max_attempts": 3,
+          "current_attempt": 3,
+          "fence_generation": 3,
+          "locked_by": null,
+          "locked_until": null,
+          "last_error": "Max attempts (3) reached with DELIVERY_UNKNOWN",
+          "metadata": {
+            "capability": "EXECUTION_IDEMPOTENT"
+          },
+          "created_at": "2026-10-23T18:24:34.609Z",
+          "updated_at": "2026-10-23T18:25:02.655Z"
+        }
+      ],
+      "nonces": [
+        {
+          "nonce": "0x68e69a5b8950322cf5250017ab773459a6b3e5116a5eb7d94784df2cd061c095",
+          "operation_id": "op_1792779871078_5psy47kokk8",
+          "status": "SETTLED",
+          "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "created_at": "2026-10-23T18:24:31.098Z",
+          "updated_at": "2026-10-23T18:24:31.231Z"
+        }
+      ]
+    },
+    "S5": {
+      "intents": [
+        {
+          "payment_intent_id": "pi_1792779902096_bhkavoyla8l",
+          "operation_id": "op_1792779902091_b15jmn3e6q",
+          "request_id": "cid:argus-live-1792779852-S5-req-5",
+          "client_id": "argus-live-1792779852-S5-req-5",
+          "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "pay_to": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "value": "10000.000000",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "network": "base-sepolia",
+          "nonce": "0x3c43f8751b3c8c96ed136f3ad8a1bb46e16f426901864e072ae98ccd3f27fd47",
+          "valid_after": "1792779902",
+          "valid_before": "1792780202",
+          "payment_payload": "{\"x402Version\":2,\"accepted\":{\"scheme\":\"exact\",\"network\":\"base-sepolia\",\"amount\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"payTo\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"maxTimeoutSeconds\":300,\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"}},\"payload\":{\"signature\":\"0xdda200ecd03025c464d93599cd41e7dfa9cb1ca432916f803ffeea4e84b425e819eeba8c75eeb383b929c67654fa3314934d0ad0c3125f0181061a5fe032cc421b\",\"authorization\":{\"from\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"to\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"value\":\"10000\",\"validAfter\":\"1792779902\",\"validBefore\":\"1792780202\",\"nonce\":\"0x3c43f8751b3c8c96ed136f3ad8a1bb46e16f426901864e072ae98ccd3f27fd47\"}}}",
+          "payment_payload_hash": "0x1e25e1c3c5c061ee97678a1a0523a58cd41f4ebf6d70d147ca75541e55a52a30",
+          "settlement_state": "SETTLED",
+          "tx_hash": "0xsettle1a16a025d2d1975",
+          "facilitator_http_status": 200,
+          "facilitator_response_body": {
+            "network": "base-sepolia",
+            "success": true,
+            "transactionHash": "0xsettle1a16a025d2d1975"
+          },
+          "error_reason": null,
+          "submit_attempt_at": "2026-10-23T18:25:02.255Z",
+          "settled_at": "2026-10-23T18:25:02.296Z",
+          "not_settled_at": null,
+          "settled_evidence_bundle": {
+            "receipt": {
+              "status": 1,
+              "gasUsed": "0",
+              "blockNumber": 256
+            },
+            "transfer": {
+              "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+              "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+              "value": "10000",
+              "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            },
+            "confirmations": 16,
+            "finalityReached": true,
+            "rpcObservations": [],
+            "authorizationUsed": {
+              "logIndex": 1,
+              "blockNumber": 256,
+              "transactionHash": "0xsettle1a16a025d2d1975"
+            }
+          },
+          "not_settled_evidence_bundle": null,
+          "reconciliation_observations": [
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "DISCOVERING",
+                "from": "CREATED"
+              },
+              "sequence": 1,
+              "timestamp": 1792779902094,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "target": "http://127.0.0.1:9977/resource"
+              },
+              "sequence": 2,
+              "timestamp": 1792779902094,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_REQUIRED",
+                "from": "DISCOVERING"
+              },
+              "sequence": 3,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "requirement": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                  "amount": "10000",
+                  "network": "base-sepolia",
+                  "deadline": 1792780202096
+                }
+              },
+              "sequence": 4,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "capabilities": {
+                  "recoveryCapability": "NONE"
+                }
+              },
+              "sequence": 5,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "POLICY",
+              "payload": {},
+              "sequence": 6,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "POLICY",
+              "payload": {
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                "amount": "10000",
+                "network": "base-sepolia"
+              },
+              "sequence": 7,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AWAITING_SIGNATURE",
+                "from": "PAYMENT_REQUIRED"
+              },
+              "sequence": 8,
+              "timestamp": 1792779902098,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "FINAL",
+              "payload": {
+                "method": "POST",
+                "target": "http://127.0.0.1:9977/resource",
+                "requestId": "cid:argus-live-1792779852-S5-req-5"
+              },
+              "sequence": 0,
+              "timestamp": 1792779902091,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "PAYMENT",
+              "payload": {
+                "source": "eip3009-verifier",
+                "requestId": "cid:argus-live-1792779852-S5-req-5",
+                "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "paymentIntentId": "pi_1792779902096_bhkavoyla8l"
+              },
+              "timestamp": 1792779902198,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AUTHORIZED",
+                "from": "AWAITING_SIGNATURE"
+              },
+              "sequence": 18,
+              "timestamp": 1792779902208,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "PAYMENT_AUTHORIZED",
+              "phase": "PAYMENT",
+              "payload": {
+                "intent": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount": "10000",
+                  "status": "AUTHORIZED",
+                  "network": "base-sepolia",
+                  "createdAt": 1792779902098,
+                  "operationId": "op_1792779902091_b15jmn3e6q",
+                  "requirement": {
+                    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                    "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "amount": "10000",
+                    "network": "base-sepolia",
+                    "deadline": 1792780202096
+                  },
+                  "authorization": {
+                    "payTo": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "value": "10000",
+                    "scheme": "exact",
+                    "context": {
+                      "nonce": "0x3c43f8751b3c8c96ed136f3ad8a1bb46e16f426901864e072ae98ccd3f27fd47",
+                      "operationId": "op_1792779902091_b15jmn3e6q",
+                      "requirement": {
+                        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                        "amount": "10000",
+                        "network": "base-sepolia",
+                        "deadline": 1792780202096
+                      }
+                    },
+                    "signature": "0xdda200ecd03025c464d93599cd41e7dfa9cb1ca432916f803ffeea4e84b425e819eeba8c75eeb383b929c67654fa3314934d0ad0c3125f0181061a5fe032cc421b",
+                    "timestamp": 1792779902208,
+                    "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    "validAfter": 1792779902,
+                    "validBefore": 1792780202
+                  }
+                },
+                "source": "EXTERNAL_SIGNED_PAYMENT_PAYLOAD"
+              },
+              "sequence": 19,
+              "timestamp": 1792779902208,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902091,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902094,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902094,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902096,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779902098,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_SUBMITTED",
+                "from": "AUTHORIZED"
+              },
+              "sequence": 20,
+              "timestamp": 1792779902225,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "PAYMENT_SUBMITTED",
+              "phase": "PAYMENT",
+              "payload": {
+                "rawData": {
+                  "network": "base-sepolia",
+                  "success": true,
+                  "transactionHash": "0xsettle1a16a025d2d1975"
+                },
+                "transactionHash": "0xsettle1a16a025d2d1975"
+              },
+              "sequence": 21,
+              "timestamp": 1792779902274,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "RECONCILIATION_STARTED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "paymentIntentId": "pi_1792779902096_bhkavoyla8l"
+              },
+              "sequence": 22,
+              "timestamp": 1792779902275,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "SETTLED",
+                "from": "PAYMENT_SUBMITTED"
+              },
+              "sequence": 23,
+              "timestamp": 1792779902298,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "SETTLEMENT_CONFIRMED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "evidenceBundle": {
+                  "receipt": {
+                    "status": 1,
+                    "gasUsed": "0",
+                    "blockNumber": 256
+                  },
+                  "transfer": {
+                    "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "value": "10000",
+                    "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                  },
+                  "confirmations": 16,
+                  "finalityReached": true,
+                  "rpcObservations": [],
+                  "authorizationUsed": {
+                    "logIndex": 1,
+                    "blockNumber": 256,
+                    "transactionHash": "0xsettle1a16a025d2d1975"
+                  }
+                },
+                "paymentIntentId": "pi_1792779902096_bhkavoyla8l"
+              },
+              "sequence": 24,
+              "timestamp": 1792779902298,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "SETTLEMENT_ALREADY_PERSISTED",
+              "phase": "EXECUTION",
+              "payload": {
+                "note": "CAS failed — settlement already persisted by another worker",
+                "paymentIntentId": "pi_1792779902096_bhkavoyla8l"
+              },
+              "sequence": 25,
+              "timestamp": 1792779902300,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "EXECUTION_INITIATED",
+              "phase": "EXECUTION",
+              "payload": {
+                "jobId": "job-1792779907660-yfpwwkct5gb",
+                "attemptId": "attempt-1792779907660-ujo1c97316",
+                "capability": "EXECUTION_IDEMPOTENT",
+                "executionId": "op_1792779902091_b15jmn3e6q"
+              },
+              "timestamp": 1792779907661,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "body": {
+                    "echo": {},
+                    "result": "delivered"
+                  },
+                  "kind": "SUCCESS",
+                  "headers": {
+                    "date": "Fri, 23 Oct 2026 18:25:07 GMT",
+                    "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+                    "connection": "keep-alive",
+                    "keep-alive": "timeout=5",
+                    "content-type": "application/json; charset=utf-8",
+                    "x-powered-by": "Express",
+                    "content-length": "32"
+                  },
+                  "durationMs": 3,
+                  "statusCode": 200
+                },
+                "attemptId": "attempt-1792779907660-ujo1c97316"
+              },
+              "timestamp": 1792779907669,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "EXECUTION_SUCCESS",
+              "phase": "EXECUTION",
+              "payload": {
+                "attemptId": "attempt-1792779907660-ujo1c97316",
+                "statusCode": 200
+              },
+              "timestamp": 1792779907672,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_PENDING",
+                "from": "SETTLED",
+                "jobId": "job-1792779907660-yfpwwkct5gb",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779907674,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_CONFIRMED",
+                "from": "EXECUTION_PENDING",
+                "jobId": "job-1792779907660-yfpwwkct5gb",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779907674,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "DELIVERED",
+                "from": "EXECUTION_CONFIRMED",
+                "jobId": "job-1792779907660-yfpwwkct5gb",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779907674,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "SUCCESS",
+                "from": "DELIVERED",
+                "jobId": "job-1792779907660-yfpwwkct5gb",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779907675,
+              "operationId": "op_1792779902091_b15jmn3e6q"
+            }
+          ],
+          "next_probe_at": null,
+          "probe_count": 0,
+          "version": 4,
+          "created_at": "2026-10-23T18:25:02.098Z",
+          "updated_at": "2026-10-23T18:25:07.681Z",
+          "target": "http://127.0.0.1:9977/resource",
+          "method": "POST",
+          "payment_policy": {
+            "maxPrice": "100000",
+            "allowedAssets": [
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+            ],
+            "allowedSellers": [
+              "0xcccccccccccccccccccccccccccccccccccccccc"
+            ],
+            "allowedNetworks": [
+              "base-sepolia"
+            ],
+            "authorizationMode": "explicit"
+          },
+          "extra_fields": null
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "recon-1792779902277-5zz9cf4j0nd-mock-a",
+          "payment_intent_id": "pi_1792779902096_bhkavoyla8l",
+          "attempt_id": "recon-1792779902277-5zz9cf4j0nd",
+          "rpc_provider_id": "mock-a",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:25:02.293Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780202",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:25:02.294Z"
+        },
+        {
+          "observation_id": "recon-1792779902277-5zz9cf4j0nd-mock-b",
+          "payment_intent_id": "pi_1792779902096_bhkavoyla8l",
+          "attempt_id": "recon-1792779902277-5zz9cf4j0nd",
+          "rpc_provider_id": "mock-b",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:25:02.294Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780202",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:25:02.295Z"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "attempt-1792779907660-ujo1c97316",
+          "operation_id": "op_1792779902091_b15jmn3e6q",
+          "execution_id": "op_1792779902091_b15jmn3e6q",
+          "attempt_number": 1,
+          "status": "SUCCESS",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": 200,
+          "response_body": {
+            "echo": {},
+            "result": "delivered"
+          },
+          "response_headers": {
+            "date": "Fri, 23 Oct 2026 18:25:07 GMT",
+            "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+            "connection": "keep-alive",
+            "keep-alive": "timeout=5",
+            "content-type": "application/json; charset=utf-8",
+            "x-powered-by": "Express",
+            "content-length": "32"
+          },
+          "error_reason": null,
+          "idempotency_key": "op_1792779902091_b15jmn3e6q",
+          "started_at": "2026-10-23T18:25:07.666Z",
+          "completed_at": "2026-10-23T18:25:07.671Z",
+          "created_at": "2026-10-23T18:25:07.660Z"
+        }
+      ],
+      "recovery": [
+        {
+          "job_id": "job-1792779907660-yfpwwkct5gb",
+          "operation_id": "op_1792779902091_b15jmn3e6q",
+          "job_type": "EXECUTION",
+          "status": "COMPLETED",
+          "priority": 0,
+          "max_attempts": 3,
+          "current_attempt": 1,
+          "fence_generation": 1,
+          "locked_by": null,
+          "locked_until": null,
+          "last_error": null,
+          "metadata": {
+            "capability": "EXECUTION_IDEMPOTENT"
+          },
+          "created_at": "2026-10-23T18:25:07.661Z",
+          "updated_at": "2026-10-23T18:25:07.672Z"
+        }
+      ],
+      "nonces": [
+        {
+          "nonce": "0x3c43f8751b3c8c96ed136f3ad8a1bb46e16f426901864e072ae98ccd3f27fd47",
+          "operation_id": "op_1792779902091_b15jmn3e6q",
+          "status": "SETTLED",
+          "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "created_at": "2026-10-23T18:25:02.097Z",
+          "updated_at": "2026-10-23T18:25:02.297Z"
+        }
+      ]
+    },
+    "S6": {
+      "intents": [
+        {
+          "payment_intent_id": "pi_1792779909080_hk2ut62vpbj",
+          "operation_id": "op_1792779909075_vmca3t23i1",
+          "request_id": "cid:argus-live-1792779852-S6-req-6",
+          "client_id": "argus-live-1792779852-S6-req-6",
+          "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "pay_to": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "value": "10000.000000",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "network": "base-sepolia",
+          "nonce": "0x049f1bbc74388525ed4ea406307da8f50924b245ff463ae12df12417d255a115",
+          "valid_after": "1792779909",
+          "valid_before": "1792780209",
+          "payment_payload": "{\"x402Version\":2,\"accepted\":{\"scheme\":\"exact\",\"network\":\"base-sepolia\",\"amount\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"payTo\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"maxTimeoutSeconds\":300,\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"}},\"payload\":{\"signature\":\"0x945432bda593a7a1a32451351ff2fdc3b5a50064d4a9c1d208bd93b85d1e7f5c1a0b985b69904989662e3e650ae6550ee9746c4ce17001a0574399f6f8a70b271c\",\"authorization\":{\"from\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"to\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"value\":\"10000\",\"validAfter\":\"1792779909\",\"validBefore\":\"1792780209\",\"nonce\":\"0x049f1bbc74388525ed4ea406307da8f50924b245ff463ae12df12417d255a115\"}}}",
+          "payment_payload_hash": "0xcbfc0854561a53026f861d8aa1f2a4a1846724331ef557ed86817dff4a796573",
+          "settlement_state": "SETTLED",
+          "tx_hash": "0xsettle1a16a02783736b2",
+          "facilitator_http_status": 200,
+          "facilitator_response_body": {
+            "network": "base-sepolia",
+            "success": true,
+            "transactionHash": "0xsettle1a16a02783736b2"
+          },
+          "error_reason": null,
+          "submit_attempt_at": "2026-10-23T18:25:09.176Z",
+          "settled_at": "2026-10-23T18:25:09.190Z",
+          "not_settled_at": null,
+          "settled_evidence_bundle": {
+            "receipt": {
+              "status": 1,
+              "gasUsed": "0",
+              "blockNumber": 256
+            },
+            "transfer": {
+              "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+              "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+              "value": "10000",
+              "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            },
+            "confirmations": 16,
+            "finalityReached": true,
+            "rpcObservations": [],
+            "authorizationUsed": {
+              "logIndex": 1,
+              "blockNumber": 256,
+              "transactionHash": "0xsettle1a16a02783736b2"
+            }
+          },
+          "not_settled_evidence_bundle": null,
+          "reconciliation_observations": [
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "DISCOVERING",
+                "from": "CREATED"
+              },
+              "sequence": 1,
+              "timestamp": 1792779909078,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "target": "http://127.0.0.1:9977/resource"
+              },
+              "sequence": 2,
+              "timestamp": 1792779909078,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_REQUIRED",
+                "from": "DISCOVERING"
+              },
+              "sequence": 3,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "requirement": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                  "amount": "10000",
+                  "network": "base-sepolia",
+                  "deadline": 1792780209080
+                }
+              },
+              "sequence": 4,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "capabilities": {
+                  "recoveryCapability": "NONE"
+                }
+              },
+              "sequence": 5,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "POLICY",
+              "payload": {},
+              "sequence": 6,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "POLICY",
+              "payload": {
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                "amount": "10000",
+                "network": "base-sepolia"
+              },
+              "sequence": 7,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AWAITING_SIGNATURE",
+                "from": "PAYMENT_REQUIRED"
+              },
+              "sequence": 8,
+              "timestamp": 1792779909083,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "FINAL",
+              "payload": {
+                "method": "POST",
+                "target": "http://127.0.0.1:9977/resource",
+                "requestId": "cid:argus-live-1792779852-S6-req-6"
+              },
+              "sequence": 0,
+              "timestamp": 1792779909075,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "PAYMENT",
+              "payload": {
+                "source": "eip3009-verifier",
+                "requestId": "cid:argus-live-1792779852-S6-req-6",
+                "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "paymentIntentId": "pi_1792779909080_hk2ut62vpbj"
+              },
+              "timestamp": 1792779909129,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AUTHORIZED",
+                "from": "AWAITING_SIGNATURE"
+              },
+              "sequence": 18,
+              "timestamp": 1792779909156,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "PAYMENT_AUTHORIZED",
+              "phase": "PAYMENT",
+              "payload": {
+                "intent": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount": "10000",
+                  "status": "AUTHORIZED",
+                  "network": "base-sepolia",
+                  "createdAt": 1792779909082,
+                  "operationId": "op_1792779909075_vmca3t23i1",
+                  "requirement": {
+                    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                    "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "amount": "10000",
+                    "network": "base-sepolia",
+                    "deadline": 1792780209080
+                  },
+                  "authorization": {
+                    "payTo": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "value": "10000",
+                    "scheme": "exact",
+                    "context": {
+                      "nonce": "0x049f1bbc74388525ed4ea406307da8f50924b245ff463ae12df12417d255a115",
+                      "operationId": "op_1792779909075_vmca3t23i1",
+                      "requirement": {
+                        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                        "amount": "10000",
+                        "network": "base-sepolia",
+                        "deadline": 1792780209080
+                      }
+                    },
+                    "signature": "0x945432bda593a7a1a32451351ff2fdc3b5a50064d4a9c1d208bd93b85d1e7f5c1a0b985b69904989662e3e650ae6550ee9746c4ce17001a0574399f6f8a70b271c",
+                    "timestamp": 1792779909156,
+                    "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    "validAfter": 1792779909,
+                    "validBefore": 1792780209
+                  }
+                },
+                "source": "EXTERNAL_SIGNED_PAYMENT_PAYLOAD"
+              },
+              "sequence": 19,
+              "timestamp": 1792779909156,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909075,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909078,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909078,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909080,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779909083,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_SUBMITTED",
+                "from": "AUTHORIZED"
+              },
+              "sequence": 20,
+              "timestamp": 1792779909171,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "PAYMENT_SUBMITTED",
+              "phase": "PAYMENT",
+              "payload": {
+                "rawData": {
+                  "network": "base-sepolia",
+                  "success": true,
+                  "transactionHash": "0xsettle1a16a02783736b2"
+                },
+                "transactionHash": "0xsettle1a16a02783736b2"
+              },
+              "sequence": 21,
+              "timestamp": 1792779909177,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "RECONCILIATION_STARTED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "paymentIntentId": "pi_1792779909080_hk2ut62vpbj"
+              },
+              "sequence": 22,
+              "timestamp": 1792779909178,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "SETTLED",
+                "from": "PAYMENT_SUBMITTED"
+              },
+              "sequence": 23,
+              "timestamp": 1792779909191,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "SETTLEMENT_CONFIRMED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "evidenceBundle": {
+                  "receipt": {
+                    "status": 1,
+                    "gasUsed": "0",
+                    "blockNumber": 256
+                  },
+                  "transfer": {
+                    "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "value": "10000",
+                    "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                  },
+                  "confirmations": 16,
+                  "finalityReached": true,
+                  "rpcObservations": [],
+                  "authorizationUsed": {
+                    "logIndex": 1,
+                    "blockNumber": 256,
+                    "transactionHash": "0xsettle1a16a02783736b2"
+                  }
+                },
+                "paymentIntentId": "pi_1792779909080_hk2ut62vpbj"
+              },
+              "sequence": 24,
+              "timestamp": 1792779909191,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "SETTLEMENT_ALREADY_PERSISTED",
+              "phase": "EXECUTION",
+              "payload": {
+                "note": "CAS failed — settlement already persisted by another worker",
+                "paymentIntentId": "pi_1792779909080_hk2ut62vpbj"
+              },
+              "sequence": 25,
+              "timestamp": 1792779909193,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "EXECUTION_INITIATED",
+              "phase": "EXECUTION",
+              "payload": {
+                "jobId": "job-1792779912685-kcoktqpfzs",
+                "attemptId": "attempt-1792779912685-2l3pu3q0wn6",
+                "capability": "EXECUTION_IDEMPOTENT",
+                "executionId": "op_1792779909075_vmca3t23i1"
+              },
+              "timestamp": 1792779912686,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "body": {
+                    "echo": {},
+                    "result": "delivered"
+                  },
+                  "kind": "SUCCESS",
+                  "headers": {
+                    "date": "Fri, 23 Oct 2026 18:25:12 GMT",
+                    "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+                    "connection": "keep-alive",
+                    "keep-alive": "timeout=5",
+                    "content-type": "application/json; charset=utf-8",
+                    "x-powered-by": "Express",
+                    "content-length": "32"
+                  },
+                  "durationMs": 2,
+                  "statusCode": 200
+                },
+                "attemptId": "attempt-1792779912685-2l3pu3q0wn6"
+              },
+              "timestamp": 1792779912692,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "EXECUTION_SUCCESS",
+              "phase": "EXECUTION",
+              "payload": {
+                "attemptId": "attempt-1792779912685-2l3pu3q0wn6",
+                "statusCode": 200
+              },
+              "timestamp": 1792779912695,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_PENDING",
+                "from": "SETTLED",
+                "jobId": "job-1792779912685-kcoktqpfzs",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779912697,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_CONFIRMED",
+                "from": "EXECUTION_PENDING",
+                "jobId": "job-1792779912685-kcoktqpfzs",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779912697,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "DELIVERED",
+                "from": "EXECUTION_CONFIRMED",
+                "jobId": "job-1792779912685-kcoktqpfzs",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779912697,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "SUCCESS",
+                "from": "DELIVERED",
+                "jobId": "job-1792779912685-kcoktqpfzs",
+                "statusCode": 200,
+                "finalStatus": "SUCCESS"
+              },
+              "timestamp": 1792779912697,
+              "operationId": "op_1792779909075_vmca3t23i1"
+            }
+          ],
+          "next_probe_at": null,
+          "probe_count": 0,
+          "version": 4,
+          "created_at": "2026-10-23T18:25:09.082Z",
+          "updated_at": "2026-10-23T18:25:12.702Z",
+          "target": "http://127.0.0.1:9977/resource",
+          "method": "POST",
+          "payment_policy": {
+            "maxPrice": "100000",
+            "allowedAssets": [
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+            ],
+            "allowedSellers": [
+              "0xcccccccccccccccccccccccccccccccccccccccc"
+            ],
+            "allowedNetworks": [
+              "base-sepolia"
+            ],
+            "authorizationMode": "explicit"
+          },
+          "extra_fields": null
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "recon-1792779909179-z7e1252zw9-mock-a",
+          "payment_intent_id": "pi_1792779909080_hk2ut62vpbj",
+          "attempt_id": "recon-1792779909179-z7e1252zw9",
+          "rpc_provider_id": "mock-a",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:25:09.188Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780209",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:25:09.189Z"
+        },
+        {
+          "observation_id": "recon-1792779909179-z7e1252zw9-mock-b",
+          "payment_intent_id": "pi_1792779909080_hk2ut62vpbj",
+          "attempt_id": "recon-1792779909179-z7e1252zw9",
+          "rpc_provider_id": "mock-b",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:25:09.188Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780209",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:25:09.189Z"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "attempt-1792779912685-2l3pu3q0wn6",
+          "operation_id": "op_1792779909075_vmca3t23i1",
+          "execution_id": "op_1792779909075_vmca3t23i1",
+          "attempt_number": 1,
+          "status": "SUCCESS",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": 200,
+          "response_body": {
+            "echo": {},
+            "result": "delivered"
+          },
+          "response_headers": {
+            "date": "Fri, 23 Oct 2026 18:25:12 GMT",
+            "etag": "W/\"20-1Ah+0jJtZXXF0rImZQRxBG8VkmM\"",
+            "connection": "keep-alive",
+            "keep-alive": "timeout=5",
+            "content-type": "application/json; charset=utf-8",
+            "x-powered-by": "Express",
+            "content-length": "32"
+          },
+          "error_reason": null,
+          "idempotency_key": "op_1792779909075_vmca3t23i1",
+          "started_at": "2026-10-23T18:25:12.690Z",
+          "completed_at": "2026-10-23T18:25:12.694Z",
+          "created_at": "2026-10-23T18:25:12.686Z"
+        }
+      ],
+      "recovery": [
+        {
+          "job_id": "job-1792779912685-kcoktqpfzs",
+          "operation_id": "op_1792779909075_vmca3t23i1",
+          "job_type": "EXECUTION",
+          "status": "COMPLETED",
+          "priority": 0,
+          "max_attempts": 3,
+          "current_attempt": 1,
+          "fence_generation": 1,
+          "locked_by": null,
+          "locked_until": null,
+          "last_error": null,
+          "metadata": {
+            "capability": "EXECUTION_IDEMPOTENT"
+          },
+          "created_at": "2026-10-23T18:25:12.686Z",
+          "updated_at": "2026-10-23T18:25:12.694Z"
+        }
+      ],
+      "nonces": [
+        {
+          "nonce": "0x049f1bbc74388525ed4ea406307da8f50924b245ff463ae12df12417d255a115",
+          "operation_id": "op_1792779909075_vmca3t23i1",
+          "status": "SETTLED",
+          "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "created_at": "2026-10-23T18:25:09.080Z",
+          "updated_at": "2026-10-23T18:25:09.190Z"
+        }
+      ]
+    },
+    "S7": {
+      "intents": [
+        {
+          "payment_intent_id": "pi_1792779913876_csibvfkbn4",
+          "operation_id": "op_1792779913872_dn7zlzw7ysw",
+          "request_id": "cid:argus-live-1792779852-S7-req-7",
+          "client_id": "argus-live-1792779852-S7-req-7",
+          "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "pay_to": "0xcccccccccccccccccccccccccccccccccccccccc",
+          "value": "10000.000000",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "network": "base-sepolia",
+          "nonce": "0x6b376fa93e30452f6d420160cf58897014720f2aeba3e2b831e966ee579d1508",
+          "valid_after": "1792779913",
+          "valid_before": "1792780213",
+          "payment_payload": "{\"x402Version\":2,\"accepted\":{\"scheme\":\"exact\",\"network\":\"base-sepolia\",\"amount\":\"10000\",\"asset\":\"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\",\"payTo\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"maxTimeoutSeconds\":300,\"extra\":{\"name\":\"USD Coin\",\"version\":\"2\"}},\"payload\":{\"signature\":\"0x5d5c3fa900eedf48f82371c81781e689448f972a1230ca31fa32cc9226f0c17c576e875bce51ddecb57c2c20915f1d3d8cb1235ae444fa6d94371600d778f56e1b\",\"authorization\":{\"from\":\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\",\"to\":\"0xcccccccccccccccccccccccccccccccccccccccc\",\"value\":\"10000\",\"validAfter\":\"1792779913\",\"validBefore\":\"1792780213\",\"nonce\":\"0x6b376fa93e30452f6d420160cf58897014720f2aeba3e2b831e966ee579d1508\"}}}",
+          "payment_payload_hash": "0x9be32a1a7c9afd78d6a9a525d33f12f26f3d6be4de66183f3c318d30ee69d8bd",
+          "settlement_state": "SETTLED",
+          "tx_hash": "0xsettle1a16a028ae90c6e",
+          "facilitator_http_status": 200,
+          "facilitator_response_body": {
+            "network": "base-sepolia",
+            "success": true,
+            "transactionHash": "0xsettle1a16a028ae90c6e"
+          },
+          "error_reason": null,
+          "submit_attempt_at": "2026-10-23T18:25:13.962Z",
+          "settled_at": "2026-10-23T18:25:13.978Z",
+          "not_settled_at": null,
+          "settled_evidence_bundle": {
+            "receipt": {
+              "status": 1,
+              "gasUsed": "0",
+              "blockNumber": 256
+            },
+            "transfer": {
+              "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+              "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+              "value": "10000",
+              "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+            },
+            "confirmations": 16,
+            "finalityReached": true,
+            "rpcObservations": [],
+            "authorizationUsed": {
+              "logIndex": 1,
+              "blockNumber": 256,
+              "transactionHash": "0xsettle1a16a028ae90c6e"
+            }
+          },
+          "not_settled_evidence_bundle": null,
+          "reconciliation_observations": [
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "DISCOVERING",
+                "from": "CREATED"
+              },
+              "sequence": 1,
+              "timestamp": 1792779913874,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "target": "http://127.0.0.1:9977/resource"
+              },
+              "sequence": 2,
+              "timestamp": 1792779913874,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_REQUIRED",
+                "from": "DISCOVERING"
+              },
+              "sequence": 3,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "requirement": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                  "amount": "10000",
+                  "network": "base-sepolia",
+                  "deadline": 1792780213876
+                }
+              },
+              "sequence": 4,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": {
+                "capabilities": {
+                  "recoveryCapability": "NONE"
+                }
+              },
+              "sequence": 5,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "POLICY",
+              "payload": {},
+              "sequence": 6,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "POLICY",
+              "payload": {
+                "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                "amount": "10000",
+                "network": "base-sepolia"
+              },
+              "sequence": 7,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AWAITING_SIGNATURE",
+                "from": "PAYMENT_REQUIRED"
+              },
+              "sequence": 8,
+              "timestamp": 1792779913878,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "FINAL",
+              "payload": {
+                "method": "POST",
+                "target": "http://127.0.0.1:9977/resource",
+                "requestId": "cid:argus-live-1792779852-S7-req-7"
+              },
+              "sequence": 0,
+              "timestamp": 1792779913872,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "PAYMENT",
+              "payload": {
+                "source": "eip3009-verifier",
+                "requestId": "cid:argus-live-1792779852-S7-req-7",
+                "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "paymentIntentId": "pi_1792779913876_csibvfkbn4"
+              },
+              "timestamp": 1792779913913,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "AUTHORIZED",
+                "from": "AWAITING_SIGNATURE"
+              },
+              "sequence": 20,
+              "timestamp": 1792779913920,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "PAYMENT_AUTHORIZED",
+              "phase": "PAYMENT",
+              "payload": {
+                "intent": {
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount": "10000",
+                  "status": "AUTHORIZED",
+                  "network": "base-sepolia",
+                  "createdAt": 1792779913877,
+                  "operationId": "op_1792779913872_dn7zlzw7ysw",
+                  "requirement": {
+                    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                    "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "amount": "10000",
+                    "network": "base-sepolia",
+                    "deadline": 1792780213876
+                  },
+                  "authorization": {
+                    "payTo": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "value": "10000",
+                    "scheme": "exact",
+                    "context": {
+                      "nonce": "0x6b376fa93e30452f6d420160cf58897014720f2aeba3e2b831e966ee579d1508",
+                      "operationId": "op_1792779913872_dn7zlzw7ysw",
+                      "requirement": {
+                        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                        "payee": "0xcccccccccccccccccccccccccccccccccccccccc",
+                        "amount": "10000",
+                        "network": "base-sepolia",
+                        "deadline": 1792780213876
+                      }
+                    },
+                    "signature": "0x5d5c3fa900eedf48f82371c81781e689448f972a1230ca31fa32cc9226f0c17c576e875bce51ddecb57c2c20915f1d3d8cb1235ae444fa6d94371600d778f56e1b",
+                    "timestamp": 1792779913920,
+                    "authorizer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    "validAfter": 1792779913,
+                    "validBefore": 1792780213
+                  }
+                },
+                "source": "EXTERNAL_SIGNED_PAYMENT_PAYLOAD"
+              },
+              "sequence": 21,
+              "timestamp": 1792779913920,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "OPERATION_CREATED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913872,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913874,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "DISCOVERY_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913874,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "PAYMENT_REQUIREMENT_RECEIVED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "SELLER_CAPABILITIES_DISCOVERED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "POLICY_VALIDATION_STARTED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "POLICY_VALIDATION_PASSED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913876,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913878,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "PAYMENT_VERIFIED",
+              "phase": "DISCOVERY",
+              "payload": null,
+              "timestamp": 1792779913913,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "PAYMENT_SUBMITTED",
+                "from": "AUTHORIZED"
+              },
+              "sequence": 22,
+              "timestamp": 1792779913958,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "PAYMENT_SUBMITTED",
+              "phase": "PAYMENT",
+              "payload": {
+                "rawData": {
+                  "network": "base-sepolia",
+                  "success": true,
+                  "transactionHash": "0xsettle1a16a028ae90c6e"
+                },
+                "transactionHash": "0xsettle1a16a028ae90c6e"
+              },
+              "sequence": 23,
+              "timestamp": 1792779913969,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "RECONCILIATION_STARTED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "paymentIntentId": "pi_1792779913876_csibvfkbn4"
+              },
+              "sequence": 24,
+              "timestamp": 1792779913971,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "FINAL",
+              "payload": {
+                "to": "SETTLED",
+                "from": "PAYMENT_SUBMITTED"
+              },
+              "sequence": 25,
+              "timestamp": 1792779913979,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "SETTLEMENT_CONFIRMED",
+              "phase": "SETTLEMENT",
+              "payload": {
+                "evidenceBundle": {
+                  "receipt": {
+                    "status": 1,
+                    "gasUsed": "0",
+                    "blockNumber": 256
+                  },
+                  "transfer": {
+                    "to": "0xcccccccccccccccccccccccccccccccccccccccc",
+                    "from": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "value": "10000",
+                    "tokenContract": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                  },
+                  "confirmations": 16,
+                  "finalityReached": true,
+                  "rpcObservations": [],
+                  "authorizationUsed": {
+                    "logIndex": 1,
+                    "blockNumber": 256,
+                    "transactionHash": "0xsettle1a16a028ae90c6e"
+                  }
+                },
+                "paymentIntentId": "pi_1792779913876_csibvfkbn4"
+              },
+              "sequence": 26,
+              "timestamp": 1792779913979,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "SETTLEMENT_ALREADY_PERSISTED",
+              "phase": "EXECUTION",
+              "payload": {
+                "note": "CAS failed — settlement already persisted by another worker",
+                "paymentIntentId": "pi_1792779913876_csibvfkbn4"
+              },
+              "sequence": 27,
+              "timestamp": 1792779913980,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "EXECUTION_INITIATED",
+              "phase": "EXECUTION",
+              "payload": {
+                "jobId": "job-1792779917706-u050bhpchy9",
+                "attemptId": "attempt-1792779917706-mdbvsawpa3n",
+                "capability": "EXECUTION_IDEMPOTENT",
+                "executionId": "op_1792779913872_dn7zlzw7ysw"
+              },
+              "timestamp": 1792779917707,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "EXECUTION_RESULT_RAW",
+              "phase": "EXECUTION",
+              "payload": {
+                "result": {
+                  "kind": "DELIVERY_UNKNOWN",
+                  "error": "2xx status received but the response body stream failed (status 200)",
+                  "reason": "RESPONSE_STREAM_FAILED",
+                  "durationMs": 54
+                },
+                "attemptId": "attempt-1792779917706-mdbvsawpa3n"
+              },
+              "timestamp": 1792779917764,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_PENDING",
+                "from": "SETTLED",
+                "jobId": "job-1792779917706-u050bhpchy9",
+                "reason": "RESPONSE_STREAM_FAILED",
+                "finalStatus": "DELIVERY_UNKNOWN"
+              },
+              "timestamp": 1792779917770,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            },
+            {
+              "event": "STATE_TRANSITION",
+              "phase": "EXECUTION",
+              "payload": {
+                "to": "EXECUTION_UNKNOWN",
+                "from": "EXECUTION_PENDING",
+                "jobId": "job-1792779917706-u050bhpchy9",
+                "reason": "RESPONSE_STREAM_FAILED",
+                "finalStatus": "DELIVERY_UNKNOWN"
+              },
+              "timestamp": 1792779917770,
+              "operationId": "op_1792779913872_dn7zlzw7ysw"
+            }
+          ],
+          "next_probe_at": null,
+          "probe_count": 0,
+          "version": 4,
+          "created_at": "2026-10-23T18:25:13.877Z",
+          "updated_at": "2026-10-23T18:25:17.772Z",
+          "target": "http://127.0.0.1:9977/resource",
+          "method": "POST",
+          "payment_policy": {
+            "maxPrice": "100000",
+            "allowedAssets": [
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+            ],
+            "allowedSellers": [
+              "0xcccccccccccccccccccccccccccccccccccccccc"
+            ],
+            "allowedNetworks": [
+              "base-sepolia"
+            ],
+            "authorizationMode": "explicit"
+          },
+          "extra_fields": null
+        }
+      ],
+      "observations": [
+        {
+          "observation_id": "recon-1792779913971-z5fauxobalb-mock-a",
+          "payment_intent_id": "pi_1792779913876_csibvfkbn4",
+          "attempt_id": "recon-1792779913971-z5fauxobalb",
+          "rpc_provider_id": "mock-a",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:25:13.976Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780213",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:25:13.977Z"
+        },
+        {
+          "observation_id": "recon-1792779913971-z5fauxobalb-mock-b",
+          "payment_intent_id": "pi_1792779913876_csibvfkbn4",
+          "attempt_id": "recon-1792779913971-z5fauxobalb",
+          "rpc_provider_id": "mock-b",
+          "underlying_provider": "",
+          "observed_at": "2026-10-23T18:25:13.977Z",
+          "block_number": "0",
+          "chain_head": "0",
+          "authorization_state": null,
+          "valid_before": "1792780213",
+          "result": "SETTLED_FOUND",
+          "staleness_blocks": null,
+          "error": null,
+          "created_at": "2026-10-23T18:25:13.978Z"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "attempt-1792779917706-mdbvsawpa3n",
+          "operation_id": "op_1792779913872_dn7zlzw7ysw",
+          "execution_id": "op_1792779913872_dn7zlzw7ysw",
+          "attempt_number": 1,
+          "status": "DELIVERY_UNKNOWN",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": null,
+          "response_body": null,
+          "response_headers": null,
+          "error_reason": "RESPONSE_STREAM_FAILED",
+          "idempotency_key": "op_1792779913872_dn7zlzw7ysw",
+          "started_at": "2026-10-23T18:25:17.710Z",
+          "completed_at": "2026-10-23T18:25:17.767Z",
+          "created_at": "2026-10-23T18:25:17.706Z"
+        },
+        {
+          "attempt_id": "attempt-retry-1792779917768-p1ot7vgzrpq",
+          "operation_id": "op_1792779913872_dn7zlzw7ysw",
+          "execution_id": "op_1792779913872_dn7zlzw7ysw",
+          "attempt_number": 2,
+          "status": "PENDING",
+          "request_url": "http://127.0.0.1:9977/seller",
+          "request_method": "POST",
+          "request_body": null,
+          "response_status_code": null,
+          "response_body": null,
+          "response_headers": null,
+          "error_reason": null,
+          "idempotency_key": "op_1792779913872_dn7zlzw7ysw",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-10-23T18:25:17.768Z"
+        }
+      ],
+      "recovery": [
+        {
+          "job_id": "job-1792779917706-u050bhpchy9",
+          "operation_id": "op_1792779913872_dn7zlzw7ysw",
+          "job_type": "EXECUTION",
+          "status": "PENDING",
+          "priority": 0,
+          "max_attempts": 3,
+          "current_attempt": 1,
+          "fence_generation": 1,
+          "locked_by": null,
+          "locked_until": null,
+          "last_error": "DELIVERY_UNKNOWN — retry attempt created",
+          "metadata": {
+            "capability": "EXECUTION_IDEMPOTENT"
+          },
+          "created_at": "2026-10-23T18:25:17.706Z",
+          "updated_at": "2026-10-23T18:25:17.768Z"
+        }
+      ],
+      "nonces": [
+        {
+          "nonce": "0x6b376fa93e30452f6d420160cf58897014720f2aeba3e2b831e966ee579d1508",
+          "operation_id": "op_1792779913872_dn7zlzw7ysw",
+          "status": "SETTLED",
+          "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "created_at": "2026-10-23T18:25:13.876Z",
+          "updated_at": "2026-10-23T18:25:13.978Z"
+        }
+      ]
+    }
+  }
+}
