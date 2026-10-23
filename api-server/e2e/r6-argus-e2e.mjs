@@ -34,6 +34,30 @@
  *   B-BS-13   authorization.nonce mismatch      → NONCE_MISMATCH
  *   B-BS-14   authorization.validBefore drift   → VALID_BEFORE_MISMATCH
  *   B-BS-15   forged signature (zero bytes)     → INVALID_SIGNATURE
+ *   ---- Stage C: post-money adversarial — money ALREADY settled. The guard
+ *   here is honest classification + recovery + ledger integrity, NOT a policy
+ *   rejection. Numbering continues the B-BS block (adversarial seller);
+ *   B-BS-18 adapts the Argus Lab Block D S11 "Over Budget" fiat scenario to
+ *   x402 rails (the Lab's own S10 "Delivery Uncertain" maps to the recover
+ *   leg of B-BS-16 and to the live-matrix S4/S7 evidence).
+ *   B-BS-16   paid but not delivered            → two legs:
+ *             refuse:  seller 500 on every attempt → honest FAILED (never a
+ *                      fake COMPLETED), exactly 1 settlement, exactly 1
+ *                      delivery attempt (a definitive answer is not retried)
+ *             recover: response lost mid-flight → DELIVERY_UNKNOWN →
+ *                      recovery retry with the SAME idempotency key →
+ *                      delivered, exactly 1 settlement across 2 attempts
+ *                      (recovery must never re-charge)
+ *   B-BS-17   replay of a used EIP-3009 nonce   → chain-faithful facilitator
+ *             rejects the second settle (single-use nonce); ledger keeps
+ *             exactly one settlement; the Secretariat is deliberately NOT in
+ *             the replay loop (a real double-spend bypasses it)
+ *   B-BS-18   over budget (client policy probe) → two legs:
+ *             over:     HONEST challenge priced above policy.maxPrice →
+ *                       422 REQUEST_REJECTED pre-money, ZERO settle
+ *                       dispatches (rail-side counter proof)
+ *             boundary: challenge priced EXACTLY maxPrice → inclusive
+ *                       boundary completes with one settle + one delivery
  */
 
 import express from "express";
@@ -82,6 +106,9 @@ const CATALOG = [
   { id: "B-BS-13", kind: "stage-b", code: "NONCE_MISMATCH" },
   { id: "B-BS-14", kind: "stage-b", code: "VALID_BEFORE_MISMATCH" },
   { id: "B-BS-15", kind: "stage-b", code: "INVALID_SIGNATURE" },
+  { id: "B-BS-16", kind: "post-money" },
+  { id: "B-BS-17", kind: "replay" },
+  { id: "B-BS-18", kind: "over-budget" },
 ];
 
 // Honest challenge served by an Argus that behaves this run.
@@ -108,6 +135,17 @@ const CHALLENGE_MUTATIONS = {
   "B-BS-04": (c) => { c.accepts[0].network = "base"; return c; },
 };
 
+// B-BS-18: the seller is HONEST (the challenge is self-consistent, nothing
+// tampered — that angle is B-BS-02) but prices the resource above the
+// client's configured budget. Budget enforcement must refuse PRE-MONEY.
+const CHALLENGE_MUTATIONS_BUDGET = {
+  "B-BS-18": (c) => { c.accepts[0].amount = "200000"; return c; }, // 2× maxPrice
+  // Boundary probe: EXACTLY at the cap. Lab Block D S11 contract: "boundary
+  // at cap == price is inclusive and completes with exactly one debit and
+  // one capture."
+  "B-BS-18B": (c) => { c.accepts[0].amount = MAX_PRICE; return c; },
+};
+
 // Client-side payload poisoning AFTER honest signing (Stage B scenarios).
 const PAYLOAD_MUTATIONS = {
   "B-BS-05": (p) => { p.x402Version = 99; return p; },
@@ -130,18 +168,56 @@ function buildArgus() {
   const app = express();
   app.use(express.json());
 
+  // Post-money adversarial state (B-BS-16). Seller behavior is keyed by the
+  // Idempotency-Key header, which the Secretariat sets to the stable
+  // executionId (= operationId). The runner registers the mode BEFORE the
+  // payment settles, so the very first delivery attempt already sees it.
+  const sellerModes = new Map();    // operationId → "refuse" | "recover"
+  const sellerAttempts = new Map(); // operationId → delivery attempt count
+
   // Challenge discovery — Secretariat.fetch(target) lands here (Stage A).
   app.post("/resource", (req, res) => {
     const scenario = String(req.query.s ?? "S8");
-    const challenge = CHALLENGE_MUTATIONS[scenario]
-      ? CHALLENGE_MUTATIONS[scenario](honestChallenge())
-      : honestChallenge();
+    const mutate = CHALLENGE_MUTATIONS[scenario] ?? CHALLENGE_MUTATIONS_BUDGET[scenario];
+    const challenge = mutate ? mutate(honestChallenge()) : honestChallenge();
     const body64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
     res.status(402).set("PAYMENT-REQUIRED", body64).json(challenge);
   });
 
   // Post-settlement resource delivery (seller adapter POSTs here).
+  // Default: honest 200. B-BS-16 legs override behavior per operationId.
   app.post("/seller", (req, res) => {
+    const opId = String(req.headers["idempotency-key"] ?? "");
+    const mode = sellerModes.get(opId);
+    if (mode === "refuse") {
+      // B-BS-16/refuse: the seller took the payment and refuses to serve the
+      // resource. A definitive 5xx — the pipeline must record HTTP_FAILURE
+      // and FAIL honestly; it must never fabricate a COMPLETED and must not
+      // blind-retry a definitive answer.
+      res.status(500).json({ error: "seller_refused_delivery" });
+      return;
+    }
+    if (mode === "recover") {
+      // B-BS-16/recover: the FIRST delivery attempt loses its response
+      // mid-flight — status line + partial body, then the socket dies. This
+      // is the fiat Block D "lost response" fault adapted to the seller
+      // edge. Recovery retries (SAME idempotency key) hit a seller that
+      // has since recovered and get the resource.
+      const n = (sellerAttempts.get(opId) ?? 0) + 1;
+      sellerAttempts.set(opId, n);
+      if (n === 1) {
+        res.status(200);
+        res.set("content-type", "application/json");
+        res.write('{"result":"deliv');
+        // Destroy AFTER the partial body flushes → the client sees a 2xx
+        // with a broken body stream → DELIVERY_UNKNOWN/RESPONSE_STREAM_FAILED
+        // (the classification fixed in the S7 live-matrix repair).
+        setTimeout(() => res.socket?.destroy(), 5);
+        return;
+      }
+      res.status(200).json({ result: "delivered", attempt: n });
+      return;
+    }
     res.status(200).json({ result: "delivered", echo: req.body ?? null });
   });
   app.get("/seller/result/:executionId", (_req, res) => {
@@ -153,26 +229,55 @@ function buildArgus() {
   // from the paymentHeader so the mock RPC can emit the matching Transfer +
   // AuthorizationUsed logs for that txHash (§7 proof bundle).
   const settledTx = new Map();
+  // B-BS-17: chain-faithful replay guard. On a real EIP-3009 rail a nonce is
+  // single-use (authorizationState[nonce] becomes Used once the transfer
+  // lands). The mock must mirror that contract — re-presenting an
+  // already-used authorization is a REPLAY and must be rejected. Lab Block D
+  // finding F1 lesson: the mock must mirror the rail's real contract,
+  // otherwise the SUT is punished for the mock's fidelity, not its own.
+  const usedNonces = new Map(); // nonce → txHash of the first settle
+  const facilitatorStats = { settlesAccepted: 0, replaysRejected: 0 };
   app.post("/facilitator/settle", (req, res) => {
-    const txHash = `0xsettle${Date.now().toString(16)}`;
     try {
       const header = String(req.body?.paymentHeader ?? "");
       const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
-      settledTx.set(txHash.toLowerCase(), {
+      const authz = {
         from: String(decoded?.payload?.authorization?.from ?? CLIENT_ADDR).toLowerCase(),
         to: String(decoded?.payload?.authorization?.to ?? SELLER_ADDR).toLowerCase(),
         value: String(decoded?.payload?.authorization?.value ?? HONEST_AMOUNT),
         nonce: String(decoded?.payload?.authorization?.nonce ?? "0x" + "0".repeat(64)).toLowerCase(),
-      });
+      };
+      if (usedNonces.has(authz.nonce)) {
+        facilitatorStats.replaysRejected++;
+        res.status(409).json({
+          success: false,
+          errorReason: "authorization_used",
+          error: `authorization nonce already used by tx ${usedNonces.get(authz.nonce)}`,
+        });
+        return;
+      }
+      const txHash = `0xsettle${Date.now().toString(16)}`;
+      settledTx.set(txHash.toLowerCase(), authz);
+      usedNonces.set(authz.nonce, txHash);
+      facilitatorStats.settlesAccepted++;
+      res.status(200).json({ success: true, transactionHash: txHash, network: NETWORK });
     } catch {
+      const txHash = `0xsettle${Date.now().toString(16)}`;
       settledTx.set(txHash.toLowerCase(), {
         from: CLIENT_ADDR.toLowerCase(), to: SELLER_ADDR, value: HONEST_AMOUNT,
         nonce: "0x" + "0".repeat(64),
       });
+      facilitatorStats.settlesAccepted++;
+      res.status(200).json({ success: true, transactionHash: txHash, network: NETWORK });
     }
-    res.status(200).json({ success: true, transactionHash: txHash, network: NETWORK });
   });
   app.post("/facilitator/verify", (_req, res) => res.json({ isValid: true }));
+
+  // Test-harness observability: B-BS-18 uses the settle counters as the
+  // RAIL-SIDE proof that an over-budget probe dispatched nothing (the Lab's
+  // Block D evidence rule — passive absence of SUT logs must not produce
+  // PASS by itself; here the rail itself reports the count).
+  app.get("/facilitator/stats", (_req, res) => res.json(facilitatorStats));
 
   // Mock JSON-RPC (§14: two providers, same endpoint is fine for the mock).
   const rpc = (method, params) => {
@@ -212,7 +317,10 @@ function buildArgus() {
   });
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
-  return app;
+  return {
+    app,
+    registerSellerMode: (operationId, mode) => sellerModes.set(operationId, mode),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +416,133 @@ async function pollFinal(requestId, timeoutMs = 30_000) {
 }
 
 // ---------------------------------------------------------------------------
+// B-BS-16/17/18 — post-money adversarial helpers
+// ---------------------------------------------------------------------------
+function bindingOf(paymentIntent) {
+  return {
+    payTo: paymentIntent.payTo,
+    value: paymentIntent.value,
+    nonceHex: paymentIntent.nonce,
+    validAfter: paymentIntent.validAfter,
+    validBefore: paymentIntent.validBefore,
+  };
+}
+
+async function getFacilitatorStats() {
+  const res = await fetch(`${ARGUS}/facilitator/stats`);
+  return res.json();
+}
+
+// One honest end-to-end pass (create → optional seller-mode registration →
+// sign the persisted intent binding → pay → poll to terminal status).
+async function honestFlow(argus, account, tag, { pollMs = 30_000, sellerMode = null } = {}) {
+  const created = await createRequest(tag);
+  const out = {
+    created,
+    requestId: created.body?.requestId ?? null,
+    operationId: created.body?.operationId ?? null,
+    payload: null,
+    final: null,
+  };
+  if (created.status === 201 && out.operationId && sellerMode) {
+    argus.registerSellerMode(out.operationId, sellerMode);
+  }
+  if (created.status !== 201) return out;
+  const signature = await signEip3009(account, bindingOf(created.body.paymentIntent));
+  out.payload = buildV2Payload({ ...bindingOf(created.body.paymentIntent), signature });
+  out.pay = await fetch(`${SECRETARIAT}/v1/requests/${out.requestId}/payment`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(out.payload),
+  });
+  out.final = await pollFinal(out.requestId, pollMs);
+  return out;
+}
+
+// B-BS-16 — paid but not delivered, both adversarial variants in one entry.
+//   refuse  — definitive 5xx: the pipeline must FAIL honestly with exactly
+//             one settlement and one delivery attempt (never a fake
+//             COMPLETED, no blind retry of a definitive answer).
+//   recover — lost response: DELIVERY_UNKNOWN, then a recovery retry with
+//             the SAME idempotency key completes the delivery with exactly
+//             ONE settlement across both attempts (no re-charge). The
+//             operation-level FSM may honestly rest at UNKNOWN (durable
+//             truth is asserted in PG — same semantics as live-matrix S3).
+async function runPostMoney(argus, entry, account) {
+  const refuse = await honestFlow(argus, account, "B-BS-16", { pollMs: 45_000, sellerMode: "refuse" });
+  const recover = await honestFlow(argus, account, "B-BS-16", { pollMs: 60_000, sellerMode: "recover" });
+  entry.requestId = refuse.requestId;
+  entry.operationId = refuse.operationId;
+  entry.legs = {
+    refuse: { requestId: refuse.requestId, operationId: refuse.operationId, finalStatus: refuse.final?.status ?? null },
+    recover: { requestId: recover.requestId, operationId: recover.operationId, finalStatus: recover.final?.status ?? null },
+  };
+  const refuseOk = refuse.final?.status === "FAILED";
+  const recoverOk = ["UNKNOWN", "COMPLETED"].includes(recover.final?.status ?? "");
+  return {
+    outcome: refuseOk && recoverOk ? "PASSED" : "LEAKED",
+    refuse: { status: refuse.final?.status ?? "-", tx: refuse.final?.settlementTxHash ?? null },
+    recover: { status: recover.final?.status ?? "-", tx: recover.final?.settlementTxHash ?? null },
+  };
+}
+
+// B-BS-17 — replay of a used EIP-3009 nonce. Attacker model: anyone who
+// observed the settled payment payload (the seller, a wire tap) re-presents
+// it DIRECTLY to the facilitator hoping for a second settlement. The
+// chain-faithful mock must reject the replay, and the ledger must keep
+// exactly one settlement. The Secretariat is deliberately NOT in this loop —
+// a real double-spend attempt bypasses it.
+async function runReplay(argus, entry, account) {
+  const flow = await honestFlow(argus, account, "B-BS-17");
+  entry.requestId = flow.requestId;
+  entry.operationId = flow.operationId;
+  if (flow.created.status !== 201 || flow.final?.status !== "COMPLETED") {
+    return { outcome: "ERROR", detail: `setup: create=${flow.created.status} final=${flow.final?.status ?? "-"}` };
+  }
+  const paymentHeader = Buffer.from(JSON.stringify(flow.payload)).toString("base64");
+  const replay = await fetch(`${ARGUS}/facilitator/settle`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ paymentHeader, resource: `${ARGUS}/resource?s=B-BS-17`, network: NETWORK }),
+  });
+  const replayBody = await replay.json().catch(() => ({}));
+  const rejected = replay.status === 409 && replayBody?.success === false;
+  return {
+    outcome: rejected ? "BLOCKED" : "LEAKED",
+    settleTx: flow.final.settlementTxHash ?? null,
+    replayStatus: replay.status,
+    replayCode: replayBody?.errorReason ?? "-",
+  };
+}
+
+// B-BS-18 — over budget (client policy probe; adapted from Argus Lab Block D
+// S11 "Over Budget", fiat rails → x402 rails). The refusal must be PRE-MONEY
+// with ZERO settle dispatches (the facilitator counters are the rail-side
+// proof). The boundary probe at EXACTLY the cap is inclusive: it completes
+// with one settlement + one delivery.
+async function runOverBudget(argus, entry, account) {
+  const statsBefore = await getFacilitatorStats();
+  const over = await createRequest("B-BS-18");
+  const statsAfter = await getFacilitatorStats();
+  const zeroDispatch = statsAfter.settlesAccepted === statsBefore.settlesAccepted;
+  const overOk = over.status === 422 && over.body?.error?.code === "REQUEST_REJECTED" && zeroDispatch;
+
+  const boundary = await honestFlow(argus, account, "B-BS-18B");
+  const boundaryOk = boundary.final?.status === "COMPLETED";
+  entry.requestId = boundary.requestId;
+  entry.operationId = boundary.operationId;
+  entry.legs = {
+    over: { httpStatus: over.status, code: over.body?.error?.code ?? "-", zeroDispatch },
+    boundary: { requestId: boundary.requestId, finalStatus: boundary.final?.status ?? null },
+  };
+  return {
+    outcome: overOk && boundaryOk ? "PASSED" : "LEAKED",
+    over: { status: over.status, code: over.body?.error?.code ?? "-", zeroDispatch },
+    boundary: { status: boundary.final?.status ?? "-" },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // PostgreSQL observation assertions
 // ---------------------------------------------------------------------------
 async function assertObservations(results) {
@@ -327,6 +562,130 @@ async function assertObservations(results) {
           (o) => o.event === "PAYMENT_VERIFICATION_REJECTED" && o.payload?.code === r.expectedCode,
         );
         out.push({ scenario: r.scenario, ok: !!rejected, note: rejected ? "rejection recorded in PG" : `missing PAYMENT_VERIFICATION_REJECTED/${r.expectedCode}` });
+      } else if (r.kind === "post-money") {
+        const legs = r.legs ?? {};
+        const checks = [];
+        if (legs.refuse?.operationId) {
+          const att = await pool.query(
+            `SELECT attempt_number, status, response_status_code FROM execution_attempts WHERE operation_id = $1 ORDER BY attempt_number`,
+            [legs.refuse.operationId],
+          );
+          const job = await pool.query(
+            `SELECT status FROM recovery_jobs WHERE operation_id = $1 AND job_type = 'EXECUTION' LIMIT 1`,
+            [legs.refuse.operationId],
+          );
+          const obs = await pool.query(
+            `SELECT reconciliation_observations FROM payment_intents WHERE request_id = $1 LIMIT 1`,
+            [legs.refuse.requestId],
+          );
+          // Ledger integrity: exactly ONE intent for the request, settled,
+          // with a single tx. PAYMENT_VERIFIED observation COUNT is not an
+          // invariant — the reconciliation worker re-verifies settled intents
+          // over time, so observations accumulate; the single tx is the
+          // no-re-charge proof.
+          const ints = await pool.query(
+            `SELECT tx_hash FROM payment_intents WHERE request_id = $1`,
+            [legs.refuse.requestId],
+          );
+          const singleSettle = ints.rows.length === 1 && !!ints.rows[0].tx_hash;
+          const events = (obs.rows[0]?.reconciliation_observations ?? []).map((o) => o.event);
+          const a = att.rows;
+          checks.push({
+            leg: "refuse",
+            ok: a.length === 1 && a[0].status === "HTTP_FAILURE" && a[0].response_status_code === 500
+              && job.rows[0]?.status === "FAILED" && singleSettle
+              && events.includes("EXECUTION_HTTP_FAILURE") && !events.includes("EXECUTION_SUCCESS"),
+            note: `attempts=${a.length}[${a.map((x) => `${x.status}:${x.response_status_code ?? "-"}`).join(",")}] job=${job.rows[0]?.status ?? "-"} intents=${ints.rows.length} tx=${ints.rows[0]?.tx_hash ? "single" : "none"}`,
+          });
+        }
+        if (legs.recover?.operationId) {
+          // Attempt 2 is driven by the background worker poll — give it a
+          // bounded window to land before asserting.
+          let a = [];
+          for (let i = 0; i < 30; i++) {
+            const q = await pool.query(
+              `SELECT attempt_number, status, response_status_code, error_reason FROM execution_attempts WHERE operation_id = $1 ORDER BY attempt_number`,
+              [legs.recover.operationId],
+            );
+            a = q.rows;
+            if (a.length >= 2 && a[a.length - 1].status === "SUCCESS") break;
+            await new Promise((res) => setTimeout(res, 1000));
+          }
+          const job = await pool.query(
+            `SELECT status FROM recovery_jobs WHERE operation_id = $1 AND job_type = 'EXECUTION' LIMIT 1`,
+            [legs.recover.operationId],
+          );
+          const obs = await pool.query(
+            `SELECT reconciliation_observations FROM payment_intents WHERE request_id = $1 LIMIT 1`,
+            [legs.recover.requestId],
+          );
+          const ints = await pool.query(
+            `SELECT tx_hash FROM payment_intents WHERE request_id = $1`,
+            [legs.recover.requestId],
+          );
+          const singleSettle = ints.rows.length === 1 && !!ints.rows[0].tx_hash;
+          const events = (obs.rows[0]?.reconciliation_observations ?? []).map((o) => o.event);
+          const firstUnknown = a[0]?.status === "DELIVERY_UNKNOWN"
+            && ["RESPONSE_STREAM_FAILED", "CONNECTION_RESET"].includes(a[0]?.error_reason ?? "");
+          const secondSuccess = a.length >= 2 && a[a.length - 1].status === "SUCCESS" && a[a.length - 1].response_status_code === 200;
+          checks.push({
+            leg: "recover",
+            ok: a.length === 2 && firstUnknown && secondSuccess
+              && job.rows[0]?.status === "COMPLETED" && singleSettle
+              && events.includes("EXECUTION_RETRY_CREATED") && events.includes("EXECUTION_SUCCESS"),
+            note: `attempts=${a.length}[${a.map((x) => `${x.status}:${x.error_reason ?? x.response_status_code ?? "-"}`).join(",")}] job=${job.rows[0]?.status ?? "-"} intents=${ints.rows.length} tx=${ints.rows[0]?.tx_hash ? "single" : "none"}`,
+          });
+        }
+        const ok = checks.length > 0 && checks.every((c) => c.ok);
+        out.push({ scenario: r.scenario, ok, note: checks.map((c) => `${c.leg}:${c.ok ? "ok" : "FAIL"}(${c.note})`).join(" ") || "no legs" });
+      } else if (r.kind === "replay") {
+        const q = await pool.query(
+          `SELECT settlement_state, tx_hash, reconciliation_observations FROM payment_intents WHERE request_id = $1`,
+          [r.requestId],
+        );
+        const rows = q.rows;
+        const verified = rows.flatMap((x) => x.reconciliation_observations ?? [])
+          .filter((o) => o.event === "PAYMENT_VERIFIED").length;
+        const att = await pool.query(
+          `SELECT count(*)::int AS n FROM execution_attempts WHERE operation_id = $1`,
+          [r.operationId],
+        );
+        // Replay proof lives at the facilitator (409, single-use nonce); the
+        // ledger must show ONE settled intent with ONE tx and ONE delivery.
+        const ok = rows.length === 1 && rows[0].settlement_state === "SETTLED" && !!rows[0].tx_hash
+          && verified >= 1 && att.rows[0]?.n === 1;
+        out.push({
+          scenario: r.scenario,
+          ok,
+          note: `intents=${rows.length} settled=${rows.filter((x) => x.settlement_state === "SETTLED").length} tx=${rows[0]?.tx_hash ? "single" : "none"} verified>=${verified >= 1 ? 1 : 0} attempts=${att.rows[0]?.n}`,
+        });
+      } else if (r.kind === "over-budget") {
+        // Over leg: pre-money refusal adds one more POLICY_REJECTED row to
+        // the run window (4 stage-a + B-BS-18 => >= 5).
+        const g = await pool.query(
+          `SELECT count(*)::int AS n FROM reconciliation_observations
+           WHERE result = 'POLICY_REJECTED' AND observed_at >= to_timestamp($1 / 1000.0)`,
+          [RUN_STARTED_AT],
+        );
+        // Boundary leg: priced EXACTLY at the cap, settled exactly once.
+        const q = await pool.query(
+          `SELECT value, settlement_state, tx_hash, reconciliation_observations FROM payment_intents WHERE request_id = $1 LIMIT 1`,
+          [r.requestId],
+        );
+        const row = q.rows[0];
+        const verified = (row?.reconciliation_observations ?? []).filter((o) => o.event === "PAYMENT_VERIFIED").length;
+        const att = await pool.query(
+          `SELECT count(*)::int AS n FROM execution_attempts WHERE operation_id = $1 AND status = 'SUCCESS'`,
+          [r.operationId],
+        );
+        // value is decimal(38,6) — compare numerically, not as a string.
+        const boundaryOk = !!row && Number(row.value) === Number(MAX_PRICE)
+          && row.settlement_state === "SETTLED" && !!row.tx_hash && verified >= 1 && att.rows[0]?.n === 1;
+        out.push({
+          scenario: r.scenario,
+          ok: g.rows[0]?.n >= 5 && boundaryOk,
+          note: `policyRejected=${g.rows[0]?.n} boundaryValue=${row?.value ?? "-"} state=${row?.settlement_state ?? "-"} tx=${row?.tx_hash ? "single" : "none"} successAttempts=${att.rows[0]?.n}`,
+        });
       } else if (r.scenario === "S8") {
         const q = await pool.query(
           `SELECT settlement_state, reconciliation_observations FROM payment_intents WHERE request_id = $1 LIMIT 1`,
@@ -380,7 +739,7 @@ async function main() {
   const account = privateKeyToAccount(CLIENT_KEY);
   const argus = buildArgus();
   const argusServer = await new Promise((resolve) => {
-    const s = argus.listen(ARGUS_PORT, "127.0.0.1", () => resolve(s));
+    const s = argus.app.listen(ARGUS_PORT, "127.0.0.1", () => resolve(s));
   });
   console.log(`[argus] listening on ${ARGUS}`);
 
@@ -397,6 +756,17 @@ async function main() {
       verdict: { outcome: "ERROR" },
     };
     try {
+      // ---- Post-money adversarial: B-BS-16/17/18 drive their own flows ----
+      if (scenario.kind === "post-money" || scenario.kind === "replay" || scenario.kind === "over-budget") {
+        entry.verdict = scenario.kind === "post-money"
+          ? await runPostMoney(argus, entry, account)
+          : scenario.kind === "replay"
+            ? await runReplay(argus, entry, account)
+            : await runOverBudget(argus, entry, account);
+        results.push(entry);
+        continue;
+      }
+
       // ---- Stage A: discovery (Argus serves the poisoned challenge) ----
       const created = await createRequest(scenario.id);
       entry.clientId = created.body?.clientId ?? null;
@@ -532,9 +902,19 @@ async function main() {
     c.ok ? pgOk++ : pgFail++;
   }
 
-  console.log(`\nTOTAL: blocked=${blocked}/15 passed=${passed}/2 leaked=${leaked} other=${other} | PG: ok=${pgOk} fail=${pgFail}`);
+  console.log(`\nTOTAL: blocked=${blocked}/16 passed=${passed}/4 leaked=${leaked} other=${other} | PG: ok=${pgOk} fail=${pgFail}`);
+  // Gate semantics: stage-a/stage-b/replay entries must BLOCK; every
+  // post-money/canonical entry must PASS; PG must confirm every verdict.
+  const mismatch = [];
+  for (const r of results) {
+    const expected = ["stage-a", "stage-b", "replay"].includes(r.kind) ? "BLOCKED" : "PASSED";
+    if (r.verdict.outcome !== expected) mismatch.push(`${r.scenario}=${r.verdict.outcome}(!=${expected})`);
+  }
+  const gate = leaked === 0 && other === 0 && pgFail === 0
+    && blocked === 16 && passed === 4;
+  console.log(`GATE: ${gate ? "GREEN" : "RED"}${mismatch.length > 0 ? ` — ${mismatch.join(", ")}` : ""}`);
   argusServer.close();
-  process.exit(leaked > 0 || pgFail > 0 || other > 0 ? 2 : 0);
+  process.exit(gate ? 0 : 2);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

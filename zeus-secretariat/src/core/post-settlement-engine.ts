@@ -866,6 +866,16 @@ export class PostSettlementEngine {
             // Fence rejected — another worker owns this job now
             return { success: false, finalStatus: "RUNNING" };
           }
+          // B-BS-16 evidence gap (found by the r6 post-money gate): the
+          // ATTEMPTED crash-recovery branch records EXECUTION_RETRY_CREATED,
+          // but this live DELIVERY_UNKNOWN retry branch created the recovery
+          // attempt silently — the recovery DECISION was missing from the
+          // evidence trail. INV-13: record the decision.
+          await this.appendEvidence(job.operationId, "EXECUTION_RETRY_CREATED", {
+            reason: "DELIVERY_UNKNOWN — retry attempt created",
+            newAttemptId,
+            originalAttemptId: latestAttempt.attemptId,
+          });
           return { success: false, result, finalStatus: "DELIVERY_UNKNOWN" };
         }
 

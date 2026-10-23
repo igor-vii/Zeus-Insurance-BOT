@@ -62,7 +62,8 @@ jobs:
         run: bash scripts/apply-migrations.sh
 
       # Boots the standalone Secretariat with the documented launch recipe,
-      # waits for /health, runs all 17 scenarios (S8, S9, B-BS-01..15) against
-      # Argus and asserts every verdict is recorded in PostgreSQL.
+      # waits for /health, runs all 20 scenario entries (S8, S9, B-BS-01..18 —
+      # 16/18 are two-legged: refuse+recover / over+boundary = 22 verdicts)
+      # against Argus and asserts every verdict is recorded in PostgreSQL.
       - name: Adversarial E2E + PostgreSQL observation assertions
         run: bash scripts/run-e2e.sh

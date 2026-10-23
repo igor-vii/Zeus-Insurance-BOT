@@ -30,5 +30,5 @@ done
 if [ "$up" != "1" ]; then echo "SECRETARIAT FAILED TO BOOT:"; tail -30 /tmp/secretariat-e2e-boot.log; exit 1; fi
 echo "secretariat up (pid $SRV_PID)"
 
-echo "== [4/4] run adversarial E2E (17 scenarios + PG assertions) =="
+echo "== [4/4] run adversarial E2E (20 entries / 22 verdicts: S8, S9, B-BS-01..18 + PG assertions) =="
 DATABASE_URL="$DATABASE_URL" node e2e/r6-argus-e2e.mjs
