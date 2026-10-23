@@ -577,6 +577,7 @@ export class PostgresExecutionStore {
       WHERE job_id = ${jobId}
         AND fence_generation = ${fenceGeneration}
         AND status NOT IN (${"COMPLETED"}, ${"FAILED"}, ${"UNRESOLVABLE"})
+       RETURNING job_id
     `);
 
     const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;

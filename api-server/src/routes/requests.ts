@@ -20,7 +20,10 @@ const paymentPolicySchema = z.object({
 });
 
 const createRequestSchema = z.object({
-  authorizer: z.string().min(1),
+  // Stage A (discovery) MUST NOT require the authorizer: the payer address is
+  // only bound when the client externally signs the EIP-3009 payload in
+  // Stage B. ExecuteRequest.authorizer is optional — mirror that here.
+  authorizer: z.string().min(1).optional(),
   target: z.string().url(),
   method: z.string().min(1),
   payload: z.unknown().optional(),

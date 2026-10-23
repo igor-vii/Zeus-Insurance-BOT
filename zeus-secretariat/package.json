@@ -20,9 +20,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "jest",
-    "test:durable": "ZEUS_REQUIRE_DATABASE=1 jest tests/durable-storage.test.ts -t \"AE: pre-intent append\"",
-    "test:watch": "jest --watch",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:durable": "ZEUS_REQUIRE_DATABASE=1 NODE_OPTIONS=--experimental-vm-modules jest tests/durable-storage.test.ts -t \"AE: pre-intent append\"",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "lint": "echo 'No linter configured'",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit"

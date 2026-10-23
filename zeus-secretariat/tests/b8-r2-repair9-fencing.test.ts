@@ -15,6 +15,12 @@
 
 import type { ExecutionObligationStatus, RecoveryJob, ExecutionAttempt } from "../src/core/post-settlement-engine";
 
+// R0 repair: Jest ESM mode does not define __dirname; derive the test dir
+// from import.meta.url so source-scanning assertions keep working.
+import { fileURLToPath as __f2p } from "node:url";
+const __r0Dir = __f2p(new URL(".", import.meta.url));
+
+
 // ===========================================================================
 // T1-T6: Fencing & Monotonicity (requires real PostgreSQL)
 // ===========================================================================
@@ -87,7 +93,7 @@ describeIfDb("R2.2 Repair #9: Fencing & Terminal Monotonicity", () => {
 
     // Verify status unchanged
     const check = await db.execute(sql`SELECT status FROM execution_attempts WHERE attempt_id = ${attId}`);
-    expect((check as any[])[0]?.status).toBe("ATTEMPTED");
+    expect((check.rows as any[])[0]?.status).toBe("ATTEMPTED");
 
     // Cleanup
     await db.execute(sql`DELETE FROM execution_attempts WHERE attempt_id = ${attId}`);
@@ -114,7 +120,7 @@ describeIfDb("R2.2 Repair #9: Fencing & Terminal Monotonicity", () => {
     expect(result).toBe(true);
 
     const check = await db.execute(sql`SELECT status FROM execution_attempts WHERE attempt_id = ${attId}`);
-    expect((check as any[])[0]?.status).toBe("SUCCESS");
+    expect((check.rows as any[])[0]?.status).toBe("SUCCESS");
 
     await db.execute(sql`DELETE FROM execution_attempts WHERE attempt_id = ${attId}`);
     await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${jobId}`);
@@ -147,7 +153,7 @@ describeIfDb("R2.2 Repair #9: Fencing & Terminal Monotonicity", () => {
 
     // Verify still SUCCESS
     const check = await db.execute(sql`SELECT status FROM execution_attempts WHERE attempt_id = ${attId}`);
-    expect((check as any[])[0]?.status).toBe("SUCCESS");
+    expect((check.rows as any[])[0]?.status).toBe("SUCCESS");
 
     await db.execute(sql`DELETE FROM execution_attempts WHERE attempt_id = ${attId}`);
     await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${jobId}`);
@@ -173,8 +179,8 @@ describeIfDb("R2.2 Repair #9: Fencing & Terminal Monotonicity", () => {
     expect(marked).toBe(true);
 
     const check = await db.execute(sql`SELECT status, started_at FROM execution_attempts WHERE attempt_id = ${attId}`);
-    expect((check as any[])[0]?.status).toBe("ATTEMPTED");
-    expect((check as any[])[0]?.started_at).toBeTruthy();
+    expect((check.rows as any[])[0]?.status).toBe("ATTEMPTED");
+    expect((check.rows as any[])[0]?.started_at).toBeTruthy();
 
     // Second call should fail (already ATTEMPTED, not PENDING)
     const marked2 = await store.markAttemptInProgress(attId, 4);
@@ -211,7 +217,7 @@ describe("R2.2 Repair #9: Idempotency & UNKNOWN Semantics", () => {
     const fs = await import("fs");
     const path = await import("path");
     const src = fs.readFileSync(
-      path.join(__dirname, "../src/core/post-settlement-engine.ts"), "utf-8",
+      path.join(__r0Dir, "../src/core/post-settlement-engine.ts"), "utf-8",
     );
     // Retry path must reuse latestAttempt.executionId and latestAttempt.idempotencyKey
     expect(src).toMatch(/executionId:\s*latestAttempt\.executionId/);
@@ -222,7 +228,7 @@ describe("R2.2 Repair #9: Idempotency & UNKNOWN Semantics", () => {
     const fs = await import("fs");
     const path = await import("path");
     const src = fs.readFileSync(
-      path.join(__dirname, "../src/adapters/seller-execution-adapter.ts"), "utf-8",
+      path.join(__r0Dir, "../src/adapters/seller-execution-adapter.ts"), "utf-8",
     );
     expect(src).toMatch(/["']Idempotency-Key["'].*request\.idempotencyKey/);
   });

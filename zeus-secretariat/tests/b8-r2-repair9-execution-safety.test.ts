@@ -10,6 +10,12 @@ import type { ExecutionStore, ExecutionAttempt, RecoveryJob, ExecutionObligation
 import type { SellerExecutionAdapter, SellerExecutionRequest, SellerExecutionResult } from "../src/adapters/seller-execution-adapter";
 import { sql } from "drizzle-orm";
 
+// R0 repair: Jest ESM mode does not define __dirname; derive the test dir
+// from import.meta.url so source-scanning assertions keep working.
+import { fileURLToPath as __f2p } from "node:url";
+const __r0Dir = __f2p(new URL(".", import.meta.url));
+
+
 // ===========================================================================
 // Shared test fixtures
 // ===========================================================================
@@ -58,9 +64,9 @@ describe("R2.2-R9: Lease Fencing & Stale Worker Protection", () => {
   let store: ExecutionStore;
   let mockAdapter: SellerExecutionAdapter;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Use the InMemoryExecutionStore via PostSettlementEngine constructor
-    const { InMemoryExecutionStore } = require("../src/core/post-settlement-engine");
+    const { InMemoryExecutionStore } = await import("../src/core/post-settlement-engine");
     store = new InMemoryExecutionStore();
     mockAdapter = {
       async execute(req: SellerExecutionRequest): Promise<SellerExecutionResult> {
@@ -181,7 +187,7 @@ describe("R2.2-R9: Lease Fencing & Stale Worker Protection", () => {
 
 describe("R2.2-R9: IN_PROGRESS Transition", () => {
   test("T6: markAttemptInProgress transitions PENDING → ATTEMPTED", async () => {
-    const { InMemoryExecutionStore } = require("../src/core/post-settlement-engine");
+    const { InMemoryExecutionStore } = await import("../src/core/post-settlement-engine");
     const store = new InMemoryExecutionStore() as ExecutionStore;
 
     // Repair #1A: markAttemptInProgress requires owning RecoveryJob for fence validation.
@@ -208,7 +214,7 @@ describe("R2.2-R9: IN_PROGRESS Transition", () => {
 
 describe("R2.2-R9: UNKNOWN Preservation & Idempotency", () => {
   test("T7: adapter classifies timeout as DELIVERY_UNKNOWN not HTTP_FAILURE", async () => {
-    const { HttpSellerExecutionAdapter } = require("../src/adapters/seller-execution-adapter");
+    const { HttpSellerExecutionAdapter } = await import("../src/adapters/seller-execution-adapter");
     const adapter = new HttpSellerExecutionAdapter(100); // 100ms timeout
 
     // This will timeout since URL is unreachable
@@ -223,7 +229,7 @@ describe("R2.2-R9: UNKNOWN Preservation & Idempotency", () => {
   });
 
   test("T8: idempotency key remains stable across retries", async () => {
-    const { InMemoryExecutionStore } = require("../src/core/post-settlement-engine");
+    const { InMemoryExecutionStore } = await import("../src/core/post-settlement-engine");
     const store = new InMemoryExecutionStore() as ExecutionStore;
     const opId = "op-stable-key";
     const execId = "exec-stable-key";
@@ -246,7 +252,7 @@ describe("R2.2-R9: UNKNOWN Preservation & Idempotency", () => {
     const fs = await import("fs");
     const path = await import("path");
     const src = fs.readFileSync(
-      path.join(__dirname, "../src/adapters/seller-execution-adapter.ts"),
+      path.join(__r0Dir, "../src/adapters/seller-execution-adapter.ts"),
       "utf-8",
     );
     expect(src).toMatch(/Idempotency-Key.*request\.idempotencyKey/);

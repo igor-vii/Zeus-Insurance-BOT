@@ -15,6 +15,12 @@ import type {
 import type { RecoveryJob, ExecutionAttempt } from "../src/core/post-settlement-engine";
 import { sql } from "drizzle-orm";
 
+// R0 repair: Jest ESM mode does not define __dirname; derive the test dir
+// from import.meta.url so source-scanning assertions keep working.
+import { fileURLToPath as __f2p } from "node:url";
+const __r0Dir = __f2p(new URL(".", import.meta.url));
+
+
 function resultRows<T = any>(result: any): T[] {
   return Array.isArray(result) ? result : (result?.rows ?? []);
 }
@@ -50,7 +56,7 @@ describe("R2.1-FIX-5: Implementation Contract", () => {
     const fs = await import("fs");
     const path = await import("path");
     const src = fs.readFileSync(
-      path.join(__dirname, "../../api-server/src/lib/secretariat-composition.ts"),
+      path.join(__r0Dir, "../../api-server/src/lib/secretariat-composition.ts"),
       "utf-8",
     );
     expect(src).toMatch(/atomicSettlementHandoff:\s*stores\.executionStore/);
@@ -68,7 +74,7 @@ describe("R2.1-FIX-5: Production Atomic Boundary", () => {
     const fs = await import("fs");
     const path = await import("path");
     const src = fs.readFileSync(
-      path.join(__dirname, "../../lib/db/src/secretariat/postgres-execution-store.ts"), "utf-8",
+      path.join(__r0Dir, "../../lib/db/src/secretariat/postgres-execution-store.ts"), "utf-8",
     );
     const txStart = src.indexOf("this.db.transaction(async (tx)");
     expect(txStart).toBeGreaterThan(-1);

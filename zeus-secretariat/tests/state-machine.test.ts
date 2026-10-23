@@ -175,28 +175,11 @@ function createV2Doubles(opts: { settled?: boolean; submissionOutcome?: 'SUBMITT
 
 // ---------------------------------------------------------------------------
 // The canonical V2 submitPayment()/observeSettlement() require a DURABLE
-// PaymentIntent (getPaymentIntentByOperationId), which InMemoryEvidenceStore
-// does not implement. Minimal in-memory double of the DurableEvidenceStore
-// methods used by the state machine. This is infrastructure emulation only;
-// it does not replace any behavior under test.
-// ---------------------------------------------------------------------------
-function withDurableIntents(store: InMemoryEvidenceStore): InMemoryEvidenceStore {
-  const intents = new Map<string, any>();
-  const s = store as any;
-  s.createPaymentIntent = async (intent: any) => {
-    if (!intents.has(intent.operationId)) intents.set(intent.operationId, intent);
-  };
-  s.getPaymentIntentByOperationId = async (opId: string) => intents.get(opId) ?? null;
-  // Mirror the real Postgres store: persist the status transition onto the
-  // durable intent record (TASK 4D — required for INV-8 in PostSettlementEngine).
-  s.updatePaymentIntentStatus = async (id: string, status: any) => {
-    for (const it of intents.values()) {
-      if (it.paymentIntentId === id) { it.status = status; it.settlementState = status; }
-    }
-  };
-  s.createReconciliationJob = async () => 'rj-test-1';
-  return store;
-}
+// R0 repair: InMemoryEvidenceStore now natively implements the durable
+// payment-intent layer (createPaymentIntent/getPaymentIntentByOperationId/
+// updatePaymentIntentStatus/nonce registry/reconciliation observation log),
+// so the former withDurableIntents() monkey-patch shim — whose partial doubles
+// shadowed and contradicted the real implementation — has been removed.
 
 // Mock fetch for testing. Original reference preserved for restoration after the suite
 // (cleanup pattern consistent with c3-fail-operation-error-preservation.test.ts).
@@ -211,7 +194,7 @@ describe('Zeus Secretariat V0 - State Machine Tests', () => {
   let secretariat: Secretariat;
 
   beforeEach(() => {
-    store = withDurableIntents(new InMemoryEvidenceStore());
+    store = new InMemoryEvidenceStore();
     signer = new MockSigner();
     adapter = new MockPaymentAdapter({
       network: 'mock-network',

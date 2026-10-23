@@ -533,19 +533,22 @@ describe("Additional Spec Compliance", () => {
   });
 
   test("§14: Single RPC insufficient for NOT_SETTLED", async () => {
+    // R0 repair: Jest ESM mode has no require(); use dynamic import.
+    const { MultiRpcChecker } = await import("../src/core/multi-rpc-checker");
     const singleProvider = [
       { providerId: "only-one", underlyingProvider: "alchemy", rpcUrl: "mock://", maxStalenessBlocks: 5 },
     ];
     // MultiRpcChecker constructor requires >= 2 providers
-    expect(() => new (require("../src/core/multi-rpc-checker").MultiRpcChecker)(singleProvider)).toThrow();
+    expect(() => new (MultiRpcChecker as any)(singleProvider)).toThrow();
   });
 
-  test("§15: Same underlying provider rejected", () => {
+  test("§15: Same underlying provider rejected", async () => {
+    const { MultiRpcChecker } = await import("../src/core/multi-rpc-checker");
     const sameProvider = [
       { providerId: "alchemy-1", underlyingProvider: "alchemy", rpcUrl: "mock://a", maxStalenessBlocks: 5 },
       { providerId: "alchemy-2", underlyingProvider: "alchemy", rpcUrl: "mock://b", maxStalenessBlocks: 5 },
     ];
-    expect(() => new (require("../src/core/multi-rpc-checker").MultiRpcChecker)(sameProvider)).toThrow("independence");
+    expect(() => new (MultiRpcChecker as any)(sameProvider)).toThrow("independence");
   });
 
   test("§16: Probe schedule returns correct delays", () => {

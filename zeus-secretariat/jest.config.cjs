@@ -11,6 +11,11 @@ module.exports = {
   moduleNameMapper: {
     '^@workspace/db$': '<rootDir>/../lib/db/src/index.ts',
     '^@workspace/db/schema$': '<rootDir>/../lib/db/src/schema/index.ts',
+    // R0 repair: tests import deep subpaths (e.g. @workspace/db/secretariat/postgres-store)
+    // that the package "exports" map does not declare — map them onto TS sources.
+    '^@workspace/db/secretariat/(.*)$': '<rootDir>/../lib/db/src/secretariat/$1',
+    '^@workspace/db/schema/(.*)$': '<rootDir>/../lib/db/src/schema/$1',
+    '^@workspace/db/(.*)$': '<rootDir>/../lib/db/src/$1',
     '^zeus-secretariat$': '<rootDir>/src/index.ts',
     '^zeus-secretariat/(.*)$': '<rootDir>/src/$1',
     '^express$': '<rootDir>/../api-server/node_modules/express',

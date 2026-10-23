@@ -648,6 +648,19 @@ export function allowNewPayment(state: SettlementState): boolean {
   return state === "NOT_SETTLED";
 }
 
+/** §19/§21: Terminal economic states. Once reached, a state transition out is
+ *  forbidden for ANY worker (fencing/monotonicity). */
+export const TERMINAL_SETTLEMENT_STATES: readonly SettlementState[] = [
+  "SETTLED",
+  "NOT_SETTLED",
+  "UNRESOLVED_MANUAL",
+];
+
+/** §19/§21: true if `state` is terminal (irreversible). */
+export function isTerminalSettlementState(state: SettlementState): boolean {
+  return TERMINAL_SETTLEMENT_STATES.includes(state);
+}
+
 /** All states that BLOCK new payment creation. */
 export const PAYMENT_BLOCKED_STATES: readonly SettlementState[] = [
   "PENDING_SIGNATURE",
@@ -700,6 +713,9 @@ export interface DurablePaymentIntent {
 
   // Authorization fields
   readonly authorizer: string;       // from address
+  /** Canonical alias of `authorizer` (state-machine: authorizer = signed.payer).
+   *  Surfaced by durable stores on round-trip so consumers can read it back. */
+  readonly payer?: string;           // = authorizer
   readonly payTo: string;            // to address
   readonly value: string;            // USDC amount (decimal string)
   readonly asset: string;            // token contract address
@@ -875,6 +891,9 @@ export interface DurableEvidenceStore {
   createPaymentIntent(intent: DurablePaymentIntent): Promise<void>;
   getPaymentIntentByOperationId(operationId: string): Promise<DurablePaymentIntent | null>;
   getPaymentIntentByRequestId?(requestId: string): Promise<DurablePaymentIntent | null>;
+  /** R0 repair: optional scanner for PostSettlementEngine.ensureExecutionObligations().
+   *  Returns SETTLED intents that have no durable EXECUTION obligation. */
+  getSettledIntentsWithoutObligation?(limit?: number): Promise<DurablePaymentIntent[]>;
   updatePaymentIntentAuthorization?: (
     paymentIntentId: string,
     fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,

@@ -292,6 +292,12 @@ export class ReconciliationEngine {
     }
 
     await this.store.saveSettledEvidenceBundle(intent.paymentIntentId, evidence);
+    // R0 repair: the nonce registry must reflect settlement (RESERVED →
+    // SUBMITTED → SETTLED). Without this the nonce row stays SUBMITTED
+    // forever on the reconciliation path.
+    if (intent.nonce) {
+      try { await this.store.markNonceSettled(intent.nonce); } catch { /* nonce row may not exist for pre-Stage-A intents */ }
+    }
 
     return { status: "SETTLED", evidence };
   }
@@ -358,12 +364,18 @@ export class ReconciliationEngine {
           intent.settlementState,
           { txHash: recovered.transactionHash },
         );
+        // R0 repair (spec §10): "true → recover tx via logs → success+Transfer
+        // → SETTLED". The engine previously stopped here and waited for the
+        // next probe; follow the recovered receipt immediately — txHash-first
+        // (§17) — so a single reconcile() call can reach a terminal verdict.
+        return await this.reconcileByTxHash(
+          { ...intent, txHash: recovered.transactionHash },
+          attemptId,
+        );
       }
       return {
         status: "RECONCILING",
-        reason: authorizationScan.agreement === "UNANIMOUS"
-          ? "§10: authorizationState=true — recovered txHash from AuthorizationUsed"
-          : "§10: authorizationState=true — attempting txHash recovery via AuthorizationUsed",
+        reason: "§10: authorizationState=true — attempting txHash recovery via AuthorizationUsed",
         nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
       };
     }

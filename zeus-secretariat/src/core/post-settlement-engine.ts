@@ -943,6 +943,52 @@ export class PostSettlementEngine {
     return recovered;
   }
 
+  /**
+   * R0 repair: SETTLED-intent obligation scanner.
+   *
+   * Finds payment intents that reached SETTLED (by the synchronous execute()
+   * path or by the background ReconciliationWorker) but have NO durable
+   * EXECUTION obligation, and creates one via initiateExecution().
+   *
+   * Why this exists: the settlement→execution handoff has two owners —
+   *   (a) StateMachine.persistSettlementAndExecutionObligation (atomic, only
+   *       when settlement happens inside execute()), and
+   *   (b) nobody — for payments settled by the ReconciliationWorker after
+   *       execute() returned.
+   * This scanner closes case (b) and crash windows between settlement and
+   * handoff. Idempotent: the (operation_id WHERE job_type='EXECUTION') unique
+   * index blocks duplicates under concurrent scanners.
+   */
+  async ensureExecutionObligations(): Promise<string[]> {
+    const scanner = this.paymentStore as DurableEvidenceStore & Partial<{
+      getSettledIntentsWithoutObligation(limit?: number): Promise<DurablePaymentIntent[]>;
+    }>;
+    if (typeof scanner.getSettledIntentsWithoutObligation !== "function") {
+      return []; // store does not support scanning (e.g. in-memory test stores)
+    }
+    const settled = await scanner.getSettledIntentsWithoutObligation();
+    const created: string[] = [];
+    for (const intent of settled) {
+      // R0 repair: obligation-marker check works for stores whose scanner
+      // cannot see the execution store (in-memory dev stores): an existing
+      // attempt means the obligation was already created.
+      if (typeof this.executionStore.getAttemptsByOperation === "function") {
+        try {
+          const attempts = await this.executionStore.getAttemptsByOperation(intent.operationId);
+          if (Array.isArray(attempts) && attempts.length > 0) continue;
+        } catch { /* fall through and attempt idempotent creation */ }
+      }
+      try {
+        const { jobId } = await this.initiateExecution(intent.operationId, "EXECUTION_IDEMPOTENT");
+        created.push(`${intent.operationId}:${jobId}`);
+      } catch {
+        // Duplicate obligation race (unique index) or transient store error —
+        // the next scan cycle will retry what actually failed.
+      }
+    }
+    return created;
+  }
+
   private async appendEvidence(
     operationId: string,
     event: string,

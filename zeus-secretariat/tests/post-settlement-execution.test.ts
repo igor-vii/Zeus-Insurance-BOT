@@ -60,6 +60,34 @@ class TestPaymentStore implements DurableEvidenceStore {
   async markNonceSubmitted(): Promise<void> {}
   async markNonceSettled(): Promise<void> {}
   async createIntentWithNonce(): Promise<void> {}
+  async transitionToSubmitting(id: string): Promise<boolean> {
+    return this.compareAndSetState(id, "AUTHORIZED", "SUBMITTING");
+  }
+  async recordSubmissionResult(id: string, ns: any, txHash?: string, hs?: number, body?: unknown): Promise<boolean> {
+    return this.compareAndSetState(id, "SUBMITTING", ns, { txHash: txHash ?? undefined } as any);
+  }
+  async getPaymentIntentById(id: string): Promise<any> {
+    for (const i of this.intents.values()) { if ((i as any).paymentIntentId === id) return JSON.parse(JSON.stringify(i)); }
+    return null;
+  }
+  async getNonTerminalIntents(): Promise<any[]> {
+    const nt = ["SUBMITTING","SUBMITTED","SETTLEMENT_PENDING","RECONCILING"];
+    return Array.from(this.intents.values()).filter((i:any)=>nt.includes(i.settlementState??i.status)).map((i:any)=>JSON.parse(JSON.stringify(i)));
+  }
+  async compareAndSetState(id: string, exp: any, nxt: any, extra?: any): Promise<boolean> {
+    const i = this.intents.get(id); if (!i) return false;
+    if ((i as any).settlementState !== exp && (i as any).status !== exp) return false;
+    if ((i as any).settlementState !== undefined) (i as any).settlementState = nxt; else (i as any).status = nxt;
+    if (extra?.txHash) (i as any).txHash = extra.txHash; return true;
+  }
+  async canCreateNewPayment(opId: string): Promise<boolean> {
+    for (const i of this.intents.values()) { if ((i as any).operationId === opId) { const s = (i as any).settlementState ?? (i as any).status; return s === "NOT_SETTLED"; } }
+    return true;
+  }
+  async appendReconciliationObservation(_o: any): Promise<void> {}
+  async getReconciliationObservations(_id: string): Promise<any[]> { return []; }
+  async saveSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).settledEvidenceBundle = b; }
+  async saveNotSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).notSettledEvidenceBundle = b; }
 }
 
 // ---------------------------------------------------------------------------
@@ -145,28 +173,21 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
     expect(result.finalStatus).toBe("DELIVERY_UNKNOWN");
     expect(seller.getCallCount()).toBe(1);
 
-    // Verify no new payment was created
+    // Verify no new payment was created (R0 repair: canonical field is settlementState)
     const intent = await paymentStore.getPaymentIntentByOperationId(opId);
-    expect(intent!.status).toBe("SETTLED"); // unchanged — no new payment
+    expect(intent!.settlementState).toBe("SETTLED"); // unchanged — no new payment
   });
 
   // ---- Test AL: Idempotent retry — stable key, single payment ----
 
   test("AL: idempotent retry uses same key, payment submitted only once", async () => {
     const opId = "op-al-idempotent";
-    let callCount = 0;
     const { paymentStore, seller, engine } = makeEngine({});
 
-    // First call times out, second succeeds
-    const originalExecute = seller.execute.bind(seller);
-    seller.execute = async (req) => {
-      callCount++;
-      if (callCount === 1) {
-        return { kind: "DELIVERY_UNKNOWN" as const, reason: "TIMEOUT" as const, error: "timeout", durationMs: 30000 };
-      }
-      return originalExecute(req);
-    };
-    seller.setBehavior({ forceStatusCode: 200 });
+    // R0 repair: wrap-free behavior flip so BOTH calls are recorded in
+    // seller.callLog (the old monkey-patch bypassed the mock's callLog).
+    // First call times out, second succeeds.
+    seller.setBehavior({ forceTimeout: true });
 
     await paymentStore.createPaymentIntent(makeSettledIntent(opId));
 
@@ -176,6 +197,7 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
     await engine.processJob(jobId);
 
     // Second process → success with SAME idempotency key
+    seller.setBehavior({ forceStatusCode: 200 });
     const result = await engine.processJob(jobId);
 
     expect(result.success).toBe(true);
@@ -187,7 +209,7 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
 
     // Payment was submitted only once (settled intent unchanged)
     const intent = await paymentStore.getPaymentIntentByOperationId(opId);
-    expect(intent!.status).toBe("SETTLED");
+    expect(intent!.settlementState).toBe("SETTLED");
   });
 
   // ---- Test AM: Result retrieval — observation, not re-execution ----
@@ -196,23 +218,9 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
     const opId = "op-am-retrieval";
     const { paymentStore, seller, engine } = makeEngine({});
 
-    // First call times out
-    let callNum = 0;
-    const originalExecute = seller.execute.bind(seller);
-    seller.execute = async (req) => {
-      callNum++;
-      if (callNum === 1) {
-        return { kind: "DELIVERY_UNKNOWN" as const, reason: "TIMEOUT" as const, error: "timeout", durationMs: 30000 };
-      }
-      // Retrieval call — should be GET
-      return {
-        kind: "SUCCESS" as const,
-        statusCode: 200,
-        body: { result: "completed" },
-        headers: {},
-        durationMs: 50,
-      };
-    };
+    // R0 repair: behavior flip instead of an execute monkey-patch so both
+    // calls are recorded in seller.callLog.
+    seller.setBehavior({ forceTimeout: true });
 
     await paymentStore.createPaymentIntent(makeSettledIntent(opId));
 
@@ -220,6 +228,9 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
 
     // First process → timeout → creates retrieval job
     await engine.processJob(jobId);
+
+    // Retrieval call succeeds
+    seller.setBehavior({ forceStatusCode: 200 });
 
     // Find the retrieval job
     const allJobs = Array.from((engine as any).executionStore.jobs.values());
@@ -279,9 +290,9 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
     // Seller called exactly once (no duplicate payment)
     expect(seller.getCallCount()).toBe(1);
 
-    // Payment still SETTLED (no new payment created)
+    // Payment still SETTLED (no new payment created) (R0 repair: canonical field)
     const intent = await paymentStore.getPaymentIntentByOperationId(opId);
-    expect(intent!.status).toBe("SETTLED");
+    expect(intent!.settlementState).toBe("SETTLED");
   });
 
   // ---- Test AP: HTTP 5xx stored separately from timeout ----
@@ -362,34 +373,4 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
       engine.initiateExecution(opId, "EXECUTION_IDEMPOTENT"),
     ).rejects.toThrow("INV-8_VIOLATION");
   });
-
-  async transitionToSubmitting(id: string): Promise<boolean> {
-    return this.compareAndSetState(id, "AUTHORIZED", "SUBMITTING");
-  }
-  async recordSubmissionResult(id: string, ns: any, txHash?: string, hs?: number, body?: unknown): Promise<boolean> {
-    return this.compareAndSetState(id, "SUBMITTING", ns, { txHash: txHash ?? undefined } as any);
-  }
-  async getPaymentIntentById(id: string): Promise<any> {
-    for (const i of this.intents.values()) { if ((i as any).paymentIntentId === id) return JSON.parse(JSON.stringify(i)); }
-    return null;
-  }
-  async getNonTerminalIntents(): Promise<any[]> {
-    const nt = ["SUBMITTING","SUBMITTED","SETTLEMENT_PENDING","RECONCILING"];
-    return Array.from(this.intents.values()).filter((i:any)=>nt.includes(i.settlementState??i.status)).map((i:any)=>JSON.parse(JSON.stringify(i)));
-  }
-  async compareAndSetState(id: string, exp: any, nxt: any, extra?: any): Promise<boolean> {
-    const i = this.intents.get(id); if (!i) return false;
-    if ((i as any).settlementState !== exp && (i as any).status !== exp) return false;
-    if ((i as any).settlementState !== undefined) (i as any).settlementState = nxt; else (i as any).status = nxt;
-    if (extra?.txHash) (i as any).txHash = extra.txHash; return true;
-  }
-  async canCreateNewPayment(opId: string): Promise<boolean> {
-    for (const i of this.intents.values()) { if ((i as any).operationId === opId) { const s = (i as any).settlementState ?? (i as any).status; return s === "NOT_SETTLED"; } }
-    return true;
-  }
-  async appendReconciliationObservation(_o: any): Promise<void> {}
-  async getReconciliationObservations(_id: string): Promise<any[]> { return []; }
-  async saveSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).settledEvidenceBundle = b; }
-  async saveNotSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).notSettledEvidenceBundle = b; }
-
-}
+});

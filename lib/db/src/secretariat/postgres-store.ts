@@ -21,7 +21,59 @@ import type {
   EvidenceRecord, Operation, OperationStatus, NonceRecord, NonceStatus,
   ReconciliationObservation, SettledEvidenceBundle, NotSettledEvidenceBundle,
 } from "zeus-secretariat";
-import { allowNewPayment } from "zeus-secretariat";
+import { allowNewPayment, isTerminalSettlementState } from "zeus-secretariat";
+
+// ---------------------------------------------------------------------------
+// R0 repair: numeric(38,6) round-trip normalization
+// ---------------------------------------------------------------------------
+
+/**
+ * Postgres numeric(38,6) returns fixed-scale strings ("500000.000000") while
+ * the protocol value string is the exact asset amount the client signed
+ * ("500000"). Verifier binding (`same(authorization.value, intent.value)`)
+ * is a strict string comparison — an unpadded round-trip would fail every
+ * Stage-B verification after a restart with VALUE_MISMATCH. Normalize the
+ * numeric text back to its canonical minimal form on read.
+ */
+function normalizeNumericText(raw: string): string {
+  if (typeof raw !== "string" || raw === "") return raw;
+  const dot = raw.indexOf(".");
+  if (dot === -1) return raw;
+  let trimmed = raw.replace(/0+$/, "");
+  if (trimmed.endsWith(".")) trimmed = trimmed.slice(0, -1);
+  return trimmed === "" || trimmed === "-" ? "0" : trimmed;
+}
+
+/**
+ * R0 repair: walk an error chain (DrizzleQueryError → cause → PG error) and
+ * return the first PostgreSQL error code found, if any.
+ */
+function findPgErrorCode(err: unknown): string | undefined {
+  let cursor: unknown = err;
+  for (let depth = 0; depth < 6 && cursor && typeof cursor === "object"; depth++) {
+    const code = (cursor as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+    cursor = (cursor as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+/**
+ * R0 repair: deep key-order-insensitive JSON canonicalization used by the
+ * saveOperation() fast-path dedup set. Postgres jsonb does NOT preserve object
+ * key order, so a naive JSON.stringify comparison of an in-memory record and
+ * its durable (jsonb-round-tripped) twin would report a false difference and
+ * defeat the fast path. This canonical form matches jsonb equality semantics
+ * for plain JSON data (objects/arrays/strings/numbers/booleans/null).
+ */
+function canonicalEvidenceJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value ?? null);
+  if (Array.isArray(value)) return `[${value.map(canonicalEvidenceJson).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalEvidenceJson(v)}`).join(",")}}`;
+}
 
 interface PaymentIntentRow {
   paymentIntentId: string; operationId: string; requestId: string | null; clientId: string | null;
@@ -32,6 +84,7 @@ interface PaymentIntentRow {
   errorReason: string | null; submitAttemptAt: Date | null; settledAt: Date | null; notSettledAt: Date | null;
   settledEvidenceBundle: unknown; notSettledEvidenceBundle: unknown; reconciliationObservations: unknown;
   nextProbeAt: Date | null; probeCount: number; version: number; createdAt: Date; updatedAt: Date;
+  extraFields?: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +246,7 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
         probeCount: intent.probeCount ?? 0, version: 0,
       });
     } catch (err: unknown) {
-      if ((err as { code?: string }).code === "23505") throw new Error("DUPLICATE_OPERATION_ID: " + intent.operationId);
+      if (findPgErrorCode(err) === "23505") throw new Error("DUPLICATE_OPERATION_ID: " + intent.operationId);
       throw err;
     }
   }
@@ -213,6 +266,13 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
 
   // P0-5 + section 21: Atomic CAS via optimistic locking (version column)
   async compareAndSetState(intentId: string, expectedState: SettlementState, newState: SettlementState, extra?: Partial<DurablePaymentIntent>): Promise<boolean> {
+    // §19/§21 terminal monotonicity: SETTLED / NOT_SETTLED / UNRESOLVED_MANUAL
+    // are irreversible. Without this guard a stale worker could CAS SETTLED →
+    // NOT_SETTLED and authorize a SECOND payment for the same operation
+    // (double-spend). Reject every transition out of a terminal state.
+    if (isTerminalSettlementState(expectedState)) {
+      return false;
+    }
     const setObj: Record<string, unknown> = {
       settlementState: newState, version: sql`${paymentIntentsTable.version} + 1`, updatedAt: new Date(),
     };
@@ -441,10 +501,23 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
 
   async updatePaymentIntentStatus(id: string, status: SettlementState, extra?: any): Promise<void> {
     const setObj: Record<string, unknown> = { settlementState: status, version: sql`${paymentIntentsTable.version} + 1`, updatedAt: new Date() };
-    if (extra?.txHash !== undefined) setObj.txHash = extra.txHash;
-    if (extra?.facilitatorHttpStatus !== undefined) setObj.facilitatorHttpStatus = extra.facilitatorHttpStatus;
-    if (extra?.facilitatorResponseBody !== undefined) setObj.facilitatorResponseBody = extra.facilitatorResponseBody;
-    if (extra?.errorReason !== undefined) setObj.errorReason = extra.errorReason;
+    // R0 repair: known columns map to their fields; any OTHER auxiliary key
+    // (e.g. `signature`) must survive restarts — merge it into extra_fields.
+    const extras: Record<string, unknown> = {};
+    if (extra && typeof extra === "object") {
+      for (const [key, value] of Object.entries(extra)) {
+        switch (key) {
+          case "txHash": setObj.txHash = value; break;
+          case "facilitatorHttpStatus": setObj.facilitatorHttpStatus = value; break;
+          case "facilitatorResponseBody": setObj.facilitatorResponseBody = value; break;
+          case "errorReason": setObj.errorReason = value; break;
+          default: extras[key] = value;
+        }
+      }
+    }
+    if (Object.keys(extras).length > 0) {
+      setObj.extraFields = sql`COALESCE(${paymentIntentsTable.extraFields}, '{}'::jsonb) || ${JSON.stringify(extras)}::jsonb`;
+    }
     await this.db.update(paymentIntentsTable).set(setObj).where(eq(paymentIntentsTable.paymentIntentId, id));
   }
 
@@ -456,10 +529,42 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     return rows.map((r: any) => this.rowToIntent(r as PaymentIntentRow));
   }
 
+  /**
+   * R0 repair: SETTLED intents with NO durable EXECUTION obligation.
+   * Backs PostSettlementEngine.ensureExecutionObligations() — closes the gap
+   * where a payment settled by the background ReconciliationWorker (or between
+   * settlement and handoff after a crash) never produced a recovery_jobs
+   * (EXECUTION) row, leaving the seller permanently un-paid-out/un-delivered.
+   */
+  async getSettledIntentsWithoutObligation(limit = 100): Promise<DurablePaymentIntent[]> {
+    const result = await this.db.execute(sql`
+      SELECT pi.* FROM payment_intents pi
+      WHERE pi.settlement_state = ${"SETTLED"}
+        AND NOT EXISTS (
+          SELECT 1 FROM recovery_jobs rj
+          WHERE rj.operation_id = pi.operation_id
+            AND rj.job_type = ${"EXECUTION"}
+        )
+      ORDER BY pi.updated_at ASC
+      LIMIT ${limit}
+    `);
+    const records = Array.isArray(result)
+      ? result
+      : ((result as unknown as { rows?: unknown[] })?.rows ?? []);
+    return records.map((r) => this.rowToIntent(r as PaymentIntentRow));
+  }
+
   // Nonce registry
   async reserveNonce(nonce: string, operationId: string, payer: string): Promise<void> {
     try { await this.db.insert(nonceRegistryTable).values({ nonce, operationId, status: "RESERVED", payer }); }
-    catch (err: unknown) { if ((err as any).code === "23505") throw new Error("NONCE_ALREADY_RESERVED: " + nonce); throw err; }
+    catch (err: unknown) {
+      // R0 repair: drizzle's node-postgres driver wraps driver errors in
+      // DrizzleQueryError — the PG error code lives on `cause`, not on the
+      // thrown error itself. Unwrap the chain so the double-spend guard
+      // (NONCE_ALREADY_RESERVED) actually fires after a restart.
+      if (findPgErrorCode(err) === "23505") throw new Error("NONCE_ALREADY_RESERVED: " + nonce);
+      throw err;
+    }
   }
   async getNonce(nonce: string): Promise<NonceRecord | null> {
     const rows = await this.db.select().from(nonceRegistryTable).where(eq(nonceRegistryTable.nonce, nonce)).limit(1);
@@ -546,7 +651,12 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     const latestAttemptStatus = firstAttempt?.status ?? null;
 
     // Step 3: evidence — full JSONB array from reconciliation_observations.
-    const evidence = ((row.reconciliationObservations ?? []) as unknown) as EvidenceRecord[];
+    // R0 repair: defensive COPY. Handing the row's array out by reference lets
+    // any consumer (e.g. ExecutionFeedbackService.pushEvidence) mutate the
+    // store's own state in memory — records appeared "durable" without a
+    // single SQL append, which breaks dedup/idempotency reasoning and makes
+    // fake-db harnesses diverge from real jsonb re-read semantics.
+    const evidence = [...(((row.reconciliationObservations ?? []) as unknown) as EvidenceRecord[])] as EvidenceRecord[];
 
     // Step 4a: paymentState mapping from settlement_state.
     const settlementState = row.settlementState as string;
@@ -610,8 +720,8 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       })
       .where(eq(paymentIntentsTable.operationId, op.operationId));
 
-    // Append the LAST evidence record (STATE_TRANSITION) so currentState is
-    // durable and reconstructible by getOperation() after restart.
+    // Append evidence records that are NOT yet durable so the full FSM
+    // transition chain is reconstructible by getOperation() after restart.
     //
     // Audit finding #2 — best-effort deduplication by existing event identity
     // (operationId + timestamp + event + JSON payload). The in-memory chain
@@ -619,35 +729,56 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     // sequential duplicate polls. This read-then-append guard is NOT atomic:
     // concurrent saves can still race and append duplicates. No new
     // table/column/format change is introduced here.
-    const last = op.evidence[op.evidence.length - 1];
-    if (last) {
+    //
+    // R0 repair: append EVERY missing record, not only the last one. The
+    // previous implementation persisted just `evidence[last]`, so multi-step
+    // feedback chains (EXECUTION_PENDING → EXECUTION_CONFIRMED → DELIVERED →
+    // SUCCESS) lost all intermediate transitions and restart reconstruction
+    // could only see the final state.
+    if (op.evidence.length > 0) {
       const intent = await this.getPaymentIntentByOperationId(op.operationId);
       if (intent) {
-        const observationsJson = JSON.stringify(intent.reconciliationObservations ?? []);
-        const alreadyPresent = sql`
-          SELECT EXISTS (
-            SELECT 1 FROM jsonb_array_elements(${observationsJson}::jsonb) AS e
-            WHERE e = ${JSON.stringify(last)}::jsonb
-          ) AS present
-        `;
-        const checkRows = await this.db.execute(alreadyPresent);
-        // A1-R D-2 (dedup-guard): db.execute() under drizzle node-postgres
-        // returns a QueryResult object ({ rows: [...] }), NOT a bare array.
-        // The previous `Array.isArray(checkRows) ? checkRows : []` yielded []
-        // on the real driver, so `present` was always undefined and the guard
-        // appended duplicates even when the record was already durable. Same
-        // normalization pattern as getOperation() above (D-2b / REPAIR-3K).
-        const normalizedCheckRows = Array.isArray(checkRows)
-          ? checkRows
-          : ((checkRows as unknown as { rows?: unknown[] })?.rows ?? []);
-        const present = normalizedCheckRows[0] as { present?: boolean } | undefined;
-        if (!present?.present) {
-          await this.db.execute(sql`
-            UPDATE payment_intents
-            SET reconciliation_observations = COALESCE(reconciliation_observations, '[]'::jsonb) || ${JSON.stringify(last)}::jsonb,
-                updated_at = NOW()
-            WHERE payment_intent_id = ${intent.paymentIntentId}
-          `);
+        // R0 repair: COPY — rowToIntent may hand out the underlying row array
+        // (in-memory fakes); the local `existing.push(rec)` bookkeeping below
+        // must never mutate it directly (only SQL appends do).
+        const existing = Array.isArray(intent.reconciliationObservations)
+          ? [...(intent.reconciliationObservations as unknown as EvidenceRecord[])]
+          : [];
+        // Fast path: skip records whose deep-canonical form is already durable.
+        // Survivors (typically just this cycle's new transitions) are verified
+        // with the jsonb equality EXISTS guard, which is key-order-insensitive
+        // and therefore immune to jsonb key reordering on the server.
+        const have = new Set(existing.map(canonicalEvidenceJson));
+        const candidates = op.evidence.filter((r) => !have.has(canonicalEvidenceJson(r)));
+        for (const rec of candidates) {
+          const observationsJson = JSON.stringify(existing);
+          const alreadyPresent = sql`
+            SELECT EXISTS (
+              SELECT 1 FROM jsonb_array_elements(${observationsJson}::jsonb) AS e
+              WHERE e = ${JSON.stringify(rec)}::jsonb
+            ) AS present
+          `;
+          const checkRows = await this.db.execute(alreadyPresent);
+          // A1-R D-2 (dedup-guard): db.execute() under drizzle node-postgres
+          // returns a QueryResult object ({ rows: [...] }), NOT a bare array.
+          // The previous `Array.isArray(checkRows) ? checkRows : []` yielded []
+          // on the real driver, so `present` was always undefined and the guard
+          // appended duplicates even when the record was already durable. Same
+          // normalization pattern as getOperation() above (D-2b / REPAIR-3K).
+          const normalizedCheckRows = Array.isArray(checkRows)
+            ? checkRows
+            : ((checkRows as unknown as { rows?: unknown[] })?.rows ?? []);
+          const present = normalizedCheckRows[0] as { present?: boolean } | undefined;
+          if (!present?.present) {
+            await this.db.execute(sql`
+              UPDATE payment_intents
+              SET reconciliation_observations = COALESCE(reconciliation_observations, '[]'::jsonb) || ${JSON.stringify(rec)}::jsonb,
+                  updated_at = NOW()
+              WHERE payment_intent_id = ${intent.paymentIntentId}
+            `);
+            existing.push(rec);
+            have.add(canonicalEvidenceJson(rec));
+          }
         }
       }
     }
@@ -830,10 +961,19 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   }
 
   private rowToIntent(row: PaymentIntentRow): DurablePaymentIntent {
+    // R0 repair: round-trip non-column extras (e.g. `signature`) persisted by
+    // updatePaymentIntentStatus. Canonical columns always win over extras.
+    const extras = (row.extraFields && typeof row.extraFields === "object" && !Array.isArray(row.extraFields))
+      ? row.extraFields as Record<string, unknown>
+      : {};
     return {
+      ...extras,
       paymentIntentId: row.paymentIntentId, operationId: row.operationId,
       requestId: row.requestId ?? undefined, clientId: row.clientId ?? undefined,
-      authorizer: row.authorizer, payTo: row.payTo, value: row.value,
+      // payer is the canonical authorizer alias (authorizer === signed.payer);
+      // exposed explicitly so durable consumers can read it back by name.
+      payer: row.authorizer,
+      authorizer: row.authorizer, payTo: row.payTo, value: normalizeNumericText(String(row.value)),
       asset: row.asset, network: row.network, nonce: row.nonce,
       validAfter: row.validAfter, validBefore: row.validBefore,
       paymentPayload: row.paymentPayload, paymentPayloadHash: row.paymentPayloadHash,
@@ -847,6 +987,6 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       notSettledEvidenceBundle: row.notSettledEvidenceBundle as any,
       reconciliationObservations: row.reconciliationObservations as any,
       probeCount: row.probeCount ?? 0, createdAt: row.createdAt.getTime(), updatedAt: row.updatedAt.getTime(),
-    };
+    } as DurablePaymentIntent;
   }
 }

@@ -6,6 +6,7 @@
  */
 
 import { NonceGenerator } from './payment-types.js';
+import { NonceAlreadyUsedError } from './payment-errors.js';
 import { randomBytes } from 'crypto';
 
 export class CryptoNonceGenerator implements NonceGenerator {
@@ -32,6 +33,10 @@ export class InMemoryNonceRegistry {
   private nonceMap: Map<string, string> = new Map();
 
   async reserveNonce(operationId: string, nonce: string): Promise<void> {
+    // R0 repair: throw the CANONICAL NonceAlreadyUsedError from
+    // payment-errors.ts. This file previously declared its own duplicate
+    // class, so `instanceof` checks (and rejects.toThrow(Class) assertions)
+    // against the exported canonical error always failed.
     if (this.nonceMap.has(nonce)) {
       throw new NonceAlreadyUsedError(
         `Nonce ${nonce} already reserved for operation ${this.nonceMap.get(nonce)}`
@@ -53,15 +58,5 @@ export class InMemoryNonceRegistry {
    */
   clear(): void {
     this.nonceMap.clear();
-  }
-}
-
-/**
- * Error thrown when attempting to reuse a nonce.
- */
-export class NonceAlreadyUsedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NonceAlreadyUsedError';
   }
 }

@@ -299,6 +299,9 @@ export class Secretariat {
       return this.buildResult(operation);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (process.env.ZEUS_DEBUG_STACK) {
+        console.error('[StateMachine.execute] failure:', (error as Error)?.stack ?? error);
+      }
       return await this.failOperation(operation, 'FAILED', errorMessage);
     }
   }
@@ -582,7 +585,17 @@ export class Secretariat {
     }
 
     // Check max price
-    if (parseFloat(requirement.amount) > parseFloat(policy.maxPrice)) {
+    // R0 repair: unit-consistent comparison. x402 requirement amounts are
+    // smallest-unit integers ("500000"), while legacy human quotes are decimal
+    // strings ("1.00"). Comparing a smallest-unit integer against a human
+    // decimal with parseFloat() mixes units (500000 > 1.0 → always rejects).
+    // When BOTH sides are integer strings, compare exact BigInt magnitudes;
+    // otherwise fall back to the legacy parseFloat behavior.
+    const isInt = (s: string) => /^\d+$/.test(String(s).trim());
+    const exceeds = isInt(requirement.amount) && isInt(policy.maxPrice)
+      ? BigInt(requirement.amount) > BigInt(policy.maxPrice)
+      : parseFloat(requirement.amount) > parseFloat(policy.maxPrice);
+    if (exceeds) {
       this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
         reason: 'Amount exceeds maxPrice',
         required: requirement.amount,
@@ -816,14 +829,12 @@ export class Secretariat {
         },
       };
       const serializedPayload = JSON.stringify(signedPayload);
-      const updateAuthorization = (durableStore as DurableEvidenceStore & {
-        updatePaymentIntentAuthorization?: (
-          paymentIntentId: string,
-          fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,
-        ) => Promise<void>;
-      }).updatePaymentIntentAuthorization;
-      if (preCreatedIntent && typeof updateAuthorization === "function") {
-        await updateAuthorization(preCreatedIntent.paymentIntentId, {
+      // R0 repair: call the method ON its receiver. The previous
+      // `const updateAuthorization = store.updatePaymentIntentAuthorization;`
+      // extraction dropped `this`, crashing every store whose implementation
+      // touches instance state (e.g. InMemoryEvidenceStore).
+      if (preCreatedIntent && typeof durableStore.updatePaymentIntentAuthorization === "function") {
+        await durableStore.updatePaymentIntentAuthorization.call(durableStore, preCreatedIntent.paymentIntentId, {
           paymentPayload: serializedPayload,
           paymentPayloadHash: keccak256(toBytes(serializedPayload)),
         });

@@ -307,7 +307,9 @@ describe('Phase 2.1 - Payment Signer Boundary', () => {
         asset: 'USDC',
         payer: address,
         payTo: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
-        amount: '1.00',
+        // R0 repair: the signer contract requires the amount in smallest units
+        // (BigInt(request.amount)); a human decimal like '1.00' is not valid input.
+        amount: '1000000',
         nonce: '0x' + '1'.repeat(64),
         validAfter: Math.floor(Date.now() / 1000),
         validBefore: Math.floor(Date.now() / 1000) + 3600,
@@ -326,14 +328,15 @@ describe('Phase 2.1 - Payment Signer Boundary', () => {
       expect(result.signerType).toBe('LOCAL_EOA');
     });
 
-    it('should throw error when private key not found in env', () => {
-      const { createLocalEoaSignerFromEnv } = require('../src/adapters/local-eoa-signer');
+    it('should throw error when private key not found in env', async () => {
+      // R0 repair: Jest ESM mode has no require(); use dynamic import.
+      const { createLocalEoaSignerFromEnv } = await import('../src/adapters/local-eoa-signer');
       
       // Save original env
       const originalValue = process.env.ZEUS_SIGNER_PRIVATE_KEY;
       delete process.env.ZEUS_SIGNER_PRIVATE_KEY;
       
-      expect(() => createLocalEoaSignerFromEnv())
+      await expect(() => createLocalEoaSignerFromEnv())
         .toThrow('Private key not found');
       
       // Restore
@@ -342,12 +345,12 @@ describe('Phase 2.1 - Payment Signer Boundary', () => {
       }
     });
 
-    it('should throw error for invalid private key format', () => {
-      const { createLocalEoaSignerFromEnv } = require('../src/adapters/local-eoa-signer');
+    it('should throw error for invalid private key format', async () => {
+      const { createLocalEoaSignerFromEnv } = await import('../src/adapters/local-eoa-signer');
       
       process.env.ZEUS_SIGNER_PRIVATE_KEY = 'invalid_key';
       
-      expect(() => createLocalEoaSignerFromEnv())
+      await expect(() => createLocalEoaSignerFromEnv())
         .toThrow('Invalid private key format');
       
       delete process.env.ZEUS_SIGNER_PRIVATE_KEY;
