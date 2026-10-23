@@ -25,7 +25,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x3c8e585b"
+      "0x7faf3231"
     ]
   },
   "S2": {
@@ -54,7 +54,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0xeaf7d871"
+      "0x25f7632d"
     ]
   },
   "S3": {
@@ -83,7 +83,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x50de6d1f"
+      "0x37f6783c"
     ]
   },
   "S4": {
@@ -111,7 +111,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x68e69a5b"
+      "0xac56a9a1"
     ]
   },
   "S5": {
@@ -140,7 +140,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x3c43f875"
+      "0xfc864770"
     ]
   },
   "S6": {
@@ -169,7 +169,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x049f1bbc"
+      "0xa2751196"
     ]
   },
   "S7": {
@@ -192,21 +192,43 @@
       "SETTLEMENT_CONFIRMED",
       "SETTLEMENT_ALREADY_PERSISTED",
       "EXECUTION_INITIATED",
-      "EXECUTION_RESULT_RAW"
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
     ],
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x6b376fa9"
+      "0xfc6a8368"
     ]
   },
   "S8": {
-    "intents": 0,
-    "states": [],
-    "observations": [],
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
+    ],
     "attempts": [],
-    "recoveryJobs": 0,
-    "nonces": []
+    "recoveryJobs": "none",
+    "nonces": [
+      "0x5ac208c6"
+    ]
   },
   "DOUBLE_INTENT_CLIENTS": []
 }

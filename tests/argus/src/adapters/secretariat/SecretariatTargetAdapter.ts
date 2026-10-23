@@ -44,6 +44,7 @@ import {
   ExchangeStatus,
   RunId,
   Metadata,
+  PaymentRequired,
 } from '../../core/AgentTargetPort';
 
 function generateId(prefix: string): string {
@@ -89,6 +90,14 @@ export class SecretariatTargetAdapter implements AgentTargetPort {
   // Distinct settlements already reported (S6: a retried payment must not
   // produce a second payment_settled observation).
   private reportedTx = new Set<string>();
+  // S8 split-402 mode: the persisted Stage-A binding awaiting the signed
+  // retry carried by sendWithSignature(). One pending binding per adapter
+  // instance (a scenario run performs one signed retry at a time).
+  private pending402: {
+    clientId: string;
+    requestId: string;
+    pi: NonNullable<CreateResponse['paymentIntent']>;
+  } | null = null;
 
   constructor(targetType: string = 'secretariat') {
     this.id = generateId('sec-adapter');
@@ -142,6 +151,14 @@ export class SecretariatTargetAdapter implements AgentTargetPort {
     return Number.parseInt(process.env.ARGUS_LIVE_POLL_DEADLINE_MS ?? '20000', 10);
   }
 
+  // S8: model the x402 step-1/step-2 split at the /v1 boundary. Stage A
+  // (POST /v1/requests returning the persisted paymentIntent) IS the
+  // PAYMENT_REQUIRED moment; the signed retry is Stage B. When unset, act()
+  // keeps the combined Stage A+B behavior used by S1–S7.
+  private get split402(): boolean {
+    return process.env.SECRETARIAT_402_SPLIT === '1';
+  }
+
   private get clientKey(): string {
     const key = process.env.SECRETARIAT_CLIENT_KEY;
     if (!key) throw new Error('SECRETARIAT_CLIENT_KEY is required for the secretariat target');
@@ -151,6 +168,13 @@ export class SecretariatTargetAdapter implements AgentTargetPort {
   async send(runId: RunId, type: string, payload?: unknown): Promise<Exchange> {
     if (!this.isConnected()) {
       throw new Error('Not connected. Call connect() first.');
+    }
+
+    if (this.split402 && type === 'request_resource') {
+      // S8: x402 step 1 only — create the operation and hand back the
+      // persisted payment requirements WITHOUT paying. The engine's
+      // paymentResolver signs; the signed retry arrives via sendWithSignature().
+      return this.sendSplit402(runId, type, payload);
     }
 
     if (type !== 'request_payment') {
@@ -278,59 +302,7 @@ export class SecretariatTargetAdapter implements AgentTargetPort {
       // ---------------- Poll to terminal (crash-tolerant in S3 mode) --------
       const pollId = requestId ?? known;
       if (pollId && !rejectedCode) {
-        const deadline = Date.now() + this.pollDeadlineMs;
-        let outageStarted = false;
-        let recoveredAfterOutage = false;
-
-        while (Date.now() < deadline) {
-          let body: PollResponse | null = null;
-          try {
-            const res = await this.getJson(`/v1/requests/${pollId}`);
-            body = res.body as PollResponse;
-            if (outageStarted) {
-              recoveredAfterOutage = true;
-              outageStarted = false;
-            }
-          } catch {
-            if (!outageStarted) {
-              outageStarted = true;
-            }
-            await sleep(500);
-            continue;
-          }
-
-          if (body?.settlementTxHash) txHash = body.settlementTxHash;
-          if (body?.outcome !== undefined) outcome = body.outcome;
-          const st = body?.status ?? '';
-
-          if (
-            st === 'COMPLETED' || st === 'FAILED' ||
-            st === 'UNRESOLVABLE' || st === 'UNKNOWN'
-          ) {
-            finalStatus = st;
-            break;
-          }
-          await sleep(400);
-        }
-
-        if (!finalStatus) finalStatus = 'PROCESSING_AT_DEADLINE';
-
-        if (txHash && !this.reportedTx.has(txHash)) {
-          this.reportedTx.add(txHash);
-          observations.push('payment_settled');
-        } else if (!txHash && finalStatus === 'COMPLETED') {
-          // Completed without a visible tx hash — still exactly one settlement
-          // for this requestId from the client's point of view.
-          observations.push('payment_settled');
-        }
-
-        if (recoveredAfterOutage) {
-          observations.push('recovery_completed');
-        }
-
-        if (finalStatus === 'COMPLETED') observations.push('success');
-        else if (finalStatus === 'FAILED') observations.push('failed');
-        else observations.push('delivery_unknown');
+        await this.pollAndRecord(pollId, observations);
       }
     } catch (error) {
       observations.push('failed');
@@ -365,6 +337,264 @@ export class SecretariatTargetAdapter implements AgentTargetPort {
 
     this.exchanges.push(exchange);
     return exchange;
+  }
+
+  /**
+   * Poll /v1/requests/:id to a terminal public status and record canonical
+   * observations. Shared by the combined Stage A+B path and the S8 signed
+   * retry. Crash-tolerant: connection failures during a crash/restart window
+   * are recorded as an outage and recovery_completed is emitted only when a
+   * later poll succeeds (a boundary fact, not a synthetic event).
+   */
+  private async pollAndRecord(
+    pollId: string,
+    observations: string[],
+  ): Promise<{ finalStatus: string; txHash?: string; outcome?: unknown; recoveredAfterOutage: boolean }> {
+    const deadline = Date.now() + this.pollDeadlineMs;
+    let outageStarted = false;
+    let recoveredAfterOutage = false;
+    let txHash: string | undefined;
+    let outcome: unknown;
+    let finalStatus: string | undefined;
+
+    while (Date.now() < deadline) {
+      let body: PollResponse | null = null;
+      try {
+        const res = await this.getJson(`/v1/requests/${pollId}`);
+        body = res.body as PollResponse;
+        if (outageStarted) {
+          recoveredAfterOutage = true;
+          outageStarted = false;
+        }
+      } catch {
+        if (!outageStarted) {
+          outageStarted = true;
+        }
+        await sleep(500);
+        continue;
+      }
+
+      if (body?.settlementTxHash) txHash = body.settlementTxHash;
+      if (body?.outcome !== undefined) outcome = body.outcome;
+      const st = body?.status ?? '';
+
+      if (
+        st === 'COMPLETED' || st === 'FAILED' ||
+        st === 'UNRESOLVABLE' || st === 'UNKNOWN'
+      ) {
+        finalStatus = st;
+        break;
+      }
+      await sleep(400);
+    }
+
+    if (!finalStatus) finalStatus = 'PROCESSING_AT_DEADLINE';
+
+    if (txHash && !this.reportedTx.has(txHash)) {
+      this.reportedTx.add(txHash);
+      observations.push('payment_settled');
+    } else if (!txHash && finalStatus === 'COMPLETED') {
+      // Completed without a visible tx hash — still exactly one settlement
+      // for this requestId from the client's point of view.
+      observations.push('payment_settled');
+    }
+
+    if (recoveredAfterOutage) {
+      observations.push('recovery_completed');
+    }
+
+    if (finalStatus === 'COMPLETED') observations.push('success');
+    else if (finalStatus === 'FAILED') observations.push('failed');
+    else observations.push('delivery_unknown');
+
+    return { finalStatus, txHash, outcome, recoveredAfterOutage };
+  }
+
+  /**
+   * S8 split-402 Stage A: drive POST /v1/requests ONLY and return the
+   * persisted paymentIntent as a PAYMENT_REQUIRED exchange. At the /v1
+   * boundary this 201+paymentIntent IS the x402 "402 Payment Required"
+   * moment — the resource is paywalled and the persisted intent is the
+   * canonical requirement set. The persisted intent fields (nonce /
+   * validAfter / validBefore) ride in paymentRequired.parsed.accepts[0].extra
+   * so the external bindingSource can produce the exact SigningBinding; the
+   * adapter generates NO intent fields and does NOT pay here.
+   */
+  private async sendSplit402(runId: RunId, type: string, payload: unknown): Promise<Exchange> {
+    const p = (payload ?? {}) as { requestId?: string; idempotencyKey?: string };
+    const idempotencyKey = p.idempotencyKey ?? `key-${generateId('k')}`;
+    const logicalRequest = process.env.ARGUS_LIVE_LOGICAL_KEY ?? p.requestId ?? idempotencyKey;
+    const runStamp = process.env.ARGUS_LIVE_RUN_STAMP ?? 'dev';
+    const clientId = `argus-live-${runStamp}-${this.scenarioTag}-${logicalRequest}`;
+    const observations: string[] = [];
+
+    try {
+      const created = await this.postJson('/v1/requests', {
+        target: this.resourceUrl,
+        method: 'POST',
+        payload: { prompt: this.scenarioTag },
+        clientId,
+        authorizer: await this.clientAddress(),
+        policy: {
+          maxPrice: process.env.SECRETARIAT_MAX_PRICE ?? '100000',
+          allowedNetworks: [process.env.SECRETARIAT_NETWORK ?? 'base-sepolia'],
+          allowedAssets: [process.env.SECRETARIAT_ASSET ?? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'],
+          allowedSellers: [process.env.SECRETARIAT_SELLER_ADDR ?? '0xcccccccccccccccccccccccccccccccccccccccc'],
+          authorizationMode: 'explicit',
+        },
+      });
+      const createBody = created.body as CreateResponse;
+      const requestId = createBody?.requestId;
+      const pi = createBody?.paymentIntent;
+
+      if (created.status === 201 && requestId && pi) {
+        this.seenLogical.set(clientId, requestId);
+        this.pending402 = { clientId, requestId, pi };
+        observations.push('payment_intent_created');
+        const networkName = process.env.SECRETARIAT_NETWORK ?? 'base-sepolia';
+        const chainId = Number.parseInt(process.env.SECRETARIAT_CHAIN_ID ?? '84532', 10);
+        const asset = process.env.SECRETARIAT_ASSET ?? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+        const paymentRequired: PaymentRequired = {
+          raw: Buffer.from(JSON.stringify(pi)).toString('base64'),
+          parsed: {
+            x402Version: 2,
+            resource: { url: this.resourceUrl, description: 'argus live scenario resource' },
+            accepts: [{
+              scheme: 'exact',
+              network: networkName,
+              amount: pi.value,
+              asset,
+              payTo: pi.payTo,
+              maxTimeoutSeconds: 300,
+              // durable intent fields owned by the Secretariat — carried
+              // opaquely for the external bindingSource (S8 wiring)
+              extra: { nonce: pi.nonce, validAfter: pi.validAfter, validBefore: pi.validBefore },
+            }],
+          },
+          scheme: 'exact',
+          network: `eip155:${chainId}`,
+          amount: pi.value,
+          asset,
+          payTo: pi.payTo,
+          maxTimeoutSeconds: 300,
+        };
+        return {
+          id: generateId('sec-exch'),
+          runId,
+          direction: MessageDirection.OUTBOUND,
+          type,
+          timestamp: Date.now(),
+          payload: { idempotencyKey, logicalRequest, clientId, requestId },
+          status: ExchangeStatus.PAYMENT_REQUIRED,
+          metadata: { observations, statusCode: created.status } as Metadata,
+          paymentRequired,
+        };
+      }
+
+      // Create rejected / no intent — a failed Stage A is a hard failure for
+      // the S8 flow; do not fabricate PAYMENT_REQUIRED.
+      const rejectedCode = createBody?.error?.code ?? `HTTP_${created.status}`;
+      observations.push('failed');
+      return {
+        id: generateId('sec-exch'),
+        runId,
+        direction: MessageDirection.OUTBOUND,
+        type,
+        timestamp: Date.now(),
+        payload: { idempotencyKey, logicalRequest, clientId, rejectedCode },
+        status: ExchangeStatus.FAILURE,
+        error: `Stage A rejected: ${rejectedCode}`,
+        metadata: { observations, statusCode: created.status } as Metadata,
+      };
+    } catch (error) {
+      observations.push('failed');
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        id: generateId('sec-exch'),
+        runId,
+        direction: MessageDirection.OUTBOUND,
+        type,
+        timestamp: Date.now(),
+        payload: { idempotencyKey, logicalRequest, clientId, error: message },
+        status: ExchangeStatus.FAILURE,
+        error: message,
+        metadata: { observations } as Metadata,
+      };
+    }
+  }
+
+  /**
+   * S8 signed retry (x402 step 2): receive the Base64 x402 V2 PaymentPayload
+   * produced by the PaymentAdapter (signature over the EXACT persisted
+   * binding), submit it to Stage B (POST /v1/requests/:id/payment) and poll
+   * to terminal. metadata.statusCode carries the Stage-B HTTP status so the
+   * engine's payment_retry_outcome evidence can reject a second 402.
+   */
+  async sendWithSignature(
+    runId: RunId,
+    type: string,
+    _payload: unknown,
+    paymentSignature: string,
+  ): Promise<Exchange> {
+    if (!this.isConnected()) {
+      throw new Error('Not connected. Call connect() first.');
+    }
+    if (!this.pending402) {
+      throw new Error('sendWithSignature called with no pending PAYMENT_REQUIRED binding');
+    }
+    const { clientId, requestId } = this.pending402;
+    const observations: string[] = [];
+    try {
+      const decoded = JSON.parse(Buffer.from(paymentSignature, 'base64').toString('utf8')) as unknown;
+      const payRes = await this.postJson(`/v1/requests/${requestId}/payment`, decoded);
+      let statusCode = payRes.status;
+      if (payRes.status !== 200) {
+        const errBody = payRes.body as { error?: { code?: string } };
+        observations.push('failed');
+        return {
+          id: generateId('sec-exch'),
+          runId,
+          direction: MessageDirection.OUTBOUND,
+          type,
+          timestamp: Date.now(),
+          payload: { clientId, requestId, rejectedCode: errBody?.error?.code ?? `HTTP_${payRes.status}` },
+          status: ExchangeStatus.FAILURE,
+          error: `Stage B rejected: ${errBody?.error?.code ?? `HTTP_${payRes.status}`}`,
+          metadata: { observations, statusCode } as Metadata,
+        };
+      }
+      const terminal = await this.pollAndRecord(requestId, observations);
+      return {
+        id: generateId('sec-exch'),
+        runId,
+        direction: MessageDirection.OUTBOUND,
+        type,
+        timestamp: Date.now(),
+        payload: {
+          clientId,
+          requestId,
+          finalStatus: terminal.finalStatus,
+          settlementTxHash: terminal.txHash ?? null,
+          outcome: terminal.outcome ?? null,
+        },
+        status: terminal.finalStatus === 'COMPLETED' ? ExchangeStatus.SUCCESS : ExchangeStatus.UNKNOWN,
+        metadata: { observations, statusCode } as Metadata,
+      };
+    } catch (error) {
+      observations.push('failed');
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        id: generateId('sec-exch'),
+        runId,
+        direction: MessageDirection.OUTBOUND,
+        type,
+        timestamp: Date.now(),
+        payload: { clientId, requestId, error: message },
+        status: ExchangeStatus.FAILURE,
+        error: message,
+        metadata: { observations } as Metadata,
+      };
+    }
   }
 
   private buildExchange(

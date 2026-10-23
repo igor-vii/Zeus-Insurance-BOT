@@ -26,6 +26,8 @@ import { Assertion } from '../core/Assertions';
 import { validateScenario } from '../core/validateScenario';
 import { createPaymentAdapter } from '../adapters/payment/PaymentAdapterFactory';
 import type { PaymentAdapter } from '../adapters/payment/PaymentAdapter';
+import { SecretariatEip3009PaymentAdapter } from '../adapters/secretariat/SecretariatEip3009PaymentAdapter';
+import type { SigningIntentSource } from '../adapters/payment/SigningBinding';
 import { X402SellerAdapter, DEFAULT_BASE_SEPOLIA_PAY_TO } from '../adapters/seller/X402SellerAdapter';
 import type { InboundExecutionWindow } from '../core/ScenarioEngine';
 import type { ScenarioDefinition } from '../core/ScenarioDefinition';
@@ -306,6 +308,25 @@ async function main(): Promise<void> {
       // При ARGUS_TARGET_KIND=mock — PaymentAdapter не создаётся,
       // поведение CLI сохраняется (baseline).
       let paymentAdapter: PaymentAdapter | undefined;
+      // S8 live wiring: persisted-intent bindingSource. The durable intent
+      // fields (nonce / validAfter / validBefore) ride in
+      // paymentRequired.parsed.accepts[0].extra (put there by
+      // SecretariatTargetAdapter.sendSplit402) — this source ONLY relays them;
+      // nothing is generated locally (SigningBinding.ts contract).
+      let secretariatBindingSource: SigningIntentSource | undefined;
+      if (targetSpec.kind === 'secretariat' && process.env.SECRETARIAT_ENABLE_402_RESOLVER === '1') {
+        paymentAdapter = new SecretariatEip3009PaymentAdapter();
+        secretariatBindingSource = (pr) => {
+          const extra = (pr as {
+            parsed?: { accepts?: Array<{ extra?: Record<string, unknown> }> };
+          }).parsed?.accepts?.[0]?.extra ?? {};
+          return {
+            nonce: String(extra.nonce ?? ''),
+            validAfter: String(extra.validAfter ?? ''),
+            validBefore: String(extra.validBefore ?? ''),
+          };
+        };
+      }
       if (targetSpec.kind === 'x402' || targetSpec.kind === 'http') {
         const pk = process.env.ARGUS_TEST_WALLET_PRIVATE_KEY;
         const rpc = process.env.BASE_SEPOLIA_RPC_URL;
@@ -329,9 +350,8 @@ async function main(): Promise<void> {
         scenarioDef,
         controllers,
         assertions,
-        paymentAdapter
-        // bindingSource НЕ передан: используется defaultSigningIntentSource
-        // (test-only placeholder) — wire boundary не фиксируется в Block D.
+        paymentAdapter,
+        secretariatBindingSource
       );
 
       const result = await orchestrator.run();

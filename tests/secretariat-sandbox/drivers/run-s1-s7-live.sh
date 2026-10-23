@@ -80,6 +80,8 @@ run_scenario() {
       ARGUS_LIVE_RUN_STAMP="$RUN_STAMP" \
       ARGUS_LIVE_CRASH="$crash" \
       ARGUS_LIVE_POLL_DEADLINE_MS="$deadline" \
+      SECRETARIAT_ENABLE_402_RESOLVER=1 \
+      SECRETARIAT_402_SPLIT=1 \
       ARGUS_DUMP_EVIDENCE=1 \
       timeout ${SCENARIO_TIMEOUT:-40} npx tsx src/cli/argus.ts run "$S" ) > "$TMP/$S.log" 2>&1
   echo $?
@@ -106,6 +108,9 @@ for S in S1 S2 S3 S4 S5 S6 S7 S8; do
   SCENARIO_TIMEOUT=40
   case "$S" in
     S3) crash=1; deadline=45000; SCENARIO_TIMEOUT=60 ;;
+    # S8 now runs the FULL x402 split: Stage A (PAYMENT_REQUIRED) -> signed
+    # retry (EIP-3009 over the persisted intent) -> Stage B -> poll terminal.
+    S8) crash=0; deadline=45000; SCENARIO_TIMEOUT=55 ;;
     # S4's own hang fault (duration_ms=-1) never terminates by design —
     # B4 inventory: "canonical infinite hang is non-terminating". The runner
     # kills the scenario after the adapter's work is done and lets the PG
@@ -165,6 +170,8 @@ for S in S1 S2 S3 S4 S5 S6 S7 S8; do
       ARGUS_LIVE_SCENARIO="$S" \
       ARGUS_LIVE_RUN_STAMP="$RUN_STAMP" \
       ARGUS_LIVE_POLL_DEADLINE_MS="$deadline" \
+      SECRETARIAT_ENABLE_402_RESOLVER=1 \
+      SECRETARIAT_402_SPLIT=1 \
       ARGUS_DUMP_EVIDENCE=1 \
       $S6_LOGICAL \
       timeout ${SCENARIO_TIMEOUT:-40} npx tsx src/cli/argus.ts run "$S" > "$TMP/$S.log" 2>&1; echo $? )

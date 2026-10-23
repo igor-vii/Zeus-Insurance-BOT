@@ -380,6 +380,33 @@ export class ScenarioEngine {
       );
     }
 
+    // 1b. Derived engine event: the seller delivery demonstrably RESUMED
+    // after a survived outage. At the /v1 boundary the SUT's internal
+    // forward-to-seller is not directly observable; the observable
+    // equivalent is the pair (recovery_completed — a poll succeeded after a
+    // real outage — AND success — the operation reached terminal COMPLETED).
+    // Only then is forward_request emitted, so a restart without a resumed
+    // delivery can never satisfy the S3-style "retry resumed" invariants.
+    // The +1ms encodes the causal order (resumption is observed strictly
+    // after the recovery) that a single exchange cannot separate.
+    if (
+      observations.includes('recovery_completed') &&
+      observations.includes('success')
+    ) {
+      this.evidenceCollector.collect(
+        {
+          source: 'engine',
+          type: 'forward_request',
+          data: {
+            derivedFrom: ['recovery_completed', 'success'],
+            actionType: action.type,
+          } as Record<string, unknown>,
+          timestamp: now + 1,
+        },
+        this.context.runId
+      );
+    }
+
     // 2. Engine event: action был выполнен
     this.evidenceCollector.collect(
       {
