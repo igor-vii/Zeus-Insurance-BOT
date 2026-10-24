@@ -204,7 +204,10 @@ class FakeDb {
       return [{ present }];
     }
 
-    if (text.includes("FROM payment_intents")) {
+    // R0 repair: the current store appends evidence with
+    // "UPDATE payment_intents SET reconciliation_observations = ..." (no FROM
+    // clause). Match that shape so the append is actually emulated.
+    if (text.includes("UPDATE payment_intents") && text.includes("reconciliation_observations")) {
       // UPDATE ... reconciliation_observations = COALESCE(...) || ${record}::jsonb
       const im = text.match(/WHERE payment_intent_id = '([^']+)'/);
       const rm = text.match(/\|\| '(\{.*?\})'::jsonb/s);
@@ -285,6 +288,38 @@ const TIMEOUT_RESULT: SellerExecutionResult = {
   kind: "DELIVERY_UNKNOWN", reason: "TIMEOUT", error: "timeout", durationMs: 30_000,
 };
 
+// R0 repair: in production the execution store persists attempts to the
+// execution_attempts table (PostgresExecutionStore), which is what
+// getOperation() uses to reconstruct executionState. The in-memory store used
+// by this harness never touches the DB, so the mirror proxy syncs every
+// attempt mutation into FakeDb.attempts — faithfully emulating the shared-DB
+// production composition.
+function mirrorExecutionStore(execStore: InMemoryExecutionStore, db: FakeDb): InMemoryExecutionStore {
+  const sync = () => {
+    db.attempts = [...execStore.attempts.values()].map((a) => ({
+      operation_id: (a as any).operationId,
+      attempt_number: (a as any).attemptNumber ?? 1,
+      status: (a as any).status,
+    }));
+  };
+  return new Proxy(execStore, {
+    get(target, prop, receiver) {
+      const orig = Reflect.get(target, prop, receiver);
+      if (typeof orig === "function") {
+        return (...args: unknown[]) => {
+          const r = (orig as any).apply(target, args);
+          if (r && typeof r.then === "function") {
+            return r.then((v: unknown) => { sync(); return v; });
+          }
+          sync();
+          return r;
+        };
+      }
+      return orig;
+    },
+  });
+}
+
 async function seedSettledPipeline(opts: {
   capability: "EXECUTION_IDEMPOTENT" | "RESULT_RETRIEVAL" | "NONE";
   adapter: SellerExecutionAdapter;
@@ -293,7 +328,12 @@ async function seedSettledPipeline(opts: {
   const opId = opts.opId ?? `op-${Math.random().toString(36).slice(2)}`;
   const db = new FakeDb();
   db.seedIntent(opId, { settlementState: "SETTLED" });
-  const execStore = new InMemoryExecutionStore();
+  const rawExecStore = new InMemoryExecutionStore();
+  // Mirror proxy is the ONLY handle used by the engine AND the tests, so
+  // db.attempts tracks every attempt mutation (production parity: the
+  // PostgresExecutionStore writes execution_attempts in the same DB that
+  // PostgresEvidenceStore.getOperation reads).
+  const execStore = mirrorExecutionStore(rawExecStore, db);
   const engine = new PostSettlementEngine(
     new FakePaymentStoreForEngine(db) as never,
     execStore as never,

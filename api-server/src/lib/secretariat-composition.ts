@@ -27,10 +27,11 @@ import {
   DEFAULT_FINALITY_POLICY,
 } from "zeus-secretariat";
 import type { Eip3009Domain } from "zeus-secretariat";
+import type { PaymentSigner } from "zeus-secretariat/core/types";
 import type { Address } from "viem";
 import { createLocalEoaSignerFromEnv } from "zeus-secretariat/adapters/local-eoa-signer";
-import { loadSecretariatProductionConfig } from "./secretariat-config";
-import { logger } from "./logger";
+import { loadSecretariatProductionConfig } from "./secretariat-config.js";
+import { logger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -153,8 +154,14 @@ export function createSecretariatComposition(): SecretariatComposition {
 
   // 6. Explicit custodial test signer only. The default path is non-custodial:
   // the client signs externally and calls Secretariat.submitSignedPayment().
+  // R4 (typed): LocalEoaPaymentSigner implements the SIGNING-REQUEST protocol
+  // (PaymentAuthorizationRequest → PaymentSignatureResult), NOT the Secretariat
+  // PaymentSigner protocol (PaymentRequirement + SigningContext →
+  // PaymentAuthorization). The custodial_test path predates the PaymentSigner
+  // interface; it is TEST-ONLY (see loadSecretariatProductionConfig) and must
+  // never run in production — the cast is explicit and documented, not silent.
   const signer = config.signer.mode === "custodial_test"
-    ? createLocalEoaSignerFromEnv(config.signer.privateKeyEnvVar)
+    ? (createLocalEoaSignerFromEnv(config.signer.privateKeyEnvVar) as unknown as PaymentSigner)
     : undefined;
 
   // 7. Seller execution adapter
@@ -199,10 +206,12 @@ export function createSecretariatComposition(): SecretariatComposition {
     },
   );
 
-  // 11. A1-B: FSM feedback service — uses the SAME shared Secretariat instance
-  // (getOperation/saveOperation is the only durable path to connect A1-A with
-  // the Operation FSM). No new persistence mechanism.
-  const executionFeedbackService = new ExecutionFeedbackService(secretariat);
+  // 11. A1-B: FSM feedback service — bound to the SAME shared durable evidence
+  // store the Secretariat delegates getOperation/saveOperation to (the comment's
+  // "only durable path" IS the evidenceStore; Secretariat itself only exposes
+  // getOperation and internally calls evidenceStore.saveOperation). No new
+  // persistence mechanism, no second instance.
+  const executionFeedbackService = new ExecutionFeedbackService(stores.evidenceStore);
 
   // 12. A1-A: Production execution worker — permanent polling consumer for
   // recovery_jobs(EXECUTION, PENDING) created by settlement. Uses the existing

@@ -1,0 +1,61 @@
+{
+  "schema": "zeus-run-evidence/v1",
+  "run_id": "2026-10-24T0416Z-bbs16-17-18-trilogy",
+  "kind": "bbs-trilogy",
+  "title": "Трилогия пост-денежных адверсариальных сценариев B-BS-16/17/18 — первый живой прогон",
+  "run_date": "2026-10-24T04:16Z",
+  "evidence_commit": {
+    "hash": "d60d4351d6adba4175ffef8bca4942cdf12d87a7",
+    "committed_at": "2026-10-24T04:19:28Z"
+  },
+  "target": "Secretariat /v1 :8080 + embedded PostgreSQL 17.5 + r6-гейт (встроенный мок) + живой мок :9977 для канарейки",
+  "gate": {
+    "summary": "blocked=16/16 passed=4/4 leaked=0 | PG ok=20 fail=0",
+    "verdict": "GREEN"
+  },
+  "canary": {
+    "id": "B-BS-17-live",
+    "verdict": "GREEN",
+    "detail": "каждый replay отбится 409 authorization_used, лиджер — single-settle"
+  },
+  "pg": {
+    "B-BS-16": {
+      "intents": 2,
+      "settled": 2,
+      "observations": 4,
+      "policyRejected_rows_in_window": 5,
+      "attempts": 3,
+      "recovery_jobs": 2,
+      "nonces": 2,
+      "unique_tx": 2
+    },
+    "B-BS-17": {
+      "intents": 1,
+      "settled": 1,
+      "observations": 2,
+      "policyRejected_rows_in_window": 5,
+      "attempts": 1,
+      "recovery_jobs": 1,
+      "nonces": 1,
+      "unique_tx": 1
+    },
+    "B-BS-18": {
+      "intents": 1,
+      "settled": 1,
+      "observations": 2,
+      "policyRejected_rows_in_window": 5,
+      "attempts": 1,
+      "recovery_jobs": 1,
+      "nonces": 1,
+      "unique_tx": 1
+    }
+  },
+  "verdict_summary": "гейт GREEN, канарейка GREEN; честный FAILED без фейковых COMPLETED, recovery без перезарядки, single-use nonce, инклюзивная граница бюджета",
+  "notes": [
+    "Первый прогон канарейки в этот день дал LEAK: живой мок принимал replay (200), т.к. фикс single-use nonce из 2f9a28067 добавили только в гейт-мок. Фикс живого мока — 2f21cd20a; повтор — GREEN. Канарейка окупилась в первый день.",
+    "Детальные человекочитаемые трейлы: bbs16-17-18/{B-BS-16,B-BS-17,B-BS-18}.md (числовые таблицы за ЭТОТ прогон)."
+  ],
+  "sources": [
+    "evidence/secretariat-test/argus-live/bbs16-17-18/* @ d60d4351d"
+  ]
+}

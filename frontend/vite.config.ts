@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-const isProd = process.env.NODE_ENV === 'production' || process.env.NETLIFY === 'true';
+const isProd = process.env.NODE_ENV === 'production';
 const basePath = isProd ? '/' : (process.env.BASE_PATH || '/');
 
 let port = 5173;

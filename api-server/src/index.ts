@@ -1,5 +1,5 @@
-import app, { gracefulShutdown } from "./app";
-import { logger } from "./lib/logger";
+import app, { gracefulShutdown } from "./app.js";
+import { logger } from "./lib/logger.js";
 import type { Server } from "http";
 
 const rawPort = process.env["PORT"];

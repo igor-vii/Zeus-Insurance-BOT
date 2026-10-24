@@ -20,7 +20,10 @@ const paymentPolicySchema = z.object({
 });
 
 const createRequestSchema = z.object({
-  authorizer: z.string().min(1),
+  // Stage A (discovery) MUST NOT require the authorizer: the payer address is
+  // only bound when the client externally signs the EIP-3009 payload in
+  // Stage B. ExecuteRequest.authorizer is optional — mirror that here.
+  authorizer: z.string().min(1).optional(),
   target: z.string().url(),
   method: z.string().min(1),
   payload: z.unknown().optional(),
@@ -234,10 +237,16 @@ export function createRequestsRouter(
     }
 
     if (result.status === "AWAITING_PAYMENT_SIGNATURE") {
+      // R6 (mainnet usability): the paying client can only build the EIP-3009
+      // signature from the PERSISTED intent binding — nonce + validity window.
+      // Both are generated in Stage A and were previously dropped from the
+      // HTTP response, making Stage B unsignable for an external client.
       response.status(201).json({
         requestId: result.requestId,
+        operationId: result.operationId,
         status: result.status,
         paymentRequired: result.paymentRequired,
+        paymentIntent: result.paymentIntent,
       });
       return;
     }

@@ -23,6 +23,43 @@ export declare class MockPaymentAdapter {
 }
 export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer.js';
 export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer.js';
+export declare class MockSettlementAdapter {
+    private store?;
+    readonly network: string;
+    failProbability: number;
+    private counter;
+    readonly submissions: Array<{
+        intent: any;
+        payload: any;
+        txHash: string;
+    }>;
+    /**
+     * @param store optional durable store — when provided, submit() persists
+     *   SETTLEMENT_PENDING + txHash and marks the nonce SUBMITTED, mirroring
+     *   X402FacilitatorClient behavior (the reconciliation engine needs the
+     *   durable txHash to take the txHash-first path).
+     */
+    constructor(store?: any | undefined, network?: string);
+    submit(intent: any, payload: any): Promise<{
+        status: string;
+        txHash?: string;
+        reason?: string;
+        rawResponse?: unknown;
+    }>;
+    /** Deterministic settled receipt for a recorded submission (§7/§8 shapes). */
+    buildSettledReceipt(txHash: string): {
+        confirmed: boolean;
+        status: "success";
+        blockNumber: number;
+        confirmations: number;
+        logs: {
+            address: any;
+            topics: string[];
+            data: string;
+            logIndex: number;
+        }[];
+    } | null;
+}
 export type { PaymentSigner } from '../core/payment-signer.js';
 export type { PaymentAuthorizationRequest, PaymentSignatureResult, SignedPaymentAuthorization, PaymentAuthorizationState, NonceGenerator, NonceRegistry, } from '../core/payment-types.js';
 export { PaymentSigningError, NonceAlreadyUsedError, SignerBindingError, InvalidAuthorizationError, SignatureUnknownError, PolicyNotValidatedError, } from '../core/payment-errors.js';

@@ -79,6 +79,18 @@ export class ExecutionWorker {
    * for shutdown-drain scenarios. Returns the number of jobs processed.
    */
   async runOnce(): Promise<number> {
+    // R0 repair: BEFORE draining pending jobs, make sure every SETTLED payment
+    // intent has an EXECUTION obligation. Without this scan, a payment settled
+    // by the background ReconciliationWorker (or after a crash between
+    // settlement and handoff) would stay SETTLED forever — the seller would
+    // never be called and the client would never receive the resource.
+    // Best-effort + idempotent: stores without the scanner are skipped;
+    // duplicate obligations are blocked by the DB unique index.
+    try {
+      await this.engine.ensureExecutionObligations?.();
+    } catch {
+      /* scanning is best-effort; job processing must proceed */
+    }
     const jobs = await this.store.getPendingJobs();
     let processed = 0;
     for (const job of jobs.slice(0, this.batchSize)) {

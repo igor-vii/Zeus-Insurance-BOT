@@ -87,10 +87,12 @@ function buildMcpServer(): McpServer {
         const history = await getSellerHistory(seller);
         const riskScore = await calculateRiskScore(seller, amountBigInt, maxRetries, history);
         const premiumAmount = await calculatePremium(amountBigInt, maxRetries, 100n);
+        // A1 repair: the ABI has no `buyInsurance` — V2 exposes `buyPolicy` with
+        // an explicit premium argument. The tool already computed premiumAmount.
         const data = encodeFunctionData({
           abi: ZEUS_INSURANCE_ABI,
-          functionName: "buyInsurance" as never,
-          args: [seller as `0x${string}`, amountBigInt, BigInt(timeoutSeconds), BigInt(maxRetries)],
+          functionName: "buyPolicy",
+          args: [seller as `0x${string}`, amountBigInt, BigInt(timeoutSeconds), BigInt(maxRetries), premiumAmount],
         });
         return ok({
           to: ZEUS_INSURANCE_ADDRESS,

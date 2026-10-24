@@ -107,6 +107,14 @@ export interface RecoveryJob {
  */
 export interface ExecutionStore {
   saveAttempt(attempt: ExecutionAttempt): Promise<void>;
+  /**
+   * F-001 (external audit Blocker): atomic attempt+job creation.
+   * Both rows MUST persist in a single transaction — or neither does.
+   * Replaces the unfenced saveAttempt() → saveJob() pair whose crash window
+   * permanently orphaned SETTLED intents (attempt without job: the scanner
+   * excluded them, the seller was never called, the client never served).
+   */
+  saveAttemptWithJob(attempt: ExecutionAttempt, job: RecoveryJob): Promise<void>;
   getAttemptById(attemptId: string): Promise<ExecutionAttempt | null>;
   getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]>;
   /**
@@ -231,6 +239,19 @@ export class InMemoryExecutionStore {
     const list = this.attemptsByOp.get(attempt.operationId) ?? [];
     if (!list.includes(attempt.attemptId)) list.push(attempt.attemptId);
     this.attemptsByOp.set(attempt.operationId, list);
+  }
+
+  /**
+   * F-001: in-memory parity for the atomic attempt+job creation.
+   * There are no awaits between the mutations, so a concurrent call cannot
+   * interleave on the JavaScript event loop — both rows or neither.
+   */
+  async saveAttemptWithJob(attempt: ExecutionAttempt, job: RecoveryJob): Promise<void> {
+    this.attempts.set(attempt.attemptId, { ...attempt });
+    const list = this.attemptsByOp.get(attempt.operationId) ?? [];
+    if (!list.includes(attempt.attemptId)) list.push(attempt.attemptId);
+    this.attemptsByOp.set(attempt.operationId, list);
+    this.jobs.set(job.jobId, { ...job });
   }
 
   async getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]> {
@@ -508,8 +529,13 @@ export class PostSettlementEngine {
       updatedAt: Date.now(),
     };
 
-    await this.executionStore.saveAttempt(attempt);
-    await this.executionStore.saveJob(job);
+    // F-001 (external audit Blocker): single transactional write.
+    // The previous saveAttempt() → saveJob() pair left a crash window: a
+    // failure between the two writes persisted the attempt without the job,
+    // and the obligation scanner excluded such intents forever — the seller
+    // was never called despite SETTLED payment. Now both rows are created
+    // atomically; if this throws, NOTHING persists and the next scan retries.
+    await this.executionStore.saveAttemptWithJob(attempt, job);
 
     await this.appendEvidence(operationId, "EXECUTION_INITIATED", {
       attemptId,
@@ -866,6 +892,16 @@ export class PostSettlementEngine {
             // Fence rejected — another worker owns this job now
             return { success: false, finalStatus: "RUNNING" };
           }
+          // B-BS-16 evidence gap (found by the r6 post-money gate): the
+          // ATTEMPTED crash-recovery branch records EXECUTION_RETRY_CREATED,
+          // but this live DELIVERY_UNKNOWN retry branch created the recovery
+          // attempt silently — the recovery DECISION was missing from the
+          // evidence trail. INV-13: record the decision.
+          await this.appendEvidence(job.operationId, "EXECUTION_RETRY_CREATED", {
+            reason: "DELIVERY_UNKNOWN — retry attempt created",
+            newAttemptId,
+            originalAttemptId: latestAttempt.attemptId,
+          });
           return { success: false, result, finalStatus: "DELIVERY_UNKNOWN" };
         }
 
@@ -941,6 +977,97 @@ export class PostSettlementEngine {
     }
 
     return recovered;
+  }
+
+  /**
+   * R0 repair: SETTLED-intent obligation scanner.
+   *
+   * Finds payment intents that reached SETTLED (by the synchronous execute()
+   * path or by the background ReconciliationWorker) but have NO durable
+   * EXECUTION job, and creates one:
+   *   - no attempt at all  → initiateExecution() (atomic attempt+job, F-001);
+   *   - attempt without job (legacy orphan) → the missing job is created and
+   *     linked to the surviving attempt (repair, F-001) instead of skipping.
+   *
+   * Why this exists: the settlement→execution handoff has two owners —
+   *   (a) StateMachine.persistSettlementAndExecutionObligation (atomic, only
+   *       when settlement happens inside execute()), and
+   *   (b) nobody — for payments settled by the ReconciliationWorker after
+   *       execute() returned.
+   * This scanner closes case (b) and crash windows between settlement and
+   * handoff. Idempotent: the (operation_id WHERE job_type='EXECUTION') unique
+   * index blocks duplicates under concurrent scanners.
+   */
+  async ensureExecutionObligations(): Promise<string[]> {
+    const scanner = this.paymentStore as DurableEvidenceStore & Partial<{
+      getSettledIntentsWithoutObligation(limit?: number): Promise<DurablePaymentIntent[]>;
+    }>;
+    if (typeof scanner.getSettledIntentsWithoutObligation !== "function") {
+      return []; // store does not support scanning (e.g. in-memory test stores)
+    }
+    const settled = await scanner.getSettledIntentsWithoutObligation();
+    const created: string[] = [];
+    for (const intent of settled) {
+      try {
+        // F-001 (external audit Blocker): the scanner selects SETTLED intents
+        // by a MISSING EXECUTION job. An intent that already has an attempt
+        // (a legacy orphan from a crash between the two unfenced writes) must
+        // be RECONCILED — the missing job is created and linked to the
+        // surviving attempt — never silently excluded forever.
+        let existingAttempt: ExecutionAttempt | null = null;
+        if (typeof this.executionStore.getAttemptsByOperation === "function") {
+          try {
+            const attempts = await this.executionStore.getAttemptsByOperation(intent.operationId);
+            if (Array.isArray(attempts) && attempts.length > 0) {
+              existingAttempt = attempts[attempts.length - 1];
+            }
+          } catch { /* fall through and attempt idempotent creation */ }
+        }
+
+        if (existingAttempt) {
+          // Legacy orphan repair: attempt survived, job did not.
+          //  - non-terminal attempt → PENDING job: the worker resumes the
+          //    obligation and processes the surviving attempt;
+          //  - terminal attempt    → COMPLETED marker job: the delivery
+          //    already concluded, the marker documents it and releases the
+          //    intent from future scanner windows without re-execution.
+          const terminalAttemptStates = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
+          const now = Date.now();
+          const repairJob: RecoveryJob = {
+            jobId: `job-${now}-${Math.random().toString(36).slice(2)}`,
+            operationId: intent.operationId,
+            jobType: "EXECUTION",
+            status: terminalAttemptStates.includes(existingAttempt.status) ? "COMPLETED" : "PENDING",
+            priority: 0,
+            maxAttempts: this.config.maxExecutionAttempts,
+            currentAttempt: 0,
+            metadata: {
+              capability: "EXECUTION_IDEMPOTENT",
+              repairedLegacyOrphan: true,
+              linkedAttemptId: existingAttempt.attemptId,
+              linkedAttemptStatus: existingAttempt.status,
+            },
+            createdAt: now,
+            updatedAt: now,
+          };
+          await this.executionStore.saveJob(repairJob);
+          created.push(`${intent.operationId}:${repairJob.jobId}:repaired`);
+          await this.appendEvidence(intent.operationId, "EXECUTION_OBLIGATION_REPAIRED", {
+            jobId: repairJob.jobId,
+            linkedAttemptId: existingAttempt.attemptId,
+            linkedAttemptStatus: existingAttempt.status,
+          });
+          continue;
+        }
+
+        const { jobId } = await this.initiateExecution(intent.operationId, "EXECUTION_IDEMPOTENT");
+        created.push(`${intent.operationId}:${jobId}`);
+      } catch {
+        // Duplicate obligation race (unique index) or transient store error —
+        // the next scan cycle will retry what actually failed.
+      }
+    }
+    return created;
   }
 
   private async appendEvidence(

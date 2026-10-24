@@ -60,6 +60,9 @@ export const paymentIntentsTable = pgTable(
     submitAttemptAt: timestamp("submit_attempt_at", { withTimezone: true }),
     settledAt: timestamp("settled_at", { withTimezone: true }),
     notSettledAt: timestamp("not_settled_at", { withTimezone: true }),
+    // Durable round-trip of non-column extra fields passed to
+    // updatePaymentIntentStatus (e.g. `signature`). Migration 0010.
+    extraFields: jsonb("extra_fields"),
 
     // Evidence bundles (§7, §11, §22, §23)
     settledEvidenceBundle: jsonb("settled_evidence_bundle"),

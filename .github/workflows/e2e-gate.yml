@@ -1,0 +1,69 @@
+name: e2e-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main, audit/repair-mainnet-prep]
+
+concurrency:
+  group: e2e-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Adversarial E2E (Client–Secretariat–Argus)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: zeus
+          POSTGRES_DB: zeus
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zeus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://zeus@127.0.0.1:5432/zeus
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the pnpm the audit (R0-R6) was verified with: pnpm 10.x
+      # rejects this lockfile with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH
+      # (overrides/patch config recorded by pnpm 9). Bump together with a
+      # lockfile regeneration, never as part of another change.
+      # Installed via npm (not pnpm/action-setup@v4): the action hard-errors
+      # on the mismatch between the version here and packageManager
+      # (pnpm@10.26.1) in package.json — which belongs to the repo's own
+      # update-lockfile.yml workflow and must not be touched from here.
+      - name: Install pnpm 9.15.9 (audited version)
+        run: npm install -g pnpm@9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build libraries and Secretariat bundle
+        run: |
+          pnpm -r --filter "@workspace/db" --filter "zeus-secretariat" run build
+          pnpm --filter api-server build:secretariat
+
+      - name: Apply canonical migrations
+        run: bash scripts/apply-migrations.sh
+
+      # Boots the standalone Secretariat with the documented launch recipe,
+      # waits for /health, runs all 20 scenario entries (S8, S9, B-BS-01..18 —
+      # 16/18 are two-legged: refuse+recover / over+boundary = 22 verdicts)
+      # against Argus and asserts every verdict is recorded in PostgreSQL.
+      - name: Adversarial E2E + PostgreSQL observation assertions
+        run: bash scripts/run-e2e.sh

@@ -1,0 +1,236 @@
+{
+  "S1": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0x49f52b21"
+    ]
+  },
+  "S2": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0x6ef444a1"
+    ]
+  },
+  "S3": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0x61e2a868"
+    ]
+  },
+  "S4": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_RETRY_CREATED"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0x9dae8f93"
+    ]
+  },
+  "S5": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "PAYMENT_VERIFIED",
+      "OPERATION_CREATED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0x53fa2ad3"
+    ]
+  },
+  "S6": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0xb1231442"
+    ]
+  },
+  "S7": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_RETRY_CREATED",
+      "EXECUTION_SUCCESS"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0x21990e1d"
+    ]
+  },
+  "S8": {
+    "intents": 1,
+    "states": [
+      "SETTLED"
+    ],
+    "observations": [
+      "STATE_TRANSITION",
+      "DISCOVERY_STARTED",
+      "PAYMENT_REQUIREMENT_RECEIVED",
+      "SELLER_CAPABILITIES_DISCOVERED",
+      "POLICY_VALIDATION_STARTED",
+      "POLICY_VALIDATION_PASSED",
+      "OPERATION_CREATED",
+      "PAYMENT_VERIFIED",
+      "PAYMENT_AUTHORIZED",
+      "PAYMENT_SUBMITTED",
+      "RECONCILIATION_STARTED",
+      "SETTLEMENT_CONFIRMED",
+      "SETTLEMENT_ALREADY_PERSISTED",
+      "EXECUTION_INITIATED",
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_SUCCESS"
+    ],
+    "attempts": [],
+    "recoveryJobs": "none",
+    "nonces": [
+      "0xcbcb827a"
+    ]
+  },
+  "DOUBLE_INTENT_CLIENTS": []
+}

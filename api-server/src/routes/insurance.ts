@@ -139,6 +139,10 @@ const prepareBuySchema = z.object({
   timeout: z.coerce.number().int().min(60).optional(),
   maxRetries: z.coerce.number().int().min(1).max(10),
   apiEndpoint: z.string().url().optional(),
+  // A3-adjacent repair: the handler destructures chainId to pick the network,
+  // but the schema never declared it — zod silently stripped the field, so the
+  // network always fell through to "base-sepolia" and threw Missing env.
+  chainId: z.coerce.number().int().positive().optional(),
 }).transform(d => ({
   ...d,
   timeoutSeconds: d.timeoutSeconds ?? d.timeout ?? 3600,
@@ -346,7 +350,10 @@ router.post("/claim", async (req, res) => {
   });
 
   void invalidatePolicy(policyId);
-  res.json({ to: insuranceAddress, data });
+  // A3 repair: `insuranceAddress` was scoped to the /prepare-buy handler —
+  // referencing it here threw ReferenceError on every request. Use the
+  // env-resolved active-network address instead.
+  res.json({ to: ZEUS_INSURANCE_ADDRESS, data });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -531,7 +538,7 @@ router.post("/observation", chainLimiter, async (req, res) => {
         },
       ],
     });
-    res.json({ mode: "hybrid", to: insuranceAddress, data, policyId });
+    res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data, policyId });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "Failed to encode calldata", detail: msg });
@@ -589,7 +596,7 @@ router.post("/slashing-protection", chainLimiter, async (req, res) => {
 
   res.json({
     mode: "hybrid",
-    to: insuranceAddress,
+    to: ZEUS_INSURANCE_ADDRESS,
     data,
     coverageType: "SlashingProtection",
     premiumAmount: premiumAmount.toString(),
@@ -700,7 +707,7 @@ router.post("/report-slashing", chainLimiter, async (req, res) => {
     args: [BigInt(policyId), evidenceHash as `0x${string}`],
   });
 
-  res.json({ mode: "hybrid", to: insuranceAddress, data, policyId });
+  res.json({ mode: "hybrid", to: ZEUS_INSURANCE_ADDRESS, data, policyId });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

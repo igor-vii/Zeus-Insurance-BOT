@@ -1,3 +1,5 @@
+import { jest } from "@jest/globals";
+
 /**
  * BLOCK 8 R2.1 — Production Composition Root Tests
  *
@@ -5,24 +7,47 @@
  * Uses mocked dependencies to avoid real DB/RPC/signer requirements.
  */
 
-// Mock external dependencies before imports
-jest.mock("@workspace/db", () => ({ db: { mock: true } }));
-jest.mock("zeus-secretariat", () => {
-  const actual = jest.requireActual("zeus-secretariat");
+// Mock external dependencies BEFORE any dynamic import of the composition.
+// R4 (ESM): under the ESM jest preset, factory `jest.mock()` does NOT intercept
+// static imports — module mocking must use jest.unstable_mockModule() and the
+// consumer module is imported dynamically by each test AFTER registration.
+//
+// The composition imports `db` AND `createSharedStores` from "@workspace/db"
+// (they moved there from zeus-secretariat; the original mock targeted the old
+// import site and silently intercepted nothing). Mock the module the
+// composition ACTUALLY consumes, and give the mock stores the methods
+// recover() calls so the lifecycle tests stay hermetic.
+jest.unstable_mockModule("@workspace/db", () => ({
+  db: { mock: true },
+  createSharedStores: (db: unknown) => ({
+    evidenceStore: {
+      __instance: "evidenceStore",
+      db,
+      getNonTerminalIntents: async () => [],
+    },
+    executionStore: {
+      __instance: "executionStore",
+      db,
+      getPendingJobs: async () => [],
+    },
+  }),
+}));
+jest.unstable_mockModule("zeus-secretariat/adapters/local-eoa-signer", () => {
+  // R4: zeus-secretariat's own adapters/index.ts re-exports the class from this
+  // module, so the mock must provide EVERY runtime export (ESM named-export
+  // validation would otherwise fail the whole graph).
+  class LocalEoaPaymentSigner {
+    readonly signerType = "LOCAL_EOA";
+    async getAddress() { return "0xTest"; }
+    async signPayment() { return {}; }
+  }
   return {
-    ...actual,
-    // Override store constructors to return trackable instances
-    createSharedStores: jest.fn((db: unknown) => ({
-      evidenceStore: { __instance: "evidenceStore", db },
-      executionStore: { __instance: "executionStore", db },
-    })),
+    LocalEoaPaymentSigner,
+    createLocalEoaSignerFromEnv: () => new LocalEoaPaymentSigner(),
   };
 });
-jest.mock("zeus-secretariat/adapters/local-eoa-signer", () => ({
-  createLocalEoaSignerFromEnv: jest.fn(() => ({ signerType: "LOCAL_EOA", getAddress: async () => "0xTest", signPayment: async () => ({}) })),
-}));
-jest.mock("../src/lib/logger", () => ({
-  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+jest.unstable_mockModule("../lib/logger", () => ({
+  logger: { info: () => {}, warn: () => {}, error: () => {} },
 }));
 
 // Set required env vars for config validation
@@ -48,7 +73,7 @@ describe("BLOCK 8 R2.1: Production Composition Root", () => {
   });
 
   test("R2.1-1: composition creates all required components", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     expect(c.stores).toBeDefined();
     expect(c.rpcChecker).toBeDefined();
@@ -64,7 +89,7 @@ describe("BLOCK 8 R2.1: Production Composition Root", () => {
   });
 
   test("R2.1-2: shared evidenceStore used by engine and worker", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     // Both engine and worker receive the same evidenceStore reference
     expect(c.stores.evidenceStore).toBe((c.reconciliationEngine as any).store);
@@ -72,20 +97,20 @@ describe("BLOCK 8 R2.1: Production Composition Root", () => {
   });
 
   test("R2.1-3: shared reconciliationEngine used by worker and secretariat", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     expect(c.reconciliationEngine).toBe((c.reconciliationWorker as any).engine);
     expect(c.reconciliationEngine).toBe((c.secretariat as any).config.reconciliationEngine);
   });
 
   test("R2.1-4: PostSettlementEngine uses shared stores", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     expect(c.stores.evidenceStore).toBe((c.postSettlementEngine as any).paymentStore);
   });
 
   test("R2.1-5: worker is NOT started during construction", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     // Worker should exist but not be running
     expect(c.reconciliationWorker).toBeDefined();
@@ -93,7 +118,7 @@ describe("BLOCK 8 R2.1: Production Composition Root", () => {
   });
 
   test("R2.1-6: startWorker activates polling", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     c.startWorker();
     expect((c.reconciliationWorker as any).running).toBe(true);
@@ -101,7 +126,7 @@ describe("BLOCK 8 R2.1: Production Composition Root", () => {
   });
 
   test("R2.1-7: shutdown is idempotent", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     c.startWorker();
     await c.shutdown();
@@ -111,14 +136,14 @@ describe("BLOCK 8 R2.1: Production Composition Root", () => {
   });
 
   test("R2.1-8: recover runs without errors", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     // recover should not throw even with no data
     await expect(c.recover()).resolves.not.toThrow();
   });
 
   test("R2.1-9: repeated factory calls create independent graphs", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const a = createSecretariatComposition();
     const b = createSecretariatComposition();
     // Different compositions have different instances
@@ -155,7 +180,7 @@ describe("BLOCK 8 R2.1-FIX-6: Strengthened Composition Tests", () => {
   });
 
   test("R2.1-FIX-6-1: recovery failure prevents worker startup", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
 
     // Mock recoverAfterCrash to throw
@@ -173,7 +198,7 @@ describe("BLOCK 8 R2.1-FIX-6: Strengthened Composition Tests", () => {
   });
 
   test("R2.1-FIX-6-2: PostSettlementEngine receives ExecutionStore (not InMemoryExecutionStore)", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
 
     // PostSettlementEngine.paymentStore should be the shared evidenceStore
@@ -184,7 +209,7 @@ describe("BLOCK 8 R2.1-FIX-6: Strengthened Composition Tests", () => {
   });
 
   test("R2.1-FIX-6-3: shutdown completes worker stop before returning", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     c.startWorker();
 
@@ -197,7 +222,7 @@ describe("BLOCK 8 R2.1-FIX-6: Strengthened Composition Tests", () => {
   });
 
   test("R2.1-FIX-6-4: double shutdown is safe and idempotent", async () => {
-    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition");
+    const { createSecretariatComposition } = await import("../../src/lib/secretariat-composition.js");
     const c = createSecretariatComposition();
     c.startWorker();
 
@@ -210,9 +235,11 @@ describe("BLOCK 8 R2.1-FIX-6: Strengthened Composition Tests", () => {
 
   test("R2.1-FIX-6-5: no as any in PostSettlementEngine construction", async () => {
     // Static verification: composition source should not contain "as any" for executionStore
+    // R4 (ESM): require()/__dirname do not exist under the ESM jest preset —
+    // read via import.meta.url instead.
     const fs = await import("fs");
     const source = fs.readFileSync(
-      require("path").join(__dirname, "../../src/lib/secretariat-composition.ts"),
+      new URL("../../src/lib/secretariat-composition.ts", import.meta.url),
       "utf-8"
     );
     // The line that previously had "stores.executionStore as any" should now be clean

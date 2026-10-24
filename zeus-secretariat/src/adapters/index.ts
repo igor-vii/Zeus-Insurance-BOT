@@ -6,6 +6,8 @@
  * Adapter knows the specific network.
  */
 
+import { keccak256, toBytes } from 'viem';
+
 export interface MockPaymentAdapterConfig {
   network: string;
   simulateSettlement?: boolean;
@@ -98,6 +100,79 @@ export class MockPaymentAdapter {
 // Export signers
 export { MockPaymentSigner, MockSignerFactory } from './mock-payment-signer.js';
 export { LocalEoaPaymentSigner, createLocalEoaSignerFromEnv } from './local-eoa-signer.js';
+
+// ---------------------------------------------------------------------------
+// R0 repair: canonical V2 mock settlement adapter.
+// MockPaymentAdapter is the LEGACY PaymentAdapter (submit(requirement,
+// authorization) → {success}); the state machine's canonical path requires a
+// SettlementAdapter (submit(dpi, v2Payload) → SubmitResult). This mock records
+// submissions so tests can drive reconciliation against deterministic
+// on-chain evidence.
+// ---------------------------------------------------------------------------
+export class MockSettlementAdapter {
+  readonly network: string;
+  failProbability = 0;
+  private counter = 0;
+  readonly submissions: Array<{ intent: any; payload: any; txHash: string }> = [];
+
+  /**
+   * @param store optional durable store — when provided, submit() persists
+   *   SETTLEMENT_PENDING + txHash and marks the nonce SUBMITTED, mirroring
+   *   X402FacilitatorClient behavior (the reconciliation engine needs the
+   *   durable txHash to take the txHash-first path).
+   */
+  constructor(private store?: any, network = 'mock-network') {
+    this.network = network;
+  }
+
+  async submit(intent: any, payload: any): Promise<{ status: string; txHash?: string; reason?: string; rawResponse?: unknown }> {
+    if (Math.random() < this.failProbability) {
+      return { status: 'REJECTED', reason: 'Simulated submission failure' };
+    }
+    this.counter += 1;
+    const txHash = `0xmocktx${this.counter.toString(16).padStart(60, '0')}`;
+    this.submissions.push({ intent, payload, txHash });
+    if (this.store && typeof this.store.updatePaymentIntentStatus === 'function') {
+      await this.store.updatePaymentIntentStatus(intent.paymentIntentId, 'SETTLEMENT_PENDING', { txHash });
+    }
+    if (this.store && intent.nonce && typeof this.store.markNonceSubmitted === 'function') {
+      await this.store.markNonceSubmitted(intent.nonce).catch(() => {});
+    }
+    return { status: 'SUBMITTED', txHash, rawResponse: { transactionHash: txHash, success: true } };
+  }
+
+  /** Deterministic settled receipt for a recorded submission (§7/§8 shapes). */
+  buildSettledReceipt(txHash: string) {
+    const rec = this.submissions.find((s) => s.txHash === txHash);
+    if (!rec) return null;
+    const intent = rec.intent;
+    const pad = (a: string) => '0x' + String(a).replace(/^0x/i, '').toLowerCase().padStart(64, '0');
+    const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+    // keccak256("AuthorizationUsed(address,bytes32)")
+    const authUsedTopic = keccak256(toBytes('AuthorizationUsed(address,bytes32)'));
+    return {
+      confirmed: true,
+      status: 'success' as const,
+      blockNumber: 50_000,
+      confirmations: 12,
+      logs: [
+        {
+          address: intent.asset,
+          topics: [authUsedTopic, pad(intent.authorizer), pad(intent.nonce)],
+          data: '0x',
+          logIndex: 0,
+        },
+        {
+          address: intent.asset,
+          topics: [transferTopic, pad(intent.authorizer), pad(intent.payTo)],
+          data: '0x' + BigInt(intent.value).toString(16),
+          logIndex: 1,
+        },
+      ],
+    };
+  }
+}
+
 
 // Export core signer interfaces and types
 export type { PaymentSigner } from '../core/payment-signer.js';

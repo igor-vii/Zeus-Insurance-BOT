@@ -1,0 +1,411 @@
+{
+  "schema": "zeus-run-evidence/v1",
+  "run_id": "2026-10-24T0514Z-full-matrix",
+  "kind": "full-matrix",
+  "title": "ЖИВАЯ МАТРИЦА целиком: S1-S8 + r6-гейт B-BS-16/17/18 + live-канарейка — один свежий цикл",
+  "started_at": "2026-10-24T05:14:06Z",
+  "finished_at": "2026-10-24T05:16:03Z",
+  "commit": {
+    "hash": "d60d4351d6adba4175ffef8bca4942cdf12d87a7",
+    "committed_at": "2026-10-24T04:19:28Z"
+  },
+  "target": "Secretariat /v1 :8080 (standalone-бандл, migrations 0000+0005..0010) + embedded PostgreSQL 17.5 + argus-live-mock :9977",
+  "stages": {
+    "s1_s8_live": {
+      "run_stamp": 1792818846,
+      "client_prefix": "argus-live-1792818846-",
+      "scenarios": [
+        {
+          "id": "S1",
+          "exit": 0,
+          "verdict": "PASS",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "OPERATION_CREATED",
+              "PAYMENT_VERIFIED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_SUCCESS"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0x49f52b21"
+            ]
+          }
+        },
+        {
+          "id": "S2",
+          "exit": 0,
+          "verdict": "PASS",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "OPERATION_CREATED",
+              "PAYMENT_VERIFIED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_SUCCESS"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0x6ef444a1"
+            ]
+          }
+        },
+        {
+          "id": "S3",
+          "exit": 0,
+          "verdict": "PASS",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "OPERATION_CREATED",
+              "PAYMENT_VERIFIED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_SUCCESS"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0x61e2a868"
+            ]
+          }
+        },
+        {
+          "id": "S4",
+          "exit": 0,
+          "verdict": "NONE",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "OPERATION_CREATED",
+              "PAYMENT_VERIFIED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_RETRY_CREATED"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0x9dae8f93"
+            ]
+          }
+        },
+        {
+          "id": "S5",
+          "exit": 0,
+          "verdict": "PASS",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "PAYMENT_VERIFIED",
+              "OPERATION_CREATED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_SUCCESS"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0x53fa2ad3"
+            ]
+          }
+        },
+        {
+          "id": "S6",
+          "exit": 0,
+          "verdict": "PASS",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "OPERATION_CREATED",
+              "PAYMENT_VERIFIED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_SUCCESS"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0xb1231442"
+            ]
+          }
+        },
+        {
+          "id": "S7",
+          "exit": 0,
+          "verdict": "PASS",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "OPERATION_CREATED",
+              "PAYMENT_VERIFIED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_RETRY_CREATED",
+              "EXECUTION_SUCCESS"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0x21990e1d"
+            ]
+          }
+        },
+        {
+          "id": "S8",
+          "exit": 0,
+          "verdict": "PASS",
+          "reason": "",
+          "pg": {
+            "intents": 1,
+            "states": [
+              "SETTLED"
+            ],
+            "observations": [
+              "STATE_TRANSITION",
+              "DISCOVERY_STARTED",
+              "PAYMENT_REQUIREMENT_RECEIVED",
+              "SELLER_CAPABILITIES_DISCOVERED",
+              "POLICY_VALIDATION_STARTED",
+              "POLICY_VALIDATION_PASSED",
+              "OPERATION_CREATED",
+              "PAYMENT_VERIFIED",
+              "PAYMENT_AUTHORIZED",
+              "PAYMENT_SUBMITTED",
+              "RECONCILIATION_STARTED",
+              "SETTLEMENT_CONFIRMED",
+              "SETTLEMENT_ALREADY_PERSISTED",
+              "EXECUTION_INITIATED",
+              "EXECUTION_RESULT_RAW",
+              "EXECUTION_SUCCESS"
+            ],
+            "attempts": [],
+            "recoveryJobs": "none",
+            "nonces": [
+              "0xcbcb827a"
+            ]
+          }
+        }
+      ],
+      "facilitator": {
+        "totalSettleCalls": 8,
+        "distinctNonces": 8,
+        "doubleSettleAttempts": 0,
+        "sellerStats": {
+          "delivered": 7,
+          "hangs": 3,
+          "lostResponses": 1
+        }
+      },
+      "double_intent_clients": []
+    },
+    "r6_gate": {
+      "summary": {
+        "blocked": "16/16",
+        "passed": "4/4",
+        "leaked": 0,
+        "other": 0,
+        "pg_ok": 20,
+        "pg_fail": 0,
+        "verdict": "GREEN"
+      },
+      "scenarios_total": 20
+    },
+    "canary": {
+      "id": "B-BS-17-live",
+      "verdict": "GREEN",
+      "log": "[canary] VERDICT: GREEN — every replay rejected, ledger single-settle"
+    },
+    "pg_trails": {
+      "B-BS-16": {
+        "intents": 2,
+        "settled": 2,
+        "observations": 4,
+        "policyRejected_rows_in_window": 5,
+        "attempts": 3,
+        "recovery_jobs": 2,
+        "nonces": 2,
+        "unique_tx": 2
+      },
+      "B-BS-17": {
+        "intents": 1,
+        "settled": 1,
+        "observations": 2,
+        "policyRejected_rows_in_window": 5,
+        "attempts": 1,
+        "recovery_jobs": 1,
+        "nonces": 1,
+        "unique_tx": 1
+      },
+      "B-BS-18": {
+        "intents": 1,
+        "settled": 1,
+        "observations": 2,
+        "policyRejected_rows_in_window": 5,
+        "attempts": 1,
+        "recovery_jobs": 1,
+        "nonces": 1,
+        "unique_tx": 1
+      }
+    }
+  },
+  "verdict_summary": "S1-S3/S5-S8 PASS, S4 NONE (by design); гейт GREEN (blocked=16/16 passed=4/4 leaked=0, PG ok=20 fail=0); канарейка GREEN; double-settle=0; дубль-интентов нет",
+  "invariants": [
+    {
+      "id": "INV-S-DEDUP",
+      "statement": "у каждого логического запроса ровно один payment_intent",
+      "proof": "DOUBLE_INTENT_CLIENTS=[]",
+      "stage": "s1_s8_live"
+    },
+    {
+      "id": "INV-S-NO-DOUBLE-SETTLE",
+      "statement": "фасилитатор не видел двойного сеттлмента",
+      "proof": "doubleSettleAttempts=0 при totalSettleCalls=8",
+      "stage": "s1_s8_live"
+    },
+    {
+      "id": "INV-16-HONEST-FAIL",
+      "statement": "5xx от продавца — окончательный отказ: ровно 1 попытка доставки, recovery-задача FAILED, никакого фейкового COMPLETED",
+      "proof": "B-BS-16: attempts=3 (1 refuse + 2 recover), recovery=[FAILED, COMPLETED], unique_tx=2 по 2 интентам",
+      "stage": "r6_gate"
+    },
+    {
+      "id": "INV-16-RECOVERY-SAME-EXEC",
+      "statement": "recovery доставляет под тем же execution_id и не перезаряжает: 1 сеттлмент на 2 попытки",
+      "proof": "B-BS-16 recover: attempt#1 DELIVERY_UNKNOWN/RESPONSE_STREAM_FAILED -> attempt#2 SUCCESS/200",
+      "stage": "r6_gate"
+    },
+    {
+      "id": "INV-17-SINGLE-USE-NONCE",
+      "statement": "EIP-3009 nonce single-use: replay идёт мимо Secretariat напрямую в фасилитатор и отбивается 409 authorization_used",
+      "proof": "B-BS-17: 1 интент, 1 сеттлмент, 1 nonce; канарейка GREEN — 3x409, лиджер single-settle",
+      "stage": "canary"
+    },
+    {
+      "id": "INV-18-INCLUSIVE-BOUNDARY",
+      "statement": "over-budget отбивается ДО денег (pre-intent POLICY_REJECTED, 0 интентов/0 сеттлментов); цена РОВНО maxPrice проходит",
+      "proof": "B-BS-18: over-нога — только evidence-запись + ноль dispatch-ов фасилитатора; boundary-нога SETTLED, 1 доставка",
+      "stage": "r6_gate"
+    }
+  ],
+  "verdict": "GREEN",
+  "notes": [
+    "Оркестрация: scripts/run-live-s1s8.mjs (PG -> миграции -> run-s1-s7-live.sh) + scripts/run-bbs-trilogy.mjs (гейт -> канарейка -> rich-дамп pgwork/rich.mjs).",
+    "Детерминизм: третий последовательный зелёный повтор той же матрицы (r2 10-23, r3 04:13, этот 05:14) без единого расхождения инвариантов.",
+    "Числовые таблицы bbs16-17-18/*.md сохранены за прогоном 04:16Z; сырье этого прогона — gate.log/canary.log/full-dump.json в той же директории."
+  ],
+  "sources": [
+    "evidence/secretariat-test/argus-live/{matrix.txt,pg-observations.json,facilitator-stats.json,S1..S8.log}",
+    "evidence/secretariat-test/argus-live/bbs16-17-18/{gate.log,canary.log,full-dump.json}"
+  ]
+}

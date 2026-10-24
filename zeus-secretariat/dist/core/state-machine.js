@@ -17,6 +17,28 @@ function generateOperationId() {
 function generateRequestId() {
     return `req_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
+/**
+ * S1/S5 live-matrix repair (2026-10-23, Argus Agent Test Lab vs real
+ * Secretariat): when the client does not supply a requestId, the previous
+ * code generated a FRESH one on every create call. The idempotency lookup
+ * (client_id, request_id) and the 0006 partial unique index therefore never
+ * matched for retries — a duplicate create (client retry after a network
+ * timeout) or a concurrent duplicate created a NEW operation and could
+ * settle TWICE for one logical request (observed live: S1 → 2 settled
+ * intents, S5 → 5, all with the same clientId).
+ *
+ * B8-001 contract: clientId is the idempotency identity of the logical
+ * request. Derive the requestId deterministically from it when the client
+ * omits its own, so duplicate creates resolve to the SAME operation through
+ * the existing lookup + 0006 unique index arbiter.
+ */
+function resolveLogicalRequestId(request) {
+    if (request.requestId)
+        return request.requestId;
+    if (request.clientId)
+        return `cid:${request.clientId}`;
+    return generateRequestId();
+}
 function generatePaymentIntentId() {
     return `pi_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
@@ -87,7 +109,7 @@ export class Secretariat {
     // MAIN ENTRY POINT: Execute an operation
     // ==========================================================================
     async execute(request) {
-        const requestId = request.requestId ?? generateRequestId();
+        const requestId = resolveLogicalRequestId(request);
         const canonicalV2 = Boolean(this.config.settlementAdapter);
         let stageARequest = request;
         // The Stage-A primitive never consults a signer. The existing signer-based
@@ -130,6 +152,9 @@ export class Secretariat {
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            if (process.env.ZEUS_DEBUG_STACK) {
+                console.error('[StateMachine.execute] failure:', error?.stack ?? error);
+            }
             return await this.failOperation(operation, 'FAILED', errorMessage);
         }
     }
@@ -380,7 +405,17 @@ export class Secretariat {
             return false;
         }
         // Check max price
-        if (parseFloat(requirement.amount) > parseFloat(policy.maxPrice)) {
+        // R0 repair: unit-consistent comparison. x402 requirement amounts are
+        // smallest-unit integers ("500000"), while legacy human quotes are decimal
+        // strings ("1.00"). Comparing a smallest-unit integer against a human
+        // decimal with parseFloat() mixes units (500000 > 1.0 → always rejects).
+        // When BOTH sides are integer strings, compare exact BigInt magnitudes;
+        // otherwise fall back to the legacy parseFloat behavior.
+        const isInt = (s) => /^\d+$/.test(String(s).trim());
+        const exceeds = isInt(requirement.amount) && isInt(policy.maxPrice)
+            ? BigInt(requirement.amount) > BigInt(policy.maxPrice)
+            : parseFloat(requirement.amount) > parseFloat(policy.maxPrice);
+        if (exceeds) {
             this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
                 reason: 'Amount exceeds maxPrice',
                 required: requirement.amount,
@@ -597,9 +632,12 @@ export class Secretariat {
                 },
             };
             const serializedPayload = JSON.stringify(signedPayload);
-            const updateAuthorization = durableStore.updatePaymentIntentAuthorization;
-            if (preCreatedIntent && typeof updateAuthorization === "function") {
-                await updateAuthorization(preCreatedIntent.paymentIntentId, {
+            // R0 repair: call the method ON its receiver. The previous
+            // `const updateAuthorization = store.updatePaymentIntentAuthorization;`
+            // extraction dropped `this`, crashing every store whose implementation
+            // touches instance state (e.g. InMemoryEvidenceStore).
+            if (preCreatedIntent && typeof durableStore.updatePaymentIntentAuthorization === "function") {
+                await durableStore.updatePaymentIntentAuthorization.call(durableStore, preCreatedIntent.paymentIntentId, {
                     paymentPayload: serializedPayload,
                     paymentPayloadHash: keccak256(toBytes(serializedPayload)),
                 });
@@ -1306,7 +1344,7 @@ export class Secretariat {
      * reachable from this primitive.
      */
     async prepareStageA(request, options = { persistPendingIntent: true }) {
-        const requestId = request.requestId ?? generateRequestId();
+        const requestId = resolveLogicalRequestId(request);
         const existing = await this.findExistingOperation(request.clientId, requestId);
         if (existing) {
             if (existing.currentState === 'AWAITING_SIGNATURE') {

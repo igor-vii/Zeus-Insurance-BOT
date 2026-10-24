@@ -210,6 +210,10 @@ class ProductionFaithfulStore implements DurableEvidenceStore {
   }
   async compareAndSetState(id: string, exp: any, nxt: any, extra?: any): Promise<boolean> {
     const i = this.intents.get(id); if (!i) return false;
+    // R0 repair: mirror the production §19/§21 terminal-monotonicity guard —
+    // no transition may leave SETTLED / NOT_SETTLED / UNRESOLVED_MANUAL.
+    const current = (i as any).settlementState ?? (i as any).status;
+    if (["SETTLED", "NOT_SETTLED", "UNRESOLVED_MANUAL"].includes(current)) return false;
     if ((i as any).settlementState !== exp && (i as any).status !== exp) return false;
     if ((i as any).settlementState !== undefined) (i as any).settlementState = nxt; else (i as any).status = nxt;
     if (extra?.txHash) (i as any).txHash = extra.txHash; return true;
@@ -220,8 +224,17 @@ class ProductionFaithfulStore implements DurableEvidenceStore {
   }
   async appendReconciliationObservation(_o: any): Promise<void> {}
   async getReconciliationObservations(_id: string): Promise<any[]> { return []; }
-  async saveSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).settledEvidenceBundle = b; }
-  async saveNotSettledEvidenceBundle(id: string, b: any): Promise<void> { const i = this.intents.get(id); if (i) (i as any).notSettledEvidenceBundle = b; }
+  // R0 repair: bundles must be stored in the SAME maps getSettledBundle /
+  // getNotSettledBundle read from (the old version wrote intent fields that
+  // the getters never consulted, so every restart assertion saw undefined).
+  async saveSettledEvidenceBundle(id: string, b: any): Promise<void> {
+    this.settledBundles.set(id, b);
+    const i = this.intents.get(id); if (i) (i as any).settledEvidenceBundle = b;
+  }
+  async saveNotSettledEvidenceBundle(id: string, b: any): Promise<void> {
+    this.notSettledBundles.set(id, b);
+    const i = this.intents.get(id); if (i) (i as any).notSettledEvidenceBundle = b;
+  }
 
   getIntent(id: string) { return this.intents.get(id); }
   getSettledBundle(id: string) { return this.settledBundles.get(id); }

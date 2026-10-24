@@ -105,15 +105,18 @@ export const ZEUS_INSURANCE_ABI = [
     type: "event",
   },
   {
+    // R2 repair: V2 exposes buyPolicy (payable, +premium). The declared legacy
+    // buyInsurance selector would revert on ZeusInsuranceV2.
     inputs: [
       { internalType: "address", name: "seller", type: "address" },
       { internalType: "uint256", name: "amount", type: "uint256" },
       { internalType: "uint256", name: "timeoutSeconds", type: "uint256" },
       { internalType: "uint256", name: "maxRetries", type: "uint256" },
+      { internalType: "uint256", name: "premium", type: "uint256" },
     ],
-    name: "buyInsurance",
-    outputs: [],
-    stateMutability: "nonpayable",
+    name: "buyPolicy",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "payable",
     type: "function",
   },
   {

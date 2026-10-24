@@ -1,13 +1,13 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import pinoHttp from "pino-http";
+import { pinoHttp } from "pino-http";
 import { paymentMiddleware } from "x402-express";
 import router from "./routes/index.js";
-import { logger } from "./lib/logger";
-import { startBackgroundSync } from "./lib/background-sync";
-import { startEventListener } from "./lib/event-listener";
-import { ZEUS_TREASURY, x402Routes } from "./config/x402.js";
+import { logger } from "./lib/logger.js";
+import { startBackgroundSync } from "./lib/background-sync.js";
+import { startEventListener } from "./lib/event-listener.js";
+import { ZEUS_TREASURY, X402_FACILITATOR_URL, x402Routes } from "./config/x402.js";
 import { connectMCPServer } from "./mcp-server/index.js";
 import llmsTxtRouter from "./routes/llms-txt.js";
 import { createRequestsRouter } from "./routes/requests.js";
@@ -76,8 +76,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  windowMs: Number(process.env["RATE_LIMIT_WINDOW_MS"] ?? 15 * 60 * 1000),
+  // R6: configurable ceiling — the adversarial E2E legitimately exceeds 100
+  // requests in a short window; production keeps the safe default.
+  max: Number(process.env["RATE_LIMIT_MAX"] ?? 100),
   standardHeaders: true,
   legacyHeaders: false,
   message: "Too many requests from this IP, please try again later.",
@@ -86,8 +88,19 @@ app.use(limiter);
 
 // x402 payment middleware — guards selected /api/insurance/* routes.
 // Disabled gracefully if ZEUS_TREASURY is not configured.
+// The facilitator is Zeus-operated (X402_FACILITATOR_URL / ZEUS_FACILITATOR_URL):
+// the default public facilitator does not support eip155:196 (X Layer).
 if (ZEUS_TREASURY) {
-  app.use(paymentMiddleware(ZEUS_TREASURY, x402Routes));
+  const facilitator = X402_FACILITATOR_URL
+    ? { url: X402_FACILITATOR_URL }
+    : undefined;
+  if (!facilitator) {
+    logger.warn(
+      "X402_FACILITATOR_URL not set — falling back to default facilitator " +
+        "(does NOT support eip155:196; protected routes will fail settlement)",
+    );
+  }
+  app.use(paymentMiddleware(ZEUS_TREASURY, x402Routes, facilitator));
 } else {
   logger.warn("ZEUS_TREASURY not set — x402 payment middleware disabled");
 }

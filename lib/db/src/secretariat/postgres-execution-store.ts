@@ -12,7 +12,7 @@
  * It MUST NOT be used for reconciliation (which uses reconciliation_jobs).
  */
 
-import { eq, and, sql, asc } from "drizzle-orm";
+import { eq, and, or, sql, asc, desc } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   executionAttemptsTable,
@@ -100,6 +100,53 @@ export class PostgresExecutionStore {
       idempotencyKey: attempt.idempotencyKey ?? null,
       startedAt: attempt.startedAt ? new Date(attempt.startedAt) : null,
       completedAt: attempt.completedAt ? new Date(attempt.completedAt) : null,
+    });
+  }
+
+  /**
+   * F-001 (external audit Blocker): atomic attempt+job creation.
+   *
+   * Both inserts run in a single DB transaction — either both rows persist
+   * or neither does. Replaces the unfenced saveAttempt() → saveJob() pair in
+   * PostSettlementEngine.initiateExecution(): a process crash (or transient
+   * DB failure) between the two inserts used to persist the attempt without
+   * the job, and the obligation scanner excluded such intents forever —
+   * SETTLED payment, seller never called. Same lock-free single-transaction
+   * pattern as settleAndCreateExecutionObligation().
+   */
+  async saveAttemptWithJob(attempt: ExecutionAttempt, job: RecoveryJob): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.insert(recoveryJobsTable).values({
+        jobId: job.jobId,
+        operationId: job.operationId,
+        jobType: job.jobType,
+        status: job.status,
+        priority: job.priority,
+        maxAttempts: job.maxAttempts,
+        currentAttempt: job.currentAttempt,
+        lockedBy: job.lockedBy ?? null,
+        lockedUntil: job.lockedUntil ? new Date(job.lockedUntil) : null,
+        lastError: job.lastError ?? null,
+        metadata: job.metadata ?? null,
+      });
+
+      await tx.insert(executionAttemptsTable).values({
+        attemptId: attempt.attemptId,
+        operationId: attempt.operationId,
+        executionId: attempt.executionId,
+        attemptNumber: attempt.attemptNumber,
+        status: attempt.status,
+        requestUrl: attempt.requestUrl ?? null,
+        requestMethod: attempt.requestMethod ?? null,
+        requestBody: attempt.requestBody ?? null,
+        responseStatusCode: attempt.responseStatusCode ?? null,
+        responseBody: attempt.responseBody ?? null,
+        responseHeaders: attempt.responseHeaders ?? null,
+        errorReason: attempt.errorReason ?? null,
+        idempotencyKey: attempt.idempotencyKey ?? null,
+        startedAt: attempt.startedAt ? new Date(attempt.startedAt) : null,
+        completedAt: attempt.completedAt ? new Date(attempt.completedAt) : null,
+      });
     });
   }
 
@@ -485,14 +532,23 @@ export class PostgresExecutionStore {
    * Ordered by priority DESC, then createdAt ASC for fairness.
    */
   async getPendingJobs(): Promise<RecoveryJob[]> {
-    const rows = await this.db.execute(sql`
-      SELECT * FROM recovery_jobs
-      WHERE status = ${"PENDING"}
-         OR (status = ${"RUNNING"} AND locked_until < NOW())
-      ORDER BY priority DESC, created_at ASC
-      LIMIT 100
-    `);
-    return (Array.isArray(rows) ? rows : []).map((r: any) => this.rowToJob(r as RecoveryJobRow));
+    // R6 repair: was a raw db.execute() whose rows carry snake_case keys while
+    // rowToJob() maps camelCase — every worker cycle threw
+    // "Cannot read properties of undefined (reading 'getTime')" inside the
+    // batch loop, so PENDING jobs were never claimed or processed.
+    const rows = await this.db
+      .select()
+      .from(recoveryJobsTable)
+      .where(or(
+        eq(recoveryJobsTable.status, "PENDING"),
+        and(
+          eq(recoveryJobsTable.status, "RUNNING"),
+          sql`${recoveryJobsTable.lockedUntil} < NOW()`,
+        ),
+      ))
+      .orderBy(desc(recoveryJobsTable.priority), asc(recoveryJobsTable.createdAt))
+      .limit(100);
+    return rows.map((r: any) => this.rowToJob(r as RecoveryJobRow));
   }
 
   /**
@@ -577,6 +633,7 @@ export class PostgresExecutionStore {
       WHERE job_id = ${jobId}
         AND fence_generation = ${fenceGeneration}
         AND status NOT IN (${"COMPLETED"}, ${"FAILED"}, ${"UNRESOLVABLE"})
+       RETURNING job_id
     `);
 
     const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;

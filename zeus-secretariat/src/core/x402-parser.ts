@@ -39,6 +39,19 @@ export class X402Parser {
       }
     }
 
+    // Priority 1b (R0 repair): legacy `X-Payment-Required` key=value header
+    // ("amount='0.5'; asset='MOCK'; network='mock-network'; payee='seller123'").
+    // Sellers and test harnesses in this repository still emit this legacy
+    // challenge form; accepting it as a fallback is additive and cannot shadow
+    // the standard base64-JSON header above.
+    const legacyHeader =
+      response.headers.get('X-Payment-Required') ??
+      response.headers.get('X-PAYMENT-REQUIRED');
+    if (legacyHeader) {
+      const legacy = X402Parser.parseLegacyHeader(legacyHeader);
+      if (legacy) return [legacy];
+    }
+
     // Priority 2: Check response body (JSON)
     // Note: We assume the response body hasn't been consumed yet or is available.
     try {
@@ -47,6 +60,36 @@ export class X402Parser {
     } catch (e) {
       throw new Error('No valid x402 challenge found in headers or body');
     }
+  }
+
+  /**
+   * R0 repair: parse the legacy key=value challenge header into a canonical
+   * X402Accept. Returns null when the header does not carry enough fields.
+   */
+  static parseLegacyHeader(raw: string): X402Accept | null {
+    const fields: Record<string, string> = {};
+    for (const pair of raw.split(';')) {
+      const idx = pair.indexOf('=');
+      if (idx === -1) continue;
+      const key = pair.slice(0, idx).trim().toLowerCase();
+      let value = pair.slice(idx + 1).trim();
+      // strip surrounding quotes (single or double)
+      const q = value.match(/^['"](.*)['"]$/);
+      if (q) value = q[1];
+      if (key) fields[key] = value;
+    }
+    const network = fields['network'];
+    const asset = fields['asset'];
+    const amount = fields['amount'] ?? fields['maxamountrequired'] ?? fields['max-amount-required'];
+    const payTo = fields['payee'] ?? fields['payto'];
+    if (!network || !amount || !payTo) return null;
+    return {
+      scheme: 'exact',
+      network,
+      asset: asset ?? '',
+      amount,
+      payTo,
+    };
   }
 
   /**

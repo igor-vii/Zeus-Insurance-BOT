@@ -1,0 +1,268 @@
+{
+  "schema": "zeus-live-matrix/v1",
+  "title": "Zeus Secretariat — живая матрица адверсариальных прогонов",
+  "description": "Единый машинночитаемый индекс живых прогонов: свежий цикл (S1-S8 + r6-гейт B-BS-16/17/18 + live-канарейка) против реального Secretariat с PostgreSQL-наблюдением, плюс история всех предыдущих прогонов. Человекочитаемые отчёты: bbs16-17-18/*.md, pg-trail/*.md.",
+  "updated_at": "2026-10-24T16:38:00Z",
+  "repo": "igor-vii/Zeus-Insurance-BOT",
+  "branch": "audit/repair-mainnet-prep",
+  "commit": "fcf6c02eed8eb832b8b4f74ded8269b9fa4f8099",
+  "latest_run": {
+    "run_id": "2026-10-24T1630Z-p0-remediation",
+    "started_at": "2026-10-24T16:24:00Z",
+    "finished_at": "2026-10-24T16:38:00Z",
+    "verdict": "GREEN",
+    "detail_ref": "runs/2026-10-24T1630Z-p0-remediation.json"
+  },
+  "matrix": [
+    {
+      "id": "S1",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "PASS",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S1.log + pg-observations.json#S1"
+    },
+    {
+      "id": "S2",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "PASS",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S2.log + pg-observations.json#S2"
+    },
+    {
+      "id": "S3",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "PASS",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S3.log + pg-observations.json#S3"
+    },
+    {
+      "id": "S4",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "NONE",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S4.log + pg-observations.json#S4"
+    },
+    {
+      "id": "S5",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "PASS",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S5.log + pg-observations.json#S5"
+    },
+    {
+      "id": "S6",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "PASS",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S6.log + pg-observations.json#S6"
+    },
+    {
+      "id": "S7",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "PASS",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S7.log + pg-observations.json#S7"
+    },
+    {
+      "id": "S8",
+      "scope": "живой S-сценарий против реального Secretariat /v1",
+      "verdict": "PASS",
+      "exit": 0,
+      "reason": "",
+      "pg_intents": 1,
+      "pg_states": [
+        "SETTLED"
+      ],
+      "evidence": "argus-live/S8.log + pg-observations.json#S8"
+    },
+    {
+      "id": "B-BS-16-refuse",
+      "scope": "оплачен, но не доставлен: продавец отвечает 5xx",
+      "verdict": "BLOCKED (честный FAILED)",
+      "pg": {
+        "intents": 1,
+        "settled": 1,
+        "attempts": 1,
+        "recovery": "FAILED",
+        "attempts_detail": [
+          "#1:HTTP_FAILURE"
+        ]
+      }
+    },
+    {
+      "id": "B-BS-16-recover",
+      "scope": "потеря ответа после оплаты -> recovery-доставка",
+      "verdict": "PASSED (recovery без перезарядки)",
+      "pg": {
+        "intents": 1,
+        "settled": 1,
+        "attempts": 2,
+        "recovery": "COMPLETED",
+        "same_execution_id": true
+      }
+    },
+    {
+      "id": "B-BS-17-gate",
+      "scope": "nonce replay (гейт-нога, встроенный мок)",
+      "verdict": "BLOCKED",
+      "pg": {
+        "intents": 1,
+        "settled": 1,
+        "nonces": 1
+      }
+    },
+    {
+      "id": "B-BS-17-live-canary",
+      "scope": "nonce replay против ЖИВОГО мока рельсы (канарейка)",
+      "verdict": "GREEN — 3x409 authorization_used, ledger single-settle",
+      "evidence": "bbs16-17-18/canary.log"
+    },
+    {
+      "id": "B-BS-18-over",
+      "scope": "сумма выше maxPrice — отбрасывается ДО денег",
+      "verdict": "BLOCKED (pre-intent POLICY_REJECTED, 0 интентов, 0 сеттлментов, 0 dispatch-ов)",
+      "pg": {
+        "intents": 0,
+        "policy_rejected_in_window": 5
+      }
+    },
+    {
+      "id": "B-BS-18-boundary",
+      "scope": "сумма РОВНО maxPrice — инклюзивная граница проходит",
+      "verdict": "SETTLED + 1 доставка",
+      "pg": {
+        "intents": 1,
+        "settled": 1
+      }
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-S-DEDUP",
+      "statement": "у каждого логического запроса ровно один payment_intent",
+      "proof": "DOUBLE_INTENT_CLIENTS=[]",
+      "stage": "s1_s8_live"
+    },
+    {
+      "id": "INV-S-NO-DOUBLE-SETTLE",
+      "statement": "фасилитатор не видел двойного сеттлмента",
+      "proof": "doubleSettleAttempts=0 при totalSettleCalls=8",
+      "stage": "s1_s8_live"
+    },
+    {
+      "id": "INV-16-HONEST-FAIL",
+      "statement": "5xx от продавца — окончательный отказ: ровно 1 попытка доставки, recovery-задача FAILED, никакого фейкового COMPLETED",
+      "proof": "B-BS-16: attempts=3 (1 refuse + 2 recover), recovery=[FAILED, COMPLETED], unique_tx=2 по 2 интентам",
+      "stage": "r6_gate"
+    },
+    {
+      "id": "INV-16-RECOVERY-SAME-EXEC",
+      "statement": "recovery доставляет под тем же execution_id и не перезаряжает: 1 сеттлмент на 2 попытки",
+      "proof": "B-BS-16 recover: attempt#1 DELIVERY_UNKNOWN/RESPONSE_STREAM_FAILED -> attempt#2 SUCCESS/200",
+      "stage": "r6_gate"
+    },
+    {
+      "id": "INV-17-SINGLE-USE-NONCE",
+      "statement": "EIP-3009 nonce single-use: replay идёт мимо Secretariat напрямую в фасилитатор и отбивается 409 authorization_used",
+      "proof": "B-BS-17: 1 интент, 1 сеттлмент, 1 nonce; канарейка GREEN — 3x409, лиджер single-settle",
+      "stage": "canary"
+    },
+    {
+      "id": "INV-18-INCLUSIVE-BOUNDARY",
+      "statement": "over-budget отбивается ДО денег (pre-intent POLICY_REJECTED, 0 интентов/0 сеттлментов); цена РОВНО maxPrice проходит",
+      "proof": "B-BS-18: over-нога — только evidence-запись + ноль dispatch-ов фасилитатора; boundary-нога SETTLED, 1 доставка",
+      "stage": "r6_gate"
+    }
+  ],
+  "runs_history": [
+    {
+      "run_id": "2026-10-08-canonical-s1-s9-preflight",
+      "date": "2026-10-08",
+      "kind": "canonical-preflight",
+      "verdict_summary": "S1/S5/S9 PASS; S2/S3/S6/S7 INCONCLUSIVE; S4 NONE; S8 FAIL — базовые подтверждения движка сценариев, посев для живой интеграции",
+      "json": "runs/2026-10-08-canonical-s1-s9-preflight.json"
+    },
+    {
+      "run_id": "2026-10-23-s1-s8-live-r1",
+      "date": "2026-10-23",
+      "kind": "s1-s8-live",
+      "verdict_summary": "S3 FAIL (recovery завершился, но повторная доставка продавцу не возобновилась), S8 FAIL (x402-split: платёж не подписан и не повторён) — обе дыры закрыты фиксами 76e719013/57e24930f",
+      "json": "runs/2026-10-23-s1-s8-live-r1.json"
+    },
+    {
+      "run_id": "2026-10-23-s1-s8-live-r2",
+      "date": "2026-10-23",
+      "kind": "s1-s8-live",
+      "verdict_summary": "полная матрица зелёная: S1-S3/S5-S8 PASS, S4 NONE (канонический бесконечный hang не terminates by design — вердикт несёт PG-трейл)",
+      "json": "runs/2026-10-23-s1-s8-live-r2.json"
+    },
+    {
+      "run_id": "2026-10-24T0413Z-s1-s8-live-r3",
+      "date": "2026-10-24T04:13Z",
+      "kind": "s1-s8-live",
+      "verdict_summary": "полная матрица зелёная (детерминированный повтор r2 в другой сессии песочницы)",
+      "json": "runs/2026-10-24T0413Z-s1-s8-live-r3.json"
+    },
+    {
+      "run_id": "2026-10-24T0416Z-bbs16-17-18-trilogy",
+      "date": "2026-10-24T04:16Z",
+      "kind": "bbs-trilogy",
+      "verdict_summary": "гейт GREEN, канарейка GREEN; честный FAILED без фейковых COMPLETED, recovery без перезарядки, single-use nonce, инклюзивная граница бюджета",
+      "json": "runs/2026-10-24T0416Z-bbs16-17-18-trilogy.json"
+    },
+    {
+      "run_id": "2026-10-24T0514Z-full-matrix",
+      "date": "2026-10-24T05:14:06Z",
+      "kind": "full-matrix",
+      "verdict_summary": "S1-S3/S5-S8 PASS, S4 NONE (by design); гейт GREEN (blocked=16/16 passed=4/4 leaked=0, PG ok=20 fail=0); канарейка GREEN; double-settle=0; дубль-интентов нет",
+      "json": "runs/2026-10-24T0514Z-full-matrix.json"
+    },
+    {
+      "run_id": "2026-10-24T1630Z-p0-remediation",
+      "date": "2026-10-24",
+      "kind": "p0-remediation",
+      "verdict_summary": "GATE GREEN (blocked=16/16, passed=4/4, PG ok=20 fail=0) + канарейка GREEN (3/3 реплея 409) + jest 45/45 сьютов (362 passed, 0 failed, все 13 DB-сьюитов живые) — первый прогон на P0-вершине fcf6c02ee",
+      "json": "runs/2026-10-24T1630Z-p0-remediation.json"
+    }
+  ],
+  "how_to_reproduce": {
+    "s1_s8": "node scripts/run-live-s1s8.mjs  # PG -> миграции -> run-s1-s7-live.sh",
+    "trilogy": "node scripts/run-bbs-trilogy.mjs  # гейт -> канарейка -> дамп",
+    "rich_dump": "cd pgwork && node rich.mjs  # rich-схема full-dump.json поверх последнего прогона"
+  }
+}

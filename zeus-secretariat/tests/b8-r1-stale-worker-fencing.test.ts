@@ -52,7 +52,7 @@ describeIfDb("BLOCK 8/1 Repair #1: Stale Worker Fencing (PostgreSQL)", () => {
 
     // Verify job is still RUNNING (not COMPLETED)
     const check = await db.execute(sql`SELECT status FROM recovery_jobs WHERE job_id = ${jobId}`);
-    expect((check as any[])[0]?.status).toBe("RUNNING");
+    expect((check.rows as any[])[0]?.status).toBe("RUNNING");
 
     // Worker B updates with current generation → ACCEPTED
     const currentResult = await store.updateJobStatus(jobId, "COMPLETED", genB!);
@@ -60,7 +60,7 @@ describeIfDb("BLOCK 8/1 Repair #1: Stale Worker Fencing (PostgreSQL)", () => {
 
     // Verify now COMPLETED
     const check2 = await db.execute(sql`SELECT status FROM recovery_jobs WHERE job_id = ${jobId}`);
-    expect((check2 as any[])[0]?.status).toBe("COMPLETED");
+    expect((check2.rows as any[])[0]?.status).toBe("COMPLETED");
 
     // Cleanup
     await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${jobId}`);
@@ -84,7 +84,7 @@ describeIfDb("BLOCK 8/1 Repair #1: Stale Worker Fencing (PostgreSQL)", () => {
 
     // Verify still COMPLETED
     const check = await db.execute(sql`SELECT status FROM recovery_jobs WHERE job_id = ${jobId}`);
-    expect((check as any[])[0]?.status).toBe("COMPLETED");
+    expect((check.rows as any[])[0]?.status).toBe("COMPLETED");
 
     // Cleanup
     await db.execute(sql`DELETE FROM recovery_jobs WHERE job_id = ${jobId}`);
@@ -120,7 +120,7 @@ describeIfDb("BLOCK 8/1 Repair #1: Stale Worker Fencing (PostgreSQL)", () => {
 
     // Verify still ATTEMPTED
     const check = await db.execute(sql`SELECT status FROM execution_attempts WHERE attempt_id = ${attId}`);
-    expect((check as any[])[0]?.status).toBe("ATTEMPTED");
+    expect((check.rows as any[])[0]?.status).toBe("ATTEMPTED");
 
     // Worker B sets SUCCESS with current fence → ACCEPTED
     const currentResult = await store.updateAttemptStatus(attId, "SUCCESS", genB!, { completedAt: now });
