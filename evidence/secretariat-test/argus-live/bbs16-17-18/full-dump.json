@@ -1,0 +1,446 @@
+{
+  "B-BS-16": {
+    "intents": [
+      {
+        "payment_intent_id": "pi_1792815407013_qokwj1mqiro",
+        "operation_id": "op_1792815407011_n9j55cc07u",
+        "request_id": "cid:argus-B-BS-16-1792815407009-4l4575",
+        "client_id": "argus-B-BS-16-1792815407009-4l4575",
+        "settlement_state": "SETTLED",
+        "value": "10000.000000",
+        "tx_hash": "0xsettle1a16c201fcd",
+        "facilitator_http_status": 200,
+        "error_reason": null,
+        "created_at": "2026-10-24T04:16:47.014Z",
+        "settled_at": "2026-10-24T04:16:47.063Z"
+      },
+      {
+        "payment_intent_id": "pi_1792815412112_8umbg9wk7m4",
+        "operation_id": "op_1792815412110_xdxfupiof2",
+        "request_id": "cid:argus-B-BS-16-1792815412108-o90e5d",
+        "client_id": "argus-B-BS-16-1792815412108-o90e5d",
+        "settlement_state": "SETTLED",
+        "value": "10000.000000",
+        "tx_hash": "0xsettle1a16c2033ad",
+        "facilitator_http_status": 200,
+        "error_reason": null,
+        "created_at": "2026-10-24T04:16:52.113Z",
+        "settled_at": "2026-10-24T04:16:52.150Z"
+      }
+    ],
+    "obsTable": [
+      {
+        "observed_at": "2026-10-24T04:16:47.062Z",
+        "observation_id": "recon-1792815407055-9b7pv32n7x-mock-a",
+        "payment_intent_id": "pi_1792815407013_qokwj1mqiro",
+        "attempt_id": "recon-1792815407055-9b7pv32n7x",
+        "rpc_provider_id": "mock-a",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:47.062Z",
+        "observation_id": "recon-1792815407055-9b7pv32n7x-mock-b",
+        "payment_intent_id": "pi_1792815407013_qokwj1mqiro",
+        "attempt_id": "recon-1792815407055-9b7pv32n7x",
+        "rpc_provider_id": "mock-b",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:52.149Z",
+        "observation_id": "recon-1792815412144-ahd84m4zrzv-mock-a",
+        "payment_intent_id": "pi_1792815412112_8umbg9wk7m4",
+        "attempt_id": "recon-1792815412144-ahd84m4zrzv",
+        "rpc_provider_id": "mock-a",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:52.149Z",
+        "observation_id": "recon-1792815412144-ahd84m4zrzv-mock-b",
+        "payment_intent_id": "pi_1792815412112_8umbg9wk7m4",
+        "attempt_id": "recon-1792815412144-ahd84m4zrzv",
+        "rpc_provider_id": "mock-b",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      }
+    ],
+    "policyRejected": [
+      {
+        "observed_at": "2026-10-24T04:16:46.750Z",
+        "observation_id": "evlog|op_1792815406747_2vz3c4q4noa|s7|POLICY|POLICY_REJECTED|1792815406750|661242554f6a7908",
+        "attempt_id": "op_1792815406747_2vz3c4q4noa",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.765Z",
+        "observation_id": "evlog|op_1792815406761_pjykwd2kfnd|s7|POLICY|POLICY_REJECTED|1792815406765|f5680ee3d14f1c83",
+        "attempt_id": "op_1792815406761_pjykwd2kfnd",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.780Z",
+        "observation_id": "evlog|op_1792815406773_67eagetqbgd|s7|POLICY|POLICY_REJECTED|1792815406780|d549aaa5a68a5dbc",
+        "attempt_id": "op_1792815406773_67eagetqbgd",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.790Z",
+        "observation_id": "evlog|op_1792815406787_eg5f495dcsa|s7|POLICY|POLICY_REJECTED|1792815406790|5e1a00e6e0db051e",
+        "attempt_id": "op_1792815406787_eg5f495dcsa",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:17:01.797Z",
+        "observation_id": "evlog|op_1792815421794_8cq27lotr66|s7|POLICY|POLICY_REJECTED|1792815421797|c737a0158db644b1",
+        "attempt_id": "op_1792815421794_8cq27lotr66",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      }
+    ],
+    "attempts": [
+      {
+        "attempt_id": "attempt-1792815411621-edc4sgbfozb",
+        "operation_id": "op_1792815407011_n9j55cc07u",
+        "execution_id": "op_1792815407011_n9j55cc07u",
+        "attempt_number": 1,
+        "status": "HTTP_FAILURE",
+        "request_url": "http://127.0.0.1:9977/seller",
+        "request_method": "POST",
+        "response_status_code": 500,
+        "error_reason": null,
+        "idempotency_key": "op_1792815407011_n9j55cc07u",
+        "started_at": "2026-10-24T04:16:51.625Z",
+        "completed_at": "2026-10-24T04:16:51.628Z"
+      },
+      {
+        "attempt_id": "attempt-1792815416637-d0mj2p3hbz",
+        "operation_id": "op_1792815412110_xdxfupiof2",
+        "execution_id": "op_1792815412110_xdxfupiof2",
+        "attempt_number": 1,
+        "status": "DELIVERY_UNKNOWN",
+        "request_url": "http://127.0.0.1:9977/seller",
+        "request_method": "POST",
+        "response_status_code": null,
+        "error_reason": "RESPONSE_STREAM_FAILED",
+        "idempotency_key": "op_1792815412110_xdxfupiof2",
+        "started_at": "2026-10-24T04:16:56.640Z",
+        "completed_at": "2026-10-24T04:16:56.652Z"
+      },
+      {
+        "attempt_id": "attempt-retry-1792815416653-ymbzq844imp",
+        "operation_id": "op_1792815412110_xdxfupiof2",
+        "execution_id": "op_1792815412110_xdxfupiof2",
+        "attempt_number": 2,
+        "status": "SUCCESS",
+        "request_url": "http://127.0.0.1:9977/seller",
+        "request_method": "POST",
+        "response_status_code": 200,
+        "error_reason": null,
+        "idempotency_key": "op_1792815412110_xdxfupiof2",
+        "started_at": "2026-10-24T04:17:01.667Z",
+        "completed_at": "2026-10-24T04:17:01.671Z"
+      }
+    ],
+    "recovery": [
+      {
+        "job_id": "job-1792815411621-a13uccd0qy9",
+        "operation_id": "op_1792815407011_n9j55cc07u",
+        "job_type": "EXECUTION",
+        "status": "FAILED",
+        "current_attempt": 1,
+        "max_attempts": 3,
+        "last_error": "HTTP 500",
+        "created_at": "2026-10-24T04:16:51.622Z",
+        "updated_at": "2026-10-24T04:16:51.628Z"
+      },
+      {
+        "job_id": "job-1792815416637-1bpyy1yw7p6",
+        "operation_id": "op_1792815412110_xdxfupiof2",
+        "job_type": "EXECUTION",
+        "status": "COMPLETED",
+        "current_attempt": 2,
+        "max_attempts": 3,
+        "last_error": "DELIVERY_UNKNOWN — retry attempt created",
+        "created_at": "2026-10-24T04:16:56.638Z",
+        "updated_at": "2026-10-24T04:17:01.672Z"
+      }
+    ],
+    "nonces": [
+      {
+        "nonce": "0x9e989cc01e95959d11b0f913afa96cc4664b40db719943ece126ac00653e98ae",
+        "operation_id": "op_1792815407011_n9j55cc07u",
+        "status": "SETTLED",
+        "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "created_at": "2026-10-24T04:16:47.013Z"
+      },
+      {
+        "nonce": "0x796cd7dac22de295418dda1f9dce8341a477170cfaeb6c5d7696d2887a53c459",
+        "operation_id": "op_1792815412110_xdxfupiof2",
+        "status": "SETTLED",
+        "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "created_at": "2026-10-24T04:16:52.113Z"
+      }
+    ]
+  },
+  "B-BS-17": {
+    "intents": [
+      {
+        "payment_intent_id": "pi_1792815416692_fezmrie3pds",
+        "operation_id": "op_1792815416689_0f3hv6eh82hc",
+        "request_id": "cid:argus-B-BS-17-1792815416687-i0c93v",
+        "client_id": "argus-B-BS-17-1792815416687-i0c93v",
+        "settlement_state": "SETTLED",
+        "value": "10000.000000",
+        "tx_hash": "0xsettle1a16c204599",
+        "facilitator_http_status": 200,
+        "error_reason": null,
+        "created_at": "2026-10-24T04:16:56.693Z",
+        "settled_at": "2026-10-24T04:16:56.740Z"
+      }
+    ],
+    "obsTable": [
+      {
+        "observed_at": "2026-10-24T04:16:56.738Z",
+        "observation_id": "recon-1792815416733-2rcnisz448v-mock-a",
+        "payment_intent_id": "pi_1792815416692_fezmrie3pds",
+        "attempt_id": "recon-1792815416733-2rcnisz448v",
+        "rpc_provider_id": "mock-a",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:56.739Z",
+        "observation_id": "recon-1792815416733-2rcnisz448v-mock-b",
+        "payment_intent_id": "pi_1792815416692_fezmrie3pds",
+        "attempt_id": "recon-1792815416733-2rcnisz448v",
+        "rpc_provider_id": "mock-b",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      }
+    ],
+    "policyRejected": [
+      {
+        "observed_at": "2026-10-24T04:16:46.750Z",
+        "observation_id": "evlog|op_1792815406747_2vz3c4q4noa|s7|POLICY|POLICY_REJECTED|1792815406750|661242554f6a7908",
+        "attempt_id": "op_1792815406747_2vz3c4q4noa",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.765Z",
+        "observation_id": "evlog|op_1792815406761_pjykwd2kfnd|s7|POLICY|POLICY_REJECTED|1792815406765|f5680ee3d14f1c83",
+        "attempt_id": "op_1792815406761_pjykwd2kfnd",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.780Z",
+        "observation_id": "evlog|op_1792815406773_67eagetqbgd|s7|POLICY|POLICY_REJECTED|1792815406780|d549aaa5a68a5dbc",
+        "attempt_id": "op_1792815406773_67eagetqbgd",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.790Z",
+        "observation_id": "evlog|op_1792815406787_eg5f495dcsa|s7|POLICY|POLICY_REJECTED|1792815406790|5e1a00e6e0db051e",
+        "attempt_id": "op_1792815406787_eg5f495dcsa",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:17:01.797Z",
+        "observation_id": "evlog|op_1792815421794_8cq27lotr66|s7|POLICY|POLICY_REJECTED|1792815421797|c737a0158db644b1",
+        "attempt_id": "op_1792815421794_8cq27lotr66",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      }
+    ],
+    "attempts": [
+      {
+        "attempt_id": "attempt-1792815421662-l6crbgx2p3",
+        "operation_id": "op_1792815416689_0f3hv6eh82hc",
+        "execution_id": "op_1792815416689_0f3hv6eh82hc",
+        "attempt_number": 1,
+        "status": "SUCCESS",
+        "request_url": "http://127.0.0.1:9977/seller",
+        "request_method": "POST",
+        "response_status_code": 200,
+        "error_reason": null,
+        "idempotency_key": "op_1792815416689_0f3hv6eh82hc",
+        "started_at": "2026-10-24T04:17:01.675Z",
+        "completed_at": "2026-10-24T04:17:01.679Z"
+      }
+    ],
+    "recovery": [
+      {
+        "job_id": "job-1792815421662-i96qjwgzzwj",
+        "operation_id": "op_1792815416689_0f3hv6eh82hc",
+        "job_type": "EXECUTION",
+        "status": "COMPLETED",
+        "current_attempt": 1,
+        "max_attempts": 3,
+        "last_error": null,
+        "created_at": "2026-10-24T04:17:01.663Z",
+        "updated_at": "2026-10-24T04:17:01.679Z"
+      }
+    ],
+    "nonces": [
+      {
+        "nonce": "0x425b72a6be5f7088a6e3fbd8f69793df3d4d6d5e493aa5860e13b09f8da41e33",
+        "operation_id": "op_1792815416689_0f3hv6eh82hc",
+        "status": "SETTLED",
+        "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "created_at": "2026-10-24T04:16:56.692Z"
+      }
+    ]
+  },
+  "B-BS-18": {
+    "intents": [
+      {
+        "payment_intent_id": "pi_1792815421808_9yqq7v8rlz",
+        "operation_id": "op_1792815421805_eqhisidjxll",
+        "request_id": "cid:argus-B-BS-18B-1792815421803-a9h42v",
+        "client_id": "argus-B-BS-18B-1792815421803-a9h42v",
+        "settlement_state": "SETTLED",
+        "value": "100000.000000",
+        "tx_hash": "0xsettle1a16c205989",
+        "facilitator_http_status": 200,
+        "error_reason": null,
+        "created_at": "2026-10-24T04:17:01.808Z",
+        "settled_at": "2026-10-24T04:17:01.843Z"
+      }
+    ],
+    "obsTable": [
+      {
+        "observed_at": "2026-10-24T04:17:01.841Z",
+        "observation_id": "recon-1792815421836-9xwjq6mzali-mock-a",
+        "payment_intent_id": "pi_1792815421808_9yqq7v8rlz",
+        "attempt_id": "recon-1792815421836-9xwjq6mzali",
+        "rpc_provider_id": "mock-a",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:17:01.842Z",
+        "observation_id": "recon-1792815421836-9xwjq6mzali-mock-b",
+        "payment_intent_id": "pi_1792815421808_9yqq7v8rlz",
+        "attempt_id": "recon-1792815421836-9xwjq6mzali",
+        "rpc_provider_id": "mock-b",
+        "underlying_provider": "",
+        "authorization_state": null,
+        "result": "SETTLED_FOUND",
+        "error": null
+      }
+    ],
+    "policyRejected": [
+      {
+        "observed_at": "2026-10-24T04:16:46.750Z",
+        "observation_id": "evlog|op_1792815406747_2vz3c4q4noa|s7|POLICY|POLICY_REJECTED|1792815406750|661242554f6a7908",
+        "attempt_id": "op_1792815406747_2vz3c4q4noa",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.765Z",
+        "observation_id": "evlog|op_1792815406761_pjykwd2kfnd|s7|POLICY|POLICY_REJECTED|1792815406765|f5680ee3d14f1c83",
+        "attempt_id": "op_1792815406761_pjykwd2kfnd",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.780Z",
+        "observation_id": "evlog|op_1792815406773_67eagetqbgd|s7|POLICY|POLICY_REJECTED|1792815406780|d549aaa5a68a5dbc",
+        "attempt_id": "op_1792815406773_67eagetqbgd",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:16:46.790Z",
+        "observation_id": "evlog|op_1792815406787_eg5f495dcsa|s7|POLICY|POLICY_REJECTED|1792815406790|5e1a00e6e0db051e",
+        "attempt_id": "op_1792815406787_eg5f495dcsa",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      },
+      {
+        "observed_at": "2026-10-24T04:17:01.797Z",
+        "observation_id": "evlog|op_1792815421794_8cq27lotr66|s7|POLICY|POLICY_REJECTED|1792815421797|c737a0158db644b1",
+        "attempt_id": "op_1792815421794_8cq27lotr66",
+        "rpc_provider_id": "evidence-log",
+        "result": "POLICY_REJECTED",
+        "error": null
+      }
+    ],
+    "attempts": [
+      {
+        "attempt_id": "attempt-1792815426690-exkk9mf9n99",
+        "operation_id": "op_1792815421805_eqhisidjxll",
+        "execution_id": "op_1792815421805_eqhisidjxll",
+        "attempt_number": 1,
+        "status": "SUCCESS",
+        "request_url": "http://127.0.0.1:9977/seller",
+        "request_method": "POST",
+        "response_status_code": 200,
+        "error_reason": null,
+        "idempotency_key": "op_1792815421805_eqhisidjxll",
+        "started_at": "2026-10-24T04:17:06.693Z",
+        "completed_at": "2026-10-24T04:17:06.697Z"
+      }
+    ],
+    "recovery": [
+      {
+        "job_id": "job-1792815426690-6hrf2ds1gjt",
+        "operation_id": "op_1792815421805_eqhisidjxll",
+        "job_type": "EXECUTION",
+        "status": "COMPLETED",
+        "current_attempt": 1,
+        "max_attempts": 3,
+        "last_error": null,
+        "created_at": "2026-10-24T04:17:06.691Z",
+        "updated_at": "2026-10-24T04:17:06.697Z"
+      }
+    ],
+    "nonces": [
+      {
+        "nonce": "0xcaebc168c7d6a6c5bf88e1229a81a2140c10804a47bc28eaef48660754d77bb4",
+        "operation_id": "op_1792815421805_eqhisidjxll",
+        "status": "SETTLED",
+        "payer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "created_at": "2026-10-24T04:17:01.808Z"
+      }
+    ]
+  }
+}
