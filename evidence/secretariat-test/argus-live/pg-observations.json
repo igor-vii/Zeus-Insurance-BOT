@@ -25,7 +25,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x7faf3231"
+      "0x49f52b21"
     ]
   },
   "S2": {
@@ -54,7 +54,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x25f7632d"
+      "0x6ef444a1"
     ]
   },
   "S3": {
@@ -83,7 +83,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x37f6783c"
+      "0x61e2a868"
     ]
   },
   "S4": {
@@ -106,12 +106,13 @@
       "SETTLEMENT_CONFIRMED",
       "SETTLEMENT_ALREADY_PERSISTED",
       "EXECUTION_INITIATED",
-      "EXECUTION_RESULT_RAW"
+      "EXECUTION_RESULT_RAW",
+      "EXECUTION_RETRY_CREATED"
     ],
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0xac56a9a1"
+      "0x9dae8f93"
     ]
   },
   "S5": {
@@ -126,8 +127,8 @@
       "SELLER_CAPABILITIES_DISCOVERED",
       "POLICY_VALIDATION_STARTED",
       "POLICY_VALIDATION_PASSED",
-      "OPERATION_CREATED",
       "PAYMENT_VERIFIED",
+      "OPERATION_CREATED",
       "PAYMENT_AUTHORIZED",
       "PAYMENT_SUBMITTED",
       "RECONCILIATION_STARTED",
@@ -140,7 +141,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0xfc864770"
+      "0x53fa2ad3"
     ]
   },
   "S6": {
@@ -169,7 +170,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0xa2751196"
+      "0xb1231442"
     ]
   },
   "S7": {
@@ -193,12 +194,13 @@
       "SETTLEMENT_ALREADY_PERSISTED",
       "EXECUTION_INITIATED",
       "EXECUTION_RESULT_RAW",
+      "EXECUTION_RETRY_CREATED",
       "EXECUTION_SUCCESS"
     ],
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0xfc6a8368"
+      "0x21990e1d"
     ]
   },
   "S8": {
@@ -227,7 +229,7 @@
     "attempts": [],
     "recoveryJobs": "none",
     "nonces": [
-      "0x5ac208c6"
+      "0xcbcb827a"
     ]
   },
   "DOUBLE_INTENT_CLIENTS": []
