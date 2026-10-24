@@ -103,6 +103,53 @@ export class PostgresExecutionStore {
     });
   }
 
+  /**
+   * F-001 (external audit Blocker): atomic attempt+job creation.
+   *
+   * Both inserts run in a single DB transaction — either both rows persist
+   * or neither does. Replaces the unfenced saveAttempt() → saveJob() pair in
+   * PostSettlementEngine.initiateExecution(): a process crash (or transient
+   * DB failure) between the two inserts used to persist the attempt without
+   * the job, and the obligation scanner excluded such intents forever —
+   * SETTLED payment, seller never called. Same lock-free single-transaction
+   * pattern as settleAndCreateExecutionObligation().
+   */
+  async saveAttemptWithJob(attempt: ExecutionAttempt, job: RecoveryJob): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.insert(recoveryJobsTable).values({
+        jobId: job.jobId,
+        operationId: job.operationId,
+        jobType: job.jobType,
+        status: job.status,
+        priority: job.priority,
+        maxAttempts: job.maxAttempts,
+        currentAttempt: job.currentAttempt,
+        lockedBy: job.lockedBy ?? null,
+        lockedUntil: job.lockedUntil ? new Date(job.lockedUntil) : null,
+        lastError: job.lastError ?? null,
+        metadata: job.metadata ?? null,
+      });
+
+      await tx.insert(executionAttemptsTable).values({
+        attemptId: attempt.attemptId,
+        operationId: attempt.operationId,
+        executionId: attempt.executionId,
+        attemptNumber: attempt.attemptNumber,
+        status: attempt.status,
+        requestUrl: attempt.requestUrl ?? null,
+        requestMethod: attempt.requestMethod ?? null,
+        requestBody: attempt.requestBody ?? null,
+        responseStatusCode: attempt.responseStatusCode ?? null,
+        responseBody: attempt.responseBody ?? null,
+        responseHeaders: attempt.responseHeaders ?? null,
+        errorReason: attempt.errorReason ?? null,
+        idempotencyKey: attempt.idempotencyKey ?? null,
+        startedAt: attempt.startedAt ? new Date(attempt.startedAt) : null,
+        completedAt: attempt.completedAt ? new Date(attempt.completedAt) : null,
+      });
+    });
+  }
+
   async getAttemptById(attemptId: string): Promise<ExecutionAttempt | null> {
     const rows = await this.db
       .select()

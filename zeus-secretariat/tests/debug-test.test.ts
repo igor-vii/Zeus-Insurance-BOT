@@ -61,8 +61,8 @@ function makeDynamicChecker(adapter: MockSettlementAdapter) {
   const pad = (a: string) => '0x' + String(a).replace(/^0x/i, '').toLowerCase().padStart(64, '0');
   const observations = <T,>(result: T | null): MultiRpcResult<T> => ({
     observations: [
-      { providerId: 'mock-a', underlyingProvider: 'mock', result, observedAt: Date.now() },
-      { providerId: 'mock-b', underlyingProvider: 'mock', result, observedAt: Date.now() },
+      { providerId: 'mock-a', underlyingProvider: 'mock', result, ...(result === null ? {} : { blockData: { blockNumber: 1000, chainHead: 1000, stalenessBlocks: 0 } }), observedAt: Date.now() },
+      { providerId: 'mock-b', underlyingProvider: 'mock', result, ...(result === null ? {} : { blockData: { blockNumber: 1000, chainHead: 1000, stalenessBlocks: 0 } }), observedAt: Date.now() },
     ],
     agreement: result === null ? 'ALL_FAILED' : 'UNANIMOUS',
     ...(result === null ? {} : { unanimousValue: result! }),
@@ -83,6 +83,26 @@ function makeDynamicChecker(adapter: MockSettlementAdapter) {
         blockNumber: 50_000,
         logIndex: 0,
       });
+    },
+    // F-002: honest scan parity — the engine now requires an actual
+    // AuthorizationUsed scan before any terminal NOT_SETTLED verdict.
+    async scanAuthorizationUsed(_token: string, _authorizer: string, nonce: string) {
+      const rec = adapter.submissions.find((s) => String(s.intent.nonce).toLowerCase() === nonce.toLowerCase());
+      const event = rec ? { transactionHash: rec.txHash, blockNumber: 50_000, logIndex: 0 } : null;
+      return {
+        observations: ['mock-a', 'mock-b'].map((p) => ({
+          providerId: p,
+          underlyingProvider: 'mock',
+          scanned: true,
+          event,
+          fromBlock: 0,
+          toBlock: 50_000,
+          chainHead: 50_000,
+          observedAt: Date.now(),
+        })),
+        outcome: event ? 'EVENT_FOUND' as const : 'SCAN_COMPLETE_EMPTY' as const,
+        ...(event ? { event } : {}),
+      };
     },
     canDeclareNotSettled(authResult: MultiRpcResult<boolean>, validBefore: number, currentTime: number) {
       if (currentTime < validBefore) return { allowed: false, reason: 'validBefore not expired' };

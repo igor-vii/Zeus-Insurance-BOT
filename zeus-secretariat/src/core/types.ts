@@ -793,6 +793,13 @@ export interface SettledEvidenceBundle {
 
 /**
  * §11 + §23: NOT_SETTLED evidence bundle — strict positive proof.
+ *
+ * F-002 (external audit Blocker): `scanComplete: true` and
+ * `authorizationUsedScanResult: "SCAN_COMPLETE_EMPTY"` may ONLY be written
+ * after an actual AuthorizationUsed log scan executed on every independent
+ * provider BEFORE the terminal CAS. The optional `authorizationUsedScan`
+ * field carries the per-provider scan observations that back the claim, so
+ * the bundle is self-evidencing instead of self-asserting.
  */
 export interface NotSettledEvidenceBundle {
   readonly authorizer: string;
@@ -803,6 +810,40 @@ export interface NotSettledEvidenceBundle {
   readonly rpcObservations: readonly RpcObservationForNotSettled[];
   readonly scanComplete: boolean;
   readonly authorizationUsedScanResult: "NOT_FOUND" | "SCAN_COMPLETE_EMPTY";
+  readonly authorizationUsedScan?: AuthorizationUsedScanSummary;
+}
+
+/**
+ * F-002: Honest per-provider AuthorizationUsed scan observation.
+ * `scanned: true` means the provider ACTUALLY executed the log query over
+ * [fromBlock, toBlock] — never inferred, never defaulted, never assumed.
+ */
+export interface AuthorizationUsedScanObservation {
+  readonly providerId: string;
+  readonly underlyingProvider: string;
+  /** true only when this provider executed the full-range log scan */
+  readonly scanned: boolean;
+  /** event found by this provider; null when the scan ran and found nothing */
+  readonly event: { transactionHash: string; blockNumber: number; logIndex: number } | null;
+  readonly fromBlock: number;
+  readonly toBlock: number;
+  /** provider chain head at scan time — freshness witness for the empty result */
+  readonly chainHead: number;
+  readonly error?: string;
+  readonly observedAt: number;
+}
+
+/** F-002: Outcome of the multi-provider AuthorizationUsed scan. */
+export type AuthorizationUsedScanOutcome =
+  | "SCAN_COMPLETE_EMPTY" // every independent provider scanned, none found the event
+  | "EVENT_FOUND"         // settlement actually happened — NOT_SETTLED is forbidden
+  | "DISAGREEMENT"        // providers disagree — fail closed
+  | "INCOMPLETE";         // at least one provider failed to scan — fail closed
+
+/** F-002: Scan summary persisted inside NotSettledEvidenceBundle. */
+export interface AuthorizationUsedScanSummary {
+  readonly outcome: AuthorizationUsedScanOutcome;
+  readonly observations: readonly AuthorizationUsedScanObservation[];
 }
 
 /**

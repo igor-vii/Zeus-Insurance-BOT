@@ -33,7 +33,7 @@ import {
   DEFAULT_RECONCILIATION_SCHEDULE,
   DEFAULT_FINALITY_POLICY,
 } from "./types.js";
-import type { MultiRpcChecker, TransactionCheckResult } from "./multi-rpc-checker.js";
+import type { MultiRpcChecker, TransactionCheckResult, AuthorizationUsedScanResult } from "./multi-rpc-checker.js";
 import { keccak256, toBytes } from "viem";
 
 // ---------------------------------------------------------------------------
@@ -392,18 +392,66 @@ export class ReconciliationEngine {
       };
     }
 
-    // §11: All conditions met — declare NOT_SETTLED
-    const rpcObs: RpcObservationForNotSettled[] = authResult.observations
-      .filter(o => o.result === false)
-      .map(o => ({
+    // F-002 (external audit Blocker): perform the REAL AuthorizationUsed scan
+    // BEFORE the terminal CAS. "scanComplete: true" must mean the scan actually
+    // ran on every independent provider — never a self-asserted label. A
+    // checker that does not expose the honest scan API is treated as an
+    // incomplete scan (fail closed), never as an empty one.
+    const scanFn = (this.rpcChecker as Partial<MultiRpcChecker>).scanAuthorizationUsed;
+    const scan: AuthorizationUsedScanResult = typeof scanFn === "function"
+      ? await scanFn.call(this.rpcChecker, intent.asset, intent.authorizer, intent.nonce)
+      : { observations: [], outcome: "INCOMPLETE" };
+
+    if (scan.outcome === "EVENT_FOUND" && scan.event) {
+      // The authorization was actually consumed — the payment settled.
+      // §17: recover through the concrete transaction; NOT_SETTLED is forbidden.
+      await this.store.updatePaymentIntentStatus(
+        intent.paymentIntentId,
+        intent.settlementState,
+        { txHash: scan.event.transactionHash },
+      );
+      return await this.reconcileByTxHash(
+        { ...intent, txHash: scan.event.transactionHash },
+        attemptId,
+      );
+    }
+
+    if (scan.outcome !== "SCAN_COMPLETE_EMPTY") {
+      // §13 fail closed: an incomplete or disagreeing scan is not a proof of
+      // absence. Keep probing — no terminal verdict, no new payments.
+      return {
+        status: "RECONCILING",
+        reason: `§11: AuthorizationUsed scan ${scan.outcome} — NOT_SETTLED requires a complete empty scan on every independent provider`,
+        nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+      };
+    }
+
+    // §11: All conditions met — declare NOT_SETTLED.
+    // Evidence records ONLY actually performed observations (F-002): real
+    // block/head/staleness witnessed by each provider, never zeroed placeholders.
+    const rpcObs: RpcObservationForNotSettled[] = [];
+    for (const o of authResult.observations) {
+      if (o.result !== false) continue;
+      const bd = o.blockData;
+      if (!bd) {
+        // §11-D already gated on this; a miss here is a contract violation —
+        // fail closed instead of persisting fabricated zeros.
+        return {
+          status: "RECONCILING",
+          reason: `§11-D: observation from ${o.providerId} lacks block data — NOT_SETTLED evidence would be incomplete`,
+          nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+        };
+      }
+      rpcObs.push({
         providerId: o.providerId,
         underlyingProvider: o.underlyingProvider,
         observedAt: o.observedAt,
-        blockNumber: 0,
-        chainHead: 0,
+        blockNumber: bd.blockNumber,
+        chainHead: bd.chainHead,
         authorizationState: false as const,
-        stalenessBlocks: 0,
-      }));
+        stalenessBlocks: bd.stalenessBlocks,
+      });
+    }
 
     const evidence: NotSettledEvidenceBundle = {
       authorizer: intent.authorizer,
@@ -414,6 +462,10 @@ export class ReconciliationEngine {
       rpcObservations: rpcObs,
       scanComplete: true,
       authorizationUsedScanResult: "SCAN_COMPLETE_EMPTY",
+      authorizationUsedScan: {
+        outcome: scan.outcome,
+        observations: scan.observations,
+      },
     };
 
     // §21: Atomic terminal transition via CAS

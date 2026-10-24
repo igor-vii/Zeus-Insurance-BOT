@@ -545,6 +545,14 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     // EXECUTION obligation (seller never called, client never served).
     // Re-expressed through the typed query builder so rowToIntent() receives
     // exactly the shape it maps.
+    //
+    // F-001 (external audit Blocker): the second clause that ALSO excluded
+    // intents with existing execution attempts is REMOVED. That clause is
+    // what turned a crash between saveAttempt() and saveJob() into a
+    // PERMANENT orphan: the scanner refused to re-select the intent, so the
+    // missing job was never recreated. Now the scanner selects by missing
+    // EXECUTION job only; ensureExecutionObligations() links a surviving
+    // attempt to a new job instead of skipping the intent forever.
     const rows = await this.db.select().from(paymentIntentsTable)
       .where(and(
         eq(paymentIntentsTable.settlementState, "SETTLED"),
@@ -552,14 +560,6 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
           SELECT 1 FROM recovery_jobs rj
           WHERE rj.operation_id = ${paymentIntentsTable.operationId}
             AND rj.job_type = ${"EXECUTION"}
-        )`,
-        // R6: also exclude intents whose execution ATTEMPT already exists.
-        // The ensureExecutionObligations() guard skips those, so without this
-        // clause legacy rows with attempts-but-no-job permanently occupy the
-        // LIMIT window and freshly settled intents never surface.
-        sql`NOT EXISTS (
-          SELECT 1 FROM execution_attempts ea
-          WHERE ea.operation_id = ${paymentIntentsTable.operationId}
         )`,
       ))
       .orderBy(asc(paymentIntentsTable.updatedAt))

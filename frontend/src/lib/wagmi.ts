@@ -46,8 +46,8 @@ const connectors = [
         metadata: {
           name: "Zeus Insurance",
           description: "Decentralized insurance for AI agents",
-          url: "https://zeus-insurance-bot.netlify.app",
-          icons: ["https://zeus-insurance-bot.netlify.app/favicon.svg"],
+          url: "https://zeus-insurance-frontend.onrender.com",
+          icons: ["https://zeus-insurance-frontend.onrender.com/favicon.svg"],
         },
       })]
     : []),
