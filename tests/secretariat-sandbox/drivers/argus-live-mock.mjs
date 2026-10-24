@@ -14,7 +14,11 @@
  *   - facilitator keeps a per-authorization-nonce settle counter and exposes
  *     GET /facilitator/stats — the double-spend probe (any nonce with
  *     settleCalls > 1 means the SUT attempted a second settlement for the
- *     same on-chain authorization).
+ *     same on-chain authorization)
+ *   - facilitator is chain-faithful (Lab Block D finding F1): EIP-3009
+ *     authorizationState is single-use — a second /settle with the same
+ *     nonce is rejected 409 authorization_used (found by the B-BS-17-live
+ *     replay canary on its first run; same contract as the r6 gate mock)
  */
 
 import { createRequire } from "node:module";
@@ -40,6 +44,7 @@ const HONEST_AMOUNT = "10000"; // 0.01 USDC
 // ---------------------------------------------------------------------------
 const settledTx = new Map(); // txHash → {from,to,value,nonce}
 const settleCalls = [];      // {nonce, payTo, value, at}
+const usedNonces = new Map(); // nonce → txHash (EIP-3009 single-use authorizationState)
 
 function honestChallenge() {
   return {
@@ -129,8 +134,22 @@ app.post("/facilitator/settle", (req, res) => {
       nonce: String(decoded?.payload?.authorization?.nonce ?? authz.nonce).toLowerCase(),
     };
   } catch { /* keep defaults */ }
-  settledTx.set(txHash.toLowerCase(), authz);
   settleCalls.push({ nonce: authz.nonce, payTo: authz.to, value: authz.value, at: Date.now() });
+  // Chain-faithful replay guard (Lab Block D finding F1 — the mock must
+  // mirror the rail's real contract): EIP-3009 authorizationState is
+  // single-use, so a second /settle with the same nonce MUST be rejected.
+  // Found by the B-BS-17-live canary on its first sandbox run: the r6 gate
+  // mock had the guard, this live driver did not.
+  if (usedNonces.has(authz.nonce)) {
+    res.status(409).json({
+      success: false,
+      errorReason: "authorization_used",
+      error: `authorization nonce already used by tx ${usedNonces.get(authz.nonce)}`,
+    });
+    return;
+  }
+  settledTx.set(txHash.toLowerCase(), authz);
+  usedNonces.set(authz.nonce, txHash);
   res.status(200).json({ success: true, transactionHash: txHash, network: NETWORK });
 });
 app.post("/facilitator/verify", (_req, res) => res.json({ isValid: true }));
