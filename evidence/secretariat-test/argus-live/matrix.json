@@ -2,19 +2,16 @@
   "schema": "zeus-live-matrix/v1",
   "title": "Zeus Secretariat — живая матрица адверсариальных прогонов",
   "description": "Единый машинночитаемый индекс живых прогонов: свежий цикл (S1-S8 + r6-гейт B-BS-16/17/18 + live-канарейка) против реального Secretariat с PostgreSQL-наблюдением, плюс история всех предыдущих прогонов. Человекочитаемые отчёты: bbs16-17-18/*.md, pg-trail/*.md.",
-  "updated_at": "2026-10-24T05:22:19Z",
+  "updated_at": "2026-10-24T16:38:00Z",
   "repo": "igor-vii/Zeus-Insurance-BOT",
   "branch": "audit/repair-mainnet-prep",
-  "commit": {
-    "hash": "d60d4351d6adba4175ffef8bca4942cdf12d87a7",
-    "committed_at": "2026-10-24T04:19:28Z"
-  },
+  "commit": "fcf6c02eed8eb832b8b4f74ded8269b9fa4f8099",
   "latest_run": {
-    "run_id": "2026-10-24T0514Z-full-matrix",
-    "started_at": "2026-10-24T05:14:06Z",
-    "finished_at": "2026-10-24T05:16:03Z",
+    "run_id": "2026-10-24T1630Z-p0-remediation",
+    "started_at": "2026-10-24T16:24:00Z",
+    "finished_at": "2026-10-24T16:38:00Z",
     "verdict": "GREEN",
-    "detail_ref": "runs/2026-10-24T0514Z-full-matrix.json"
+    "detail_ref": "runs/2026-10-24T1630Z-p0-remediation.json"
   },
   "matrix": [
     {
@@ -254,6 +251,13 @@
       "kind": "full-matrix",
       "verdict_summary": "S1-S3/S5-S8 PASS, S4 NONE (by design); гейт GREEN (blocked=16/16 passed=4/4 leaked=0, PG ok=20 fail=0); канарейка GREEN; double-settle=0; дубль-интентов нет",
       "json": "runs/2026-10-24T0514Z-full-matrix.json"
+    },
+    {
+      "run_id": "2026-10-24T1630Z-p0-remediation",
+      "date": "2026-10-24",
+      "kind": "p0-remediation",
+      "verdict_summary": "GATE GREEN (blocked=16/16, passed=4/4, PG ok=20 fail=0) + канарейка GREEN (3/3 реплея 409) + jest 45/45 сьютов (362 passed, 0 failed, все 13 DB-сьюитов живые) — первый прогон на P0-вершине fcf6c02ee",
+      "json": "runs/2026-10-24T1630Z-p0-remediation.json"
     }
   ],
   "how_to_reproduce": {
