@@ -41,7 +41,7 @@ Required:
 - BOT_CHAIN_MAINNET_RPC_URL
 - XLAYER_MAINNET_RPC_URL
 - ADMIN_JWT_SECRET - NEW: generate a strong 32+ char secret
-- CORS_ORIGINS - https://zeus-insurance-frontend.onrender.com
+- CORS_ORIGINS - https://zeus-insurance-bot-frontend.vercel.app
 
 Generate ADMIN_JWT_SECRET:
   openssl rand -hex 32
@@ -57,23 +57,29 @@ Wait for deployment to complete and check logs for errors.
 
 ---
 
-### 2. Render (Frontend: Static Site)
+### 2. Vercel (Frontend — canonical)
+
+Canonical frontend: https://zeus-insurance-bot-frontend.vercel.app
+Vercel auto-deploys on every push to main.
 
 #### Environment Variables
 
-Set these in your Render static site:
+Set these in your Vercel project:
 
 - VITE_API_BASE_URL=https://zeus-insurance-bot-api-production.up.railway.app/api
+- VITE_WALLETCONNECT_PROJECT_ID - required for the WalletConnect connector (without it only injected wallets are offered)
 - NODE_VERSION=20
 
-Build command (already configured in render.yaml):
+Build (already configured in the Vercel project):
 - pnpm install --no-frozen-lockfile --prefer-offline --filter @workspace/frontend...
 - pnpm --filter @zeus/sdk build
 - pnpm --filter @workspace/frontend build
 
-Publish path: frontend/dist
+Output: frontend/dist
 
-Render will automatically deploy on every push to main.
+Legacy hosts (do not use):
+- Render static site is retired (service returns instant 404); render.yaml kept for history only.
+- Netlify fully burned (netlify.toml removed in fcf6c02ee, site deleted).
 
 ---
 
@@ -118,7 +124,7 @@ Token expires in 30 days. Generate a new one before expiration.
 After deployment, verify:
 
 - Railway API responds to GET /health with status ok
-- Frontend loads correctly on Render URL
+- Frontend loads correctly at https://zeus-insurance-bot-frontend.vercel.app
 - CORS allows requests from frontend to API
 - JWT authentication works for /admin/reset-agent
 - All existing API endpoints still work
@@ -156,4 +162,4 @@ For issues or questions:
 
 ---
 
-Last updated: 2026-08-08 (Security Audit v1.0)
+Last updated: 2026-10-25 (canonical frontend -> Vercel)
