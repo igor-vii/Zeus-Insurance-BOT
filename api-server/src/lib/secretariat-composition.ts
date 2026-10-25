@@ -191,6 +191,9 @@ export function createSecretariatComposition(): SecretariatComposition {
     settlementAdapter,
     reconciliationEngine,
     atomicSettlementHandoff: stores.executionStore,
+    // F-01 fix: the atomic settlement → execution handoff must honor the same
+    // execution-attempt bound as the engine (ZEUS_MAX_EXECUTION_ATTEMPTS).
+    maxExecutionAttempts: config.maxExecutionAttempts,
   });
 
   // 10. Reconciliation worker (shared store + engine)

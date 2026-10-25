@@ -194,6 +194,13 @@ export interface SecretariatConfig {
    * Total attempts per flush = max(1, value). Default 3. No infinite retries.
    */
   evidencePersistenceRetries?: number;
+  /**
+   * F-01 fix (external audit 2026-10-25): bound for the recovery job created
+   * by the atomic settlement → execution handoff. Mirrors
+   * PostSettlementEngine.maxExecutionAttempts (ZEUS_MAX_EXECUTION_ATTEMPTS).
+   * Default 3 when omitted.
+   */
+  maxExecutionAttempts?: number;
 }
 
 export type CreateRequestResult =
@@ -393,6 +400,19 @@ export class Secretariat {
       // accepted for this request. Do this check before the state guard because
       // the first successful submission necessarily advances the operation.
       if (dpi.paymentPayloadHash === paymentPayloadHash) {
+        // F-05 fix (external audit 2026-10-25): AUTHORIZED with the SAME
+        // payload means a previous attempt crashed or failed AFTER persisting
+        // the authorization but BEFORE (or without durably completing) the
+        // facilitator submission. Returning buildResult() here left the
+        // payment stuck in AUTHORIZED forever while the retry LOOKED
+        // idempotent. Resume the submission instead; the EIP-3009 nonce
+        // (AuthorizationUsed on-chain) remains the double-settle guard.
+        if (dpi.settlementState === 'AUTHORIZED') {
+          return await this.resumeAuthorizedSubmission(operation, dpi);
+        }
+        // Truly advanced states (SUBMITTING/SUBMITTED/RECONCILING/SETTLED/…)
+        // are owned by the in-flight submission or the reconciliation worker:
+        // keep the idempotent response — never blind-resubmit (§14).
         return this.buildResult(operation);
       }
 
@@ -464,6 +484,44 @@ export class Secretariat {
     await this.observeSettlement(operation);
     const finalState = String(operation.currentState) as OperationStatus;
     if (finalState === 'SETTLED' || finalState === 'EXECUTION_PENDING') {
+      await this.persistSettlementAndExecutionObligation(operation);
+    }
+    await this.persistOperation(operation);
+    return this.buildResult(operation);
+  }
+
+  /**
+   * F-05 fix: resume a submission whose durable intent reached AUTHORIZED but
+   * whose facilitator submission never durably completed (crash or failure
+   * between authorization persistence and submitPayment). The signed payload
+   * hash was already verified against the durable intent by the caller; the
+   * on-chain AuthorizationUsed nonce remains the double-settle guard.
+   */
+  private async resumeAuthorizedSubmission(
+    operation: Operation,
+    dpi: DurablePaymentIntent,
+  ): Promise<ExecutionResult> {
+    const requirement = await this.getPaymentRequirementFromEvidence(operation)
+      ?? this.requirementFromIntent(dpi);
+    if (!requirement) throw new Error('PAYMENT_REQUIREMENT_NOT_FOUND');
+
+    this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_RESUMED', {
+      paymentIntentId: dpi.paymentIntentId,
+      settlementState: dpi.settlementState,
+      reason: 'AUTHORIZED without durably completed submission — resuming Stage B',
+    });
+
+    // The durable intent is the authority on authorization state: force the
+    // in-memory FSM to AUTHORIZED (the durable state already IS authorized)
+    // and re-drive the same submission pipeline as the normal flow.
+    operation.paymentState = 'AUTHORIZED';
+    operation.currentState = 'AUTHORIZED';
+    await this.persistOperation(operation);
+
+    await this.submitPayment(operation);
+    await this.observeSettlement(operation);
+    const resumedState = String(operation.currentState) as OperationStatus;
+    if (resumedState === 'SETTLED' || resumedState === 'EXECUTION_PENDING') {
       await this.persistSettlementAndExecutionObligation(operation);
     }
     await this.persistOperation(operation);
@@ -937,8 +995,13 @@ export class Secretariat {
       throw new Error('No DurablePaymentIntent found for submission — B.1 persistence required');
     }
 
-    // 2. Retrieve authorization from evidence (created in authorizePayment)
-    const authorization = await this.getAuthorizationFromEvidence(operation);
+    // 2. Retrieve authorization from evidence (created in authorizePayment).
+    // F-05 fix: fall back to the DURABLE signed payload when the evidence
+    // record was not yet persisted (crash between updatePaymentIntentAuthorization
+    // and persistOperation). The durable payload is the authoritative signed
+    // authorization — hash-verified before it was persisted.
+    const authorization = await this.getAuthorizationFromEvidence(operation)
+      ?? this.authorizationFromDurableIntent(dpi);
     if (!authorization) {
       throw new Error('No payment authorization found for submission');
     }
@@ -1575,9 +1638,21 @@ export class Secretariat {
       jobType: "EXECUTION",
       status: "PENDING",
       priority: 0,
-      maxAttempts: 3,
+      // F-01 fix: honor the configured execution-attempt bound
+      // (ZEUS_MAX_EXECUTION_ATTEMPTS) instead of a hardcoded 3.
+      maxAttempts: this.config.maxExecutionAttempts ?? 3,
       currentAttempt: 0,
-      metadata: { capability: "EXECUTION_IDEMPOTENT", requestBody: operation.requestPayload },
+      // F-01 fix: carry the DISCOVERED recovery capability — fail-closed to
+      // NONE (payment idempotency does NOT prove execution idempotency) —
+      // instead of a hardcoded EXECUTION_IDEMPOTENT, plus the result-retrieval
+      // endpoint advertised by the seller when available.
+      metadata: {
+        capability: operation.sellerCapability?.recoveryCapability ?? "NONE",
+        requestBody: operation.requestPayload,
+        ...(operation.sellerCapability?.resultRetrievalEndpoint
+          ? { resultRetrievalEndpoint: operation.sellerCapability.resultRetrievalEndpoint }
+          : {}),
+      },
       createdAt: now,
       updatedAt: now,
     };
@@ -1588,6 +1663,11 @@ export class Secretariat {
       executionId: operation.operationId, // INV-10: executionId = operationId
       attemptNumber: 1,
       status: "PENDING",
+      // F-01 fix: the paid call must hit the EXACT target/method/payload the
+      // Secretariat discovered and priced — never a config-level fallback.
+      requestUrl: operation.target,
+      requestMethod: operation.method,
+      requestBody: operation.requestPayload,
       idempotencyKey: operation.operationId, // INV-11: stable idempotency key
       createdAt: now,
     };
@@ -1986,6 +2066,28 @@ export class Secretariat {
     }
     const intent = (evidence.payload as Record<string, unknown>).intent as PaymentIntent;
     return intent?.authorization;
+  }
+
+  /**
+   * F-05 fix: reconstruct the authorization from the DURABLE signed payload
+   * persisted on the payment intent (updatePaymentIntentAuthorization). Used
+   * when the PAYMENT_AUTHORIZED evidence record was lost to a crash window.
+   */
+  private authorizationFromDurableIntent(dpi: DurablePaymentIntent): {
+    signature: string; scheme: string;
+  } | null {
+    if (!dpi.paymentPayload) return null;
+    try {
+      const parsed = JSON.parse(dpi.paymentPayload) as {
+        payload?: { signature?: string };
+        accepted?: { scheme?: string };
+      };
+      const signature = parsed?.payload?.signature;
+      if (!signature) return null;
+      return { signature, scheme: parsed?.accepted?.scheme || 'exact' };
+    } catch {
+      return null;
+    }
   }
 
   private async getSubmissionResultFromEvidence(operation: Operation): Promise<any> {

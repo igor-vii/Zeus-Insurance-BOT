@@ -186,6 +186,7 @@ export class PostgresExecutionStore {
     status: ExecutionObligationStatus,
     fenceGeneration: number,
     extra?: Partial<ExecutionAttempt>,
+    jobId?: string,
   ): Promise<boolean> {
     const setObj: Record<string, unknown> = {
       status,
@@ -200,6 +201,12 @@ export class PostgresExecutionStore {
     // Atomic update with fence check + terminal monotonicity guard.
     // Joins recovery_jobs via operation_id to verify current ownership generation.
     // Excludes all terminal states to enforce irreversibility.
+    //
+    // F-04 fix (external audit 2026-10-25): when the caller passes `jobId`,
+    // the fence check is bound to THAT recovery job. One operation can hold
+    // several jobs (original EXECUTION + RETRIEVAL) whose fence generations
+    // increment independently — matching operation_id + generation alone did
+    // NOT prove the caller owned the specific job it acts on behalf of.
     const casResult = await this.db.execute(sql`
       UPDATE execution_attempts ea
       SET status = ${status},
@@ -213,12 +220,77 @@ export class PostgresExecutionStore {
       WHERE ea.attempt_id = ${attemptId}
         AND rj.operation_id = ea.operation_id
         AND rj.fence_generation = ${fenceGeneration}
+        ${jobId ? sql`AND rj.job_id = ${jobId}` : sql``}
         AND ea.status NOT IN (${"SUCCESS"}, ${"HTTP_FAILURE"}, ${"DELIVERY_UNKNOWN"}, ${"UNRESOLVABLE"})
        RETURNING ea.attempt_id
     `);
 
     const rows = Array.isArray(casResult) ? casResult : (casResult as any).rows;
     return !!(rows && rows.length > 0);
+  }
+
+  /**
+   * F-02 fix (external audit 2026-10-25): the single legal
+   * DELIVERY_UNKNOWN → SUCCESS transition, executed by a RETRIEVAL job that
+   * obtained the seller's result. ONE transaction: the attempt transition and
+   * the owning job's COMPLETED closure commit together or not at all, and the
+   * fence is bound to the specific jobId (F-04). Any rejection returns false
+   * and changes nothing.
+   */
+  async resolveRetrievalSuccessIfOwner(
+    jobId: string,
+    attemptId: string,
+    fenceGeneration: number,
+    extra?: Partial<ExecutionAttempt>,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      // 1) Lock the owning job and verify fence + ownership + RUNNING state.
+      const jobResult = await tx.execute(sql`
+        SELECT job_id, operation_id, status, fence_generation
+        FROM recovery_jobs
+        WHERE job_id = ${jobId}
+        FOR UPDATE
+      `);
+      const jobRows = Array.isArray(jobResult) ? jobResult : (jobResult as any).rows;
+      const job = jobRows?.[0] as { operation_id: string; status: string; fence_generation: number } | undefined;
+      if (!job || job.status !== "RUNNING" || Number(job.fence_generation) !== fenceGeneration) {
+        return false;
+      }
+
+      // 2) Attempt must be the operation's DELIVERY_UNKNOWN attempt — the
+      //    only source state retrieval may resolve.
+      const attemptResult = await tx.execute(sql`
+        UPDATE execution_attempts ea
+        SET status = ${"SUCCESS"},
+            response_status_code = COALESCE(${extra?.responseStatusCode ?? null}, ea.response_status_code),
+            response_body = COALESCE(${extra?.responseBody !== undefined ? JSON.stringify(extra.responseBody) : null}::jsonb, ea.response_body),
+            response_headers = COALESCE(${extra?.responseHeaders !== undefined ? JSON.stringify(extra.responseHeaders) : null}::jsonb, ea.response_headers),
+            completed_at = COALESCE(${extra?.completedAt !== undefined ? new Date(extra.completedAt) : null}, ea.completed_at)
+        WHERE ea.attempt_id = ${attemptId}
+          AND ea.operation_id = ${job.operation_id}
+          AND ea.status = ${"DELIVERY_UNKNOWN"}
+        RETURNING ea.attempt_id
+      `);
+      const attemptRows = Array.isArray(attemptResult) ? attemptResult : (attemptResult as any).rows;
+      if (!attemptRows || attemptRows.length !== 1) return false;
+
+      // 3) Close the job — still fenced, still RUNNING.
+      const jobUpdate = await tx.execute(sql`
+        UPDATE recovery_jobs
+        SET status = ${"COMPLETED"},
+            locked_by = NULL,
+            locked_until = NULL,
+            updated_at = NOW()
+        WHERE job_id = ${jobId}
+          AND status = ${"RUNNING"}
+          AND fence_generation = ${fenceGeneration}
+        RETURNING job_id
+      `);
+      const jobUpdateRows = Array.isArray(jobUpdate) ? jobUpdate : (jobUpdate as any).rows;
+      if (!jobUpdateRows || jobUpdateRows.length !== 1) return false;
+
+      return true;
+    });
   }
 
   /**
@@ -427,11 +499,14 @@ export class PostgresExecutionStore {
   ): Promise<boolean> {
     try {
       const result = await this.db.transaction(async (tx) => {
-        // Step 1: Lock the job row and verify current fence ownership
+        // Step 1: Lock the job row and verify current fence ownership.
+        // F-04 fix: the job must still be RUNNING (owned and in-flight) — a
+        // completed/closed job must not authorize attempt mutations.
         const lockResult = await tx.execute(sql`
           SELECT job_id, operation_id FROM recovery_jobs
           WHERE job_id = ${jobId}
             AND fence_generation = ${fenceGeneration}
+            AND status = ${"RUNNING"}
           FOR UPDATE
         `);
         const lockRows = Array.isArray(lockResult) ? lockResult : (lockResult as any).rows;
@@ -454,13 +529,15 @@ export class PostgresExecutionStore {
         const attemptRows = Array.isArray(attemptResult) ? attemptResult : (attemptResult as any).rows;
         if (!attemptRows || attemptRows.length !== 1) return false;
 
-        // Step 3: Close job as UNRESOLVABLE
+        // Step 3: Close job as UNRESOLVABLE — F-04: still fenced and RUNNING.
         await tx.execute(sql`
           UPDATE recovery_jobs
           SET status = ${"UNRESOLVABLE"},
               last_error = ${jobLastError},
               updated_at = NOW()
           WHERE job_id = ${jobId}
+            AND fence_generation = ${fenceGeneration}
+            AND status = ${"RUNNING"}
         `);
 
         return true;
@@ -481,7 +558,9 @@ export class PostgresExecutionStore {
   async markAttemptInProgress(
     attemptId: string,
     fenceGeneration: number,
+    jobId?: string,
   ): Promise<boolean> {
+    // F-04: optionally bind the fence check to the specific owning job.
     const casResult = await this.db.execute(sql`
       UPDATE execution_attempts ea
       SET status = ${"ATTEMPTED"},
@@ -490,6 +569,7 @@ export class PostgresExecutionStore {
       WHERE ea.attempt_id = ${attemptId}
         AND rj.operation_id = ea.operation_id
         AND rj.fence_generation = ${fenceGeneration}
+        ${jobId ? sql`AND rj.job_id = ${jobId}` : sql``}
         AND ea.status = ${"PENDING"}
        RETURNING ea.attempt_id
     `);
