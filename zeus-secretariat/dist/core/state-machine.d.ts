@@ -55,6 +55,13 @@ export interface SecretariatConfig {
      * Total attempts per flush = max(1, value). Default 3. No infinite retries.
      */
     evidencePersistenceRetries?: number;
+    /**
+     * F-01 fix (external audit 2026-10-25): bound for the recovery job created
+     * by the atomic settlement → execution handoff. Mirrors
+     * PostSettlementEngine.maxExecutionAttempts (ZEUS_MAX_EXECUTION_ATTEMPTS).
+     * Default 3 when omitted.
+     */
+    maxExecutionAttempts?: number;
 }
 export type CreateRequestResult = {
     status: 'AWAITING_PAYMENT_SIGNATURE';
@@ -97,6 +104,14 @@ export declare class Secretariat {
      * existing facilitator/reconciliation flow is resumed.
      */
     submitSignedPayment(requestId: string, externallySignedPaymentPayload: PaymentPayload): Promise<ExecutionResult>;
+    /**
+     * F-05 fix: resume a submission whose durable intent reached AUTHORIZED but
+     * whose facilitator submission never durably completed (crash or failure
+     * between authorization persistence and submitPayment). The signed payload
+     * hash was already verified against the durable intent by the caller; the
+     * on-chain AuthorizationUsed nonce remains the double-settle guard.
+     */
+    private resumeAuthorizedSubmission;
     private createOperation;
     private discoveryPhase;
     private handlePaymentRequired;
@@ -172,6 +187,14 @@ export declare class Secretariat {
      * reachable from this primitive.
      */
     private prepareStageA;
+    /**
+     * F-07 fix: a clientId-derived logical id (`cid:${clientId}`) must only
+     * resolve to an operation with the SAME paid contract. A different
+     * target/method under the same derived id is a client bug — reject with a
+     * dedicated, actionable error instead of silently reusing the old
+     * operation (which would execute the WRONG request after payment).
+     */
+    private assertNoLogicalRequestCollision;
     private findExistingOperation;
     /**
      * Repair C3: after restart/reload, seed the durable-outbox cursor from the
@@ -192,6 +215,12 @@ export declare class Secretariat {
     private acceptToRequirement;
     private getPaymentRequirementFromEvidence;
     private getAuthorizationFromEvidence;
+    /**
+     * F-05 fix: reconstruct the authorization from the DURABLE signed payload
+     * persisted on the payment intent (updatePaymentIntentAuthorization). Used
+     * when the PAYMENT_AUTHORIZED evidence record was lost to a crash window.
+     */
+    private authorizationFromDurableIntent;
     private getSubmissionResultFromEvidence;
     getOperation(operationId: string): Promise<Operation | null>;
     getOperationByRequestId(requestId: string): Promise<Operation | null>;

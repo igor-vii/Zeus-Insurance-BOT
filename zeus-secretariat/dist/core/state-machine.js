@@ -5,6 +5,7 @@
  * We must first determine settlement status before any recovery action.
  */
 import { CryptoNonceGenerator } from './nonce-generator.js';
+import { egressFetch } from './egress-guard.js';
 import { keccak256, toBytes } from 'viem';
 import { X402Parser } from './x402-parser.js';
 import { SellerCapabilityResolver } from './capability-resolver.js';
@@ -221,6 +222,23 @@ export class Secretariat {
             // accepted for this request. Do this check before the state guard because
             // the first successful submission necessarily advances the operation.
             if (dpi.paymentPayloadHash === paymentPayloadHash) {
+                // F-05 fix (external audit 2026-10-25): AUTHORIZED with the SAME
+                // payload means a previous attempt crashed or failed. Distinguish:
+                //   (a) authorization persisted but the submission was never
+                //       DISPATCHED (no PAYMENT_SUBMITTED evidence) → resume the
+                //       submission (on-chain AuthorizationUsed nonce remains the
+                //       double-settle guard);
+                //   (b) submission already dispatched (evidence present, outcome
+                //       possibly unknown) → the idempotent response stands; the
+                //       reconciliation worker owns resolution (§14, no blind resubmit).
+                if (dpi.settlementState === 'AUTHORIZED') {
+                    const alreadyDispatched = operation.evidence.some((e) => e.phase === 'PAYMENT' && e.event === 'PAYMENT_SUBMITTED');
+                    if (!alreadyDispatched) {
+                        return await this.resumeAuthorizedSubmission(operation, dpi);
+                    }
+                }
+                // SUBMITTING/SUBMITTED/RECONCILING/SETTLED and dispatched-AUTHORIZED:
+                // keep the idempotent response — never blind-resubmit (§14).
                 return this.buildResult(operation);
             }
             throw new Error(`PAYMENT_PAYLOAD_RETRY_MISMATCH: ${operation.currentState}`);
@@ -288,6 +306,50 @@ export class Secretariat {
         await this.persistOperation(operation);
         return this.buildResult(operation);
     }
+    /**
+     * F-05 fix: resume a submission whose durable intent reached AUTHORIZED but
+     * whose facilitator submission never durably completed (crash or failure
+     * between authorization persistence and submitPayment). The signed payload
+     * hash was already verified against the durable intent by the caller; the
+     * on-chain AuthorizationUsed nonce remains the double-settle guard.
+     */
+    async resumeAuthorizedSubmission(operation, dpi) {
+        const requirement = await this.getPaymentRequirementFromEvidence(operation)
+            ?? this.requirementFromIntent(dpi);
+        if (!requirement)
+            throw new Error('PAYMENT_REQUIREMENT_NOT_FOUND');
+        this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_RESUMED', {
+            paymentIntentId: dpi.paymentIntentId,
+            settlementState: dpi.settlementState,
+            reason: 'AUTHORIZED without durably completed submission — resuming Stage B',
+        });
+        // The durable intent is the authority on authorization state: force the
+        // in-memory FSM to AUTHORIZED (the durable state already IS authorized)
+        // and re-drive the same submission pipeline as the normal flow.
+        operation.paymentState = 'AUTHORIZED';
+        operation.currentState = 'AUTHORIZED';
+        await this.persistOperation(operation);
+        // The dispatch outcome is UNKNOWN (the original attempt died mid-flight):
+        // if the re-dispatch is rejected by the rail (e.g. AuthorizationUsed —
+        // the settlement DID land), still reconcile before failing. This is the
+        // audit's 'reconcile unknown outcomes first' requirement.
+        try {
+            await this.submitPayment(operation);
+        }
+        catch (submitError) {
+            this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_RESUME_REJECTED', {
+                error: submitError instanceof Error ? submitError.message : String(submitError),
+                note: 'Re-dispatch rejected — reconciling whether the original dispatch settled',
+            });
+        }
+        await this.observeSettlement(operation);
+        const resumedState = String(operation.currentState);
+        if (resumedState === 'SETTLED' || resumedState === 'EXECUTION_PENDING') {
+            await this.persistSettlementAndExecutionObligation(operation);
+        }
+        await this.persistOperation(operation);
+        return this.buildResult(operation);
+    }
     // ==========================================================================
     // OPERATION CREATION
     // ==========================================================================
@@ -327,8 +389,10 @@ export class Secretariat {
             target: operation.target,
         });
         try {
-            // Make initial request to discover if payment is required
-            const response = await fetch(operation.target, {
+            // Make initial request to discover if payment is required.
+            // F-09 fix: client-supplied target is validated against the egress
+            // policy (no loopback/private/metadata destinations, no redirects).
+            const response = await egressFetch(operation.target, {
                 method: operation.method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -404,22 +468,66 @@ export class Secretariat {
             });
             return false;
         }
-        // Check max price
+        // Check max price.
         // R0 repair: unit-consistent comparison. x402 requirement amounts are
         // smallest-unit integers ("500000"), while legacy human quotes are decimal
-        // strings ("1.00"). Comparing a smallest-unit integer against a human
-        // decimal with parseFloat() mixes units (500000 > 1.0 → always rejects).
-        // When BOTH sides are integer strings, compare exact BigInt magnitudes;
-        // otherwise fall back to the legacy parseFloat behavior.
-        const isInt = (s) => /^\d+$/.test(String(s).trim());
-        const exceeds = isInt(requirement.amount) && isInt(policy.maxPrice)
-            ? BigInt(requirement.amount) > BigInt(policy.maxPrice)
-            : parseFloat(requirement.amount) > parseFloat(policy.maxPrice);
+        // strings ("1.00").
+        // F-08 fix (external audit 2026-10-25): the legacy parseFloat fallback
+        // made malformed limits a silent no-op (NaN comparisons are false → the
+        // payment PASSED), and mixed-unit comparisons (smallest-unit integer vs
+        // human decimal) were unit errors, not arithmetic. Now:
+        //   1. A non-decimal maxPrice REJECTS the policy (fail closed);
+        //   2. int vs int       → exact BigInt magnitudes (unchanged);
+        //   3. decimal vs decimal → exact scaled-BigInt comparison (no float math);
+        //   4. int vs decimal   → INCOMPARABLE units → REJECT (fail closed).
+        const isInt = (s) => /^\d+$/.test(s);
+        const isDecimal = (s) => /^\d+(\.\d+)?$/.test(s);
+        const hasDot = (s) => s.includes(".");
+        const reqAmount = String(requirement.amount).trim();
+        const maxPrice = String(policy.maxPrice).trim();
+        if (!isDecimal(maxPrice)) {
+            this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
+                reason: 'Invalid maxPrice format (expected a non-negative decimal number)',
+                required: reqAmount,
+                maxAllowed: policy.maxPrice,
+            });
+            return false;
+        }
+        const scaled = (s, scale) => {
+            const [intPart, fracPart = ""] = s.split(".");
+            return BigInt(intPart + fracPart.padEnd(scale, "0"));
+        };
+        let exceeds;
+        let rejectUnits = false;
+        if (isInt(reqAmount) && isInt(maxPrice)) {
+            // Same canonical (unit-less integer) representation → exact magnitudes.
+            exceeds = BigInt(reqAmount) > BigInt(maxPrice);
+        }
+        else if (hasDot(reqAmount) && hasDot(maxPrice)) {
+            // Both are human decimals → exact scaled comparison, no float math.
+            const scale = Math.max(reqAmount.split(".")[1].length, maxPrice.split(".")[1].length);
+            exceeds = scaled(reqAmount, scale) > scaled(maxPrice, scale);
+        }
+        else {
+            // Mixed units: one side is a smallest-unit integer, the other a human
+            // decimal. Without asset decimals the conversion is unknowable —
+            // comparing them is a unit error, not arithmetic. Fail closed.
+            exceeds = false;
+            rejectUnits = true;
+        }
+        if (rejectUnits) {
+            this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
+                reason: 'INCOMPARABLE_UNITS: requirement.amount is a smallest-unit integer while maxPrice is a human decimal — provide maxPrice in the same unit',
+                required: reqAmount,
+                maxAllowed: policy.maxPrice,
+            });
+            return false;
+        }
         if (exceeds) {
             this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
                 reason: 'Amount exceeds maxPrice',
-                required: requirement.amount,
-                maxAllowed: policy.maxPrice,
+                required: reqAmount,
+                maxAllowed: maxPrice,
             });
             return false;
         }
@@ -707,8 +815,13 @@ export class Secretariat {
         if (!dpi) {
             throw new Error('No DurablePaymentIntent found for submission — B.1 persistence required');
         }
-        // 2. Retrieve authorization from evidence (created in authorizePayment)
-        const authorization = await this.getAuthorizationFromEvidence(operation);
+        // 2. Retrieve authorization from evidence (created in authorizePayment).
+        // F-05 fix: fall back to the DURABLE signed payload when the evidence
+        // record was not yet persisted (crash between updatePaymentIntentAuthorization
+        // and persistOperation). The durable payload is the authoritative signed
+        // authorization — hash-verified before it was persisted.
+        const authorization = await this.getAuthorizationFromEvidence(operation)
+            ?? this.authorizationFromDurableIntent(dpi);
         if (!authorization) {
             throw new Error('No payment authorization found for submission');
         }
@@ -872,7 +985,8 @@ export class Secretariat {
         this.transitionState(operation, 'EXECUTION_PENDING');
         try {
             // Attempt to get execution result
-            const response = await fetch(operation.target, {
+            // F-09 fix: guarded egress (same policy as discovery).
+            const response = await egressFetch(operation.target, {
                 method: operation.method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -980,7 +1094,9 @@ export class Secretariat {
         }
         try {
             const url = `${endpoint}/${operation.operationId}`;
-            const response = await fetch(url, { method: 'GET' });
+            // F-09 fix: guarded egress — retrieval endpoints may also come from the
+            // client-discovered seller metadata.
+            const response = await egressFetch(url, { method: 'GET' });
             if (response.ok) {
                 const body = await response.json().catch(() => null);
                 operation.resultData = body;
@@ -1017,7 +1133,8 @@ export class Secretariat {
     async recoverViaIdempotentRetry(operation) {
         const headerName = operation.sellerCapability?.idempotencyHeader ?? 'Idempotency-Key';
         try {
-            const response = await fetch(operation.target, {
+            // F-09 fix: guarded egress (same policy as discovery).
+            const response = await egressFetch(operation.target, {
                 method: operation.method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -1254,9 +1371,21 @@ export class Secretariat {
             jobType: "EXECUTION",
             status: "PENDING",
             priority: 0,
-            maxAttempts: 3,
+            // F-01 fix: honor the configured execution-attempt bound
+            // (ZEUS_MAX_EXECUTION_ATTEMPTS) instead of a hardcoded 3.
+            maxAttempts: this.config.maxExecutionAttempts ?? 3,
             currentAttempt: 0,
-            metadata: { capability: "EXECUTION_IDEMPOTENT", requestBody: operation.requestPayload },
+            // F-01 fix: carry the DISCOVERED recovery capability — fail-closed to
+            // NONE (payment idempotency does NOT prove execution idempotency) —
+            // instead of a hardcoded EXECUTION_IDEMPOTENT, plus the result-retrieval
+            // endpoint advertised by the seller when available.
+            metadata: {
+                capability: operation.sellerCapability?.recoveryCapability ?? "NONE",
+                requestBody: operation.requestPayload,
+                ...(operation.sellerCapability?.resultRetrievalEndpoint
+                    ? { resultRetrievalEndpoint: operation.sellerCapability.resultRetrievalEndpoint }
+                    : {}),
+            },
             createdAt: now,
             updatedAt: now,
         };
@@ -1266,6 +1395,11 @@ export class Secretariat {
             executionId: operation.operationId, // INV-10: executionId = operationId
             attemptNumber: 1,
             status: "PENDING",
+            // F-01 fix: the paid call must hit the EXACT target/method/payload the
+            // Secretariat discovered and priced — never a config-level fallback.
+            requestUrl: operation.target,
+            requestMethod: operation.method,
+            requestBody: operation.requestPayload,
             idempotencyKey: operation.operationId, // INV-11: stable idempotency key
             createdAt: now,
         };
@@ -1345,8 +1479,18 @@ export class Secretariat {
      */
     async prepareStageA(request, options = { persistPendingIntent: true }) {
         const requestId = resolveLogicalRequestId(request);
+        // F-07 fix (external audit 2026-10-25): the `cid:${clientId}` derivation
+        // (B8-001, anti double-settlement) collapses every requestId-less request
+        // of a client into ONE logical operation. That is correct for RETRIES of
+        // the same request and DANGEROUS for genuinely new requests: the second
+        // different request would silently return (and eventually re-execute)
+        // the first operation. Guard: a derived id may only resolve to an
+        // operation whose paid contract (target/method) matches the incoming
+        // request; otherwise the client must supply an explicit requestId.
+        const derivedWithoutRequestId = !request.requestId && Boolean(request.clientId);
         const existing = await this.findExistingOperation(request.clientId, requestId);
         if (existing) {
+            this.assertNoLogicalRequestCollision(derivedWithoutRequestId, request, existing, requestId);
             if (existing.currentState === 'AWAITING_SIGNATURE') {
                 const dpi = await this.getDurableIntent(existing.operationId);
                 const requirement = await this.getPaymentRequirementFromEvidence(existing)
@@ -1380,6 +1524,7 @@ export class Secretariat {
                 if (pgError.code === '23505' && request.clientId) {
                     const resolved = await this.findExistingOperation(request.clientId, requestId);
                     if (resolved) {
+                        this.assertNoLogicalRequestCollision(derivedWithoutRequestId, request, resolved, requestId);
                         return {
                             status: 'EXISTING',
                             operation: resolved,
@@ -1424,6 +1569,25 @@ export class Secretariat {
             const result = await this.failOperation(operation, 'FAILED', error instanceof Error ? error.message : String(error));
             return { status: 'REJECTED', operation, result };
         }
+    }
+    /**
+     * F-07 fix: a clientId-derived logical id (`cid:${clientId}`) must only
+     * resolve to an operation with the SAME paid contract. A different
+     * target/method under the same derived id is a client bug — reject with a
+     * dedicated, actionable error instead of silently reusing the old
+     * operation (which would execute the WRONG request after payment).
+     */
+    assertNoLogicalRequestCollision(derivedWithoutRequestId, request, existing, requestId) {
+        if (!derivedWithoutRequestId)
+            return;
+        const normalize = (u) => String(u ?? '').replace(/\/+$/, '');
+        const sameTarget = normalize(existing.target) === normalize(request.target);
+        const sameMethod = String(existing.method ?? '').toUpperCase() === String(request.method ?? '').toUpperCase();
+        if (sameTarget && sameMethod)
+            return;
+        throw new Error(`REQUEST_COLLISION: client ${request.clientId} already owns logical request "${requestId}" ` +
+            `for ${existing.method} ${existing.target}. The new request (${request.method} ${request.target}) ` +
+            `differs — send an explicit requestId for each new logical request.`);
     }
     async findExistingOperation(clientId, requestId) {
         const store = this.config.evidenceStore;
@@ -1605,6 +1769,25 @@ export class Secretariat {
         }
         const intent = evidence.payload.intent;
         return intent?.authorization;
+    }
+    /**
+     * F-05 fix: reconstruct the authorization from the DURABLE signed payload
+     * persisted on the payment intent (updatePaymentIntentAuthorization). Used
+     * when the PAYMENT_AUTHORIZED evidence record was lost to a crash window.
+     */
+    authorizationFromDurableIntent(dpi) {
+        if (!dpi.paymentPayload)
+            return null;
+        try {
+            const parsed = JSON.parse(dpi.paymentPayload);
+            const signature = parsed?.payload?.signature;
+            if (!signature)
+                return null;
+            return { signature, scheme: parsed?.accepted?.scheme || 'exact' };
+        }
+        catch {
+            return null;
+        }
     }
     async getSubmissionResultFromEvidence(operation) {
         const evidence = operation.evidence.find(e => e.phase === 'PAYMENT' && e.event === 'PAYMENT_SUBMITTED');

@@ -113,12 +113,26 @@ export class InMemoryEvidenceStore {
         }
     }
     async createIntentWithNonce(intent, payer) {
-        if (intent.nonce)
-            await this.reserveNonce(intent.nonce, intent.operationId, payer);
+        // F-101 (external audit 2026-10-25): mirror the PostgresEvidenceStore's
+        // transactional semantics — nonce reservation and intent creation are ONE
+        // atomic step. If intent creation fails, the just-created reservation is
+        // rolled back so no orphan nonce diverges from the intent table.
+        if (intent.nonce && this.nonces.has(intent.nonce)) {
+            throw new Error("NONCE_ALREADY_RESERVED: " + intent.nonce);
+        }
+        if (!intent.nonce) {
+            await this.createPaymentIntent(intent);
+            return;
+        }
+        await this.reserveNonce(intent.nonce, intent.operationId, payer);
         try {
             await this.createPaymentIntent(intent);
         }
         catch (err) {
+            const rec = this.nonces.get(intent.nonce);
+            if (rec && rec.operationId === intent.operationId && rec.status === "RESERVED") {
+                this.nonces.delete(intent.nonce);
+            }
             throw err;
         }
     }
