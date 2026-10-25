@@ -1222,12 +1222,28 @@ export class PostSettlementEngine {
     event: string,
     payload: unknown,
   ): Promise<void> {
+    // F-111 (external audit 2026-10-26): assign the same Repair-C3
+    // per-operation sequence the state machine uses. The engine appends
+    // directly to the durable store, so the next free slot is derived from
+    // the durable evidence view; on a read failure the record is still
+    // appended WITHOUT a sequence (legacy payload-hash identity — correct,
+    // just weaker ordering) rather than blocking execution evidence.
+    let sequence: number | undefined;
+    try {
+      if (typeof this.paymentStore.getEvidence === "function") {
+        const existing = await this.paymentStore.getEvidence(operationId);
+        sequence = Array.isArray(existing) ? existing.length : undefined;
+      }
+    } catch {
+      sequence = undefined;
+    }
     await this.paymentStore.append({
       operationId,
       phase: "EXECUTION",
       timestamp: Date.now(),
       event,
       payload,
+      sequence,
     });
   }
 }
