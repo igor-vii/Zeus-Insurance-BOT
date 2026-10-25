@@ -242,16 +242,35 @@ function buildArgus() {
   // otherwise the SUT is punished for the mock's fidelity, not its own.
   const usedNonces = new Map(); // nonce → txHash of the first settle
   const facilitatorStats = { settlesAccepted: 0, replaysRejected: 0, malformedRejected: 0 };
+  // F-112/C-1 (external audit 2026-10-26): the mock rail MUST mirror the real
+  // x402 v2 remote-facilitator contract (CDP v2 / Radius / docs.x402.org):
+  //   POST /settle { x402Version, paymentPayload, paymentRequirements }
+  // The legacy `{paymentHeader, resource, network}` envelope is no longer
+  // accepted — a request without paymentRequirements cannot settle (the rail
+  // would not know payTo/asset/amount).
   app.post("/facilitator/settle", (req, res) => {
     try {
-      const header = String(req.body?.paymentHeader ?? "");
-      const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+      const pp = req.body?.paymentPayload;
+      const reqs = req.body?.paymentRequirements;
+      if (!pp || !reqs || typeof req.body?.x402Version !== "number") {
+        facilitatorStats.malformedRejected++;
+        res.status(400).json({ success: false, errorReason: "malformed_settle_request" });
+        return;
+      }
       const authz = {
-        from: String(decoded?.payload?.authorization?.from ?? CLIENT_ADDR).toLowerCase(),
-        to: String(decoded?.payload?.authorization?.to ?? SELLER_ADDR).toLowerCase(),
-        value: String(decoded?.payload?.authorization?.value ?? HONEST_AMOUNT),
-        nonce: String(decoded?.payload?.authorization?.nonce ?? "0x" + "0".repeat(64)).toLowerCase(),
+        from: String(pp?.payload?.authorization?.from ?? CLIENT_ADDR).toLowerCase(),
+        to: String(pp?.payload?.authorization?.to ?? SELLER_ADDR).toLowerCase(),
+        value: String(pp?.payload?.authorization?.value ?? HONEST_AMOUNT),
+        nonce: String(pp?.payload?.authorization?.nonce ?? "0x" + "0".repeat(64)).toLowerCase(),
       };
+      // Requirements sanity — the rail must agree on where the money goes.
+      if (String(reqs?.payTo ?? "").toLowerCase() !== authz.to ||
+          String(reqs?.amount ?? authz.value) !== authz.value ||
+          String(reqs?.network ?? NETWORK) === "") {
+        facilitatorStats.malformedRejected++;
+        res.status(400).json({ success: false, errorReason: "requirements_mismatch" });
+        return;
+      }
       if (usedNonces.has(authz.nonce)) {
         facilitatorStats.replaysRejected++;
         res.status(409).json({
@@ -273,7 +292,7 @@ function buildArgus() {
       // mock rail violated its own verification contract and could bless a
       // corrupted payload as a settled payment.
       facilitatorStats.malformedRejected++;
-      res.status(400).json({ success: false, errorReason: "malformed_payment_header" });
+      res.status(400).json({ success: false, errorReason: "malformed_settle_request" });
     }
   });
   app.post("/facilitator/verify", (_req, res) => res.json({ isValid: true }));
@@ -504,11 +523,26 @@ async function runReplay(argus, entry, account) {
   if (flow.created.status !== 201 || flow.final?.status !== "COMPLETED") {
     return { outcome: "ERROR", detail: `setup: create=${flow.created.status} final=${flow.final?.status ?? "-"}` };
   }
-  const paymentHeader = Buffer.from(JSON.stringify(flow.payload)).toString("base64");
+  // F-112/C-1: the replay probe now speaks the canonical v2 settle wire
+  // (paymentPayload + paymentRequirements) — same contract as the
+  // Secretariat's X402FacilitatorClient.
+  const paymentPayload = flow.payload;
+  const replayRequirements = {
+    scheme: "exact",
+    network: NETWORK,
+    asset: USDC_ASSET,
+    amount: HONEST_AMOUNT,
+    payTo: SELLER_ADDR,
+    maxTimeoutSeconds: 300,
+  };
   const replay = await fetch(`${ARGUS}/facilitator/settle`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ paymentHeader, resource: `${ARGUS}/resource?s=B-BS-17`, network: NETWORK }),
+    body: JSON.stringify({
+      x402Version: 2,
+      paymentPayload,
+      paymentRequirements: replayRequirements,
+    }),
   });
   const replayBody = await replay.json().catch(() => ({}));
   const rejected = replay.status === 409 && replayBody?.success === false;

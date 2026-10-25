@@ -116,6 +116,9 @@ app.post("/seller", (req, res) => {
 });
 
 // --- mock facilitator --------------------------------------------------------
+// F-112/C-1 (external audit 2026-10-26): canonical x402 v2 remote-facilitator
+// wire — { x402Version, paymentPayload, paymentRequirements }. The legacy
+// {paymentHeader, resource, network} envelope is gone.
 app.post("/facilitator/settle", (req, res) => {
   const txHash = `0xsettle${Date.now().toString(16)}${Math.random().toString(16).slice(2, 6)}`;
   let authz = {
@@ -125,15 +128,22 @@ app.post("/facilitator/settle", (req, res) => {
     nonce: "0x" + "0".repeat(64),
   };
   try {
-    const header = String(req.body?.paymentHeader ?? "");
-    const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+    const pp = req.body?.paymentPayload;
+    const reqs = req.body?.paymentRequirements;
+    if (!pp || !reqs || typeof req.body?.x402Version !== "number") {
+      res.status(400).json({ success: false, errorReason: "malformed_settle_request" });
+      return;
+    }
     authz = {
-      from: String(decoded?.payload?.authorization?.from ?? authz.from).toLowerCase(),
-      to: String(decoded?.payload?.authorization?.to ?? authz.to).toLowerCase(),
-      value: String(decoded?.payload?.authorization?.value ?? authz.value),
-      nonce: String(decoded?.payload?.authorization?.nonce ?? authz.nonce).toLowerCase(),
+      from: String(pp?.payload?.authorization?.from ?? authz.from).toLowerCase(),
+      to: String(pp?.payload?.authorization?.to ?? authz.to).toLowerCase(),
+      value: String(pp?.payload?.authorization?.value ?? authz.value),
+      nonce: String(pp?.payload?.authorization?.nonce ?? authz.nonce).toLowerCase(),
     };
-  } catch { /* keep defaults */ }
+  } catch {
+    res.status(400).json({ success: false, errorReason: "malformed_settle_request" });
+    return;
+  }
   settleCalls.push({ nonce: authz.nonce, payTo: authz.to, value: authz.value, at: Date.now() });
   // Chain-faithful replay guard (Lab Block D finding F1 — the mock must
   // mirror the rail's real contract): EIP-3009 authorizationState is

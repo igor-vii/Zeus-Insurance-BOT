@@ -232,8 +232,9 @@ export class SingleRpcProvider {
   /**
    * §6: Scan for AuthorizationUsed(address,bytes32) event.
    * P0-4: Real event signature — keccak256("AuthorizationUsed(address,bytes32)")
-   * = 0x3f2df0fedd38a4e4e1b3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3
-   * Actual value computed below using proper encoding.
+   * = 0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5
+   * (F-112 hygiene: the previously quoted placeholder was not a real keccak;
+   * the value above now matches the topic computed below from the ABI.)
    */
   async findAuthorizationUsedEvent(
     tokenContract: string,
@@ -245,8 +246,8 @@ export class SingleRpcProvider {
     try {
       // P0-4: Real AuthorizationUsed event signature
       // keccak256("AuthorizationUsed(address,bytes32)")
-      // Computed: 0x3f2df0fedd38a4e4e1b3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3
-      // For EIP-3009 USDC: the actual topic is derived from the ABI
+      // = 0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5
+      // Computed from the ABI below — never trust hand-copied constants.
       const topic0 = keccak256(toBytes("AuthorizationUsed(address,bytes32)"));
       const paddedAuthorizer = "0x" + authorizer.toLowerCase().replace("0x", "").padStart(64, "0");
       const paddedNonce = "0x" + nonce.replace("0x", "").padStart(64, "0");

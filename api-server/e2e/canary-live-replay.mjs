@@ -119,13 +119,24 @@ async function main() {
   }
 
   // ---- Attack: replay the used authorization DIRECTLY to the facilitator ----
-  const paymentHeader = Buffer.from(JSON.stringify(payload)).toString("base64");
+  // F-112/C-1: canonical v2 settle wire — paymentPayload + paymentRequirements.
   let accepted = 0;
   for (let i = 1; i <= REPLAYS; i++) {
     const res = await fetch(`${FACILITATOR}/settle`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ paymentHeader, resource: TARGET, network: NETWORK }),
+      body: JSON.stringify({
+        x402Version: 2,
+        paymentPayload: payload,
+        paymentRequirements: {
+          scheme: "exact",
+          network: NETWORK,
+          asset: payload?.accepted?.asset ?? "",
+          amount: payload?.accepted?.amount ?? "0",
+          payTo: payload?.accepted?.payTo ?? "",
+          maxTimeoutSeconds: payload?.accepted?.maxTimeoutSeconds ?? 300,
+        },
+      }),
     });
     const body = await res.json().catch(() => ({}));
     const rejected = res.status >= 400 || body?.success === false;

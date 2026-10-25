@@ -29,7 +29,14 @@ export class X402Parser {
     const paymentHeader = response.headers.get('PAYMENT-REQUIRED');
     if (paymentHeader) {
       try {
-        const jsonStr = atob(paymentHeader);
+        // F-112 hygiene: atob yields a Latin-1 binary string — non-ASCII
+        // (e.g. Cyrillic challenge metadata) would arrive as mojibake and
+        // poison JSON.parse or the parsed values. Decode the base64 to raw
+        // UTF-8 bytes first, then decode the bytes as UTF-8.
+        const binary = atob(paymentHeader);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const jsonStr = new TextDecoder('utf-8').decode(bytes);
         const challenge: X402Challenge = JSON.parse(jsonStr);
         if (challenge.accepts && challenge.accepts.length > 0) {
           return challenge.accepts;

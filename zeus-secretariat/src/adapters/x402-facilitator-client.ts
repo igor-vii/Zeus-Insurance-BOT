@@ -79,20 +79,13 @@ export interface PaymentPayload {
 }
 
 /**
- * Facilitator-specific request envelope.
- * This is a boundary DTO — NOT an internal payment model.
- * Constructed from canonical PaymentPayload at the adapter edge only.
- */
-interface FacilitatorSettleRequest {
-  readonly paymentHeader: string;
-  readonly resource: string;
-  readonly network: string;
-}
-
-/**
  * Encode canonical PaymentPayload as base64 PAYMENT-SIGNATURE for HTTP transport.
  *
  * Flow: PaymentPayload → deterministic JSON → UTF-8 bytes → Base64
+ *
+ * Still exported for clients that must speak the legacy v1 header flow
+ * (PAYMENT-SIGNATURE style) — the /settle wire itself no longer base64-wraps
+ * the payload (see FacilitatorSettleRequest below).
  */
 export function encodePaymentSignature(payload: PaymentPayload): string {
   const json = JSON.stringify(payload);
@@ -106,15 +99,53 @@ export function encodePaymentSignature(payload: PaymentPayload): string {
 }
 
 /**
- * Build facilitator-specific request DTO from canonical PaymentPayload.
- * This is the ONLY place where V1-shaped wire format is constructed.
+ * F-112/C-1 (external audit 2026-10-26, Major): canonical x402 v2 /settle wire
+ * format. The previous envelope `{paymentHeader, resource, network}` was a
+ * private V1-shaped contract: it carried NO paymentRequirements (the
+ * facilitator could not know payTo/asset/amount without decoding the header)
+ * and no protocol version, so ANY spec-conformant facilitator (Coinbase CDP
+ * v2, Radius, or a Zeus facilitator built on the x402 reference stack)
+ * answers 400 and every real settle would have landed in RECONCILING.
+ *
+ * The canonical v2 remote-facilitator contract (docs.cdp.coinbase.com v2
+ * x402 facilitator; docs.radiustech.xyz facilitator API; docs.x402.org) is:
+ *   POST /settle { x402Version, paymentPayload, paymentRequirements }
+ * where paymentPayload is the decoded canonical PaymentPayload and
+ * paymentRequirements is derived from `accepted` + resource.
  */
-function buildFacilitatorRequest(payload: PaymentPayload): FacilitatorSettleRequest {
-  const paymentHeader = encodePaymentSignature(payload);
+export interface FacilitatorSettleRequest {
+  readonly x402Version: number;
+  readonly paymentPayload: PaymentPayload;
+  readonly paymentRequirements: {
+    readonly scheme: string;
+    readonly network: string;
+    readonly asset: string;
+    readonly amount: string;
+    readonly payTo: string;
+    readonly maxTimeoutSeconds: number;
+    readonly resource?: { url: string; description?: string; mimeType?: string };
+    readonly extra?: Record<string, unknown>;
+  };
+}
+
+/**
+ * Build the canonical x402 v2 /settle request DTO from canonical PaymentPayload.
+ * This is the ONLY place where the facilitator wire envelope is constructed.
+ */
+export function buildFacilitatorRequest(payload: PaymentPayload): FacilitatorSettleRequest {
   return {
-    paymentHeader,
-    resource: payload.resource?.url ?? "",
-    network: payload.accepted.network,
+    x402Version: payload.x402Version,
+    paymentPayload: payload,
+    paymentRequirements: {
+      scheme: payload.accepted.scheme,
+      network: payload.accepted.network,
+      asset: payload.accepted.asset,
+      amount: payload.accepted.amount,
+      payTo: payload.accepted.payTo,
+      maxTimeoutSeconds: payload.accepted.maxTimeoutSeconds,
+      ...(payload.resource ? { resource: payload.resource } : {}),
+      ...(payload.accepted.extra ? { extra: payload.accepted.extra } : {}),
+    },
   };
 }
 
@@ -149,13 +180,39 @@ export class X402FacilitatorClient implements SettlementAdapter {
   }
 
   /**
+   * Record the durable SUBMITTING → RECONCILING transition on any
+   * non-definitive facilitator outcome. CAS-guarded ONLY: if the CAS loses,
+   * another writer (reconciler/Stage B) already owns the state and a blind
+   * overwrite would break fencing — so we do NOTHING durably (F-112/H-7).
+   */
+  private async reconcileAmbiguous(
+    paymentIntentId: string,
+    extra: Partial<Pick<DurablePaymentIntent, "facilitatorHttpStatus" | "facilitatorResponseBody" | "errorReason" | "txHash">>,
+  ): Promise<void> {
+    await this.store.compareAndSetState(
+      paymentIntentId, "SUBMITTING", "RECONCILING",
+      extra as Partial<DurablePaymentIntent>,
+    ).catch(() => {
+      // CAS lost — the durable state was moved by a concurrent writer that
+      // is now the single owner. Never overwrite it unconditionally.
+    });
+  }
+
+  /**
    * Submit a signed payment to the x402 facilitator.
    *
    * Invariants enforced:
    *   - One submit per intentId (no blind resubmit even on timeout)
    *   - Network errors → UNKNOWN (never throw)
-   *   - 4xx/5xx → REJECTED with reason
-   *   - 200 → SUBMITTED with txHash
+   *   - 200 + body.success === false → REJECTED (protocol-level refusal)
+   *   - 4xx (except 408/409/429) → REJECTED — the facilitator definitively
+   *     refused the payload; reconciling cannot change the answer.
+   *   - 409/408/429/5xx → UNKNOWN → RECONCILING (ambiguity: 409 means the
+   *     authorization may already be used on-chain — only the reconciler's
+   *     truth-scan may decide).
+   *   - 200 + success → SUBMITTED with txHash (post-settle bookkeeping
+   *     failures NEVER blur the result into NETWORK_ERROR — money may
+   *     already have moved, F-112/H-8).
    */
   async submit(
     intent: DurablePaymentIntent,
@@ -194,11 +251,12 @@ export class X402FacilitatorClient implements SettlementAdapter {
     // Optimization cache only (P1-3: NOT a safety boundary)
     this.submittedIntents.add(intent.paymentIntentId);
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeoutMs);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeoutMs);
 
-      const response = await fetch(`${this.config.baseUrl}/settle`, {
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.baseUrl}/settle`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -207,18 +265,57 @@ export class X402FacilitatorClient implements SettlementAdapter {
         body: JSON.stringify(buildFacilitatorRequest(payload)),
         signal: controller.signal,
       });
-
+    } catch (err: unknown) {
+      // F-112 hygiene: release the timer on the network-error path too.
       clearTimeout(timeoutId);
-      const responseBody = await response.json().catch(() => ({}));
+      // P0-1: Timeout/network error → RECONCILING via DB
+      const errorMsg = err instanceof Error ? err.message : "Unknown network error";
+      await this.reconcileAmbiguous(intent.paymentIntentId, {
+        errorReason: `NETWORK_ERROR: ${errorMsg}`,
+      });
+      return { status: "UNKNOWN", error: `NETWORK_ERROR: ${errorMsg}` };
+    }
+    clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const txHash =
-          (responseBody as any)?.transactionHash ??
-          (responseBody as any)?.txHash ??
-          (responseBody as any)?.transaction_hash ??
-          "";
+    const responseBody = await response.json().catch(() => ({}));
+    const body = responseBody as {
+      success?: boolean;
+      transaction?: string;
+      transactionHash?: string;
+      txHash?: string;
+      transaction_hash?: string;
+      errorReason?: string;
+      error?: string;
+      message?: string;
+    };
 
-        // P0-1: Transition SUBMITTING → SETTLEMENT_PENDING atomically
+    // -----------------------------------------------------------------
+    // 2xx — the HTTP layer succeeded; the PROTOCOL verdict lives in the body.
+    // F-112/H-5: the x402 settle contract answers {success: boolean,
+    // transaction, errorReason} — a 200 with success:false is a definitive
+    // refusal (e.g. insufficient_funds), NOT a settlement.
+    // -----------------------------------------------------------------
+    if (response.ok) {
+      if (body.success === false) {
+        const reason = body.errorReason ?? body.error ?? body.message ?? "FACILITATOR_SETTLE_FAILED";
+        await this.reconcileAmbiguous(intent.paymentIntentId, {
+          facilitatorHttpStatus: response.status,
+          facilitatorResponseBody: responseBody,
+          errorReason: `FACILITATOR_REJECTED: ${reason}`,
+        });
+        return { status: "REJECTED", reason, rawResponse: responseBody };
+      }
+
+      // Spec field is `transaction` (v2); keep legacy aliases for Zeus mocks.
+      const txHash = body.transaction ?? body.transactionHash ?? body.txHash ?? body.transaction_hash ?? "";
+
+      // P0-1: Transition SUBMITTING → SETTLEMENT_PENDING atomically.
+      // F-112/H-8: this is POST-SETTLEMENT bookkeeping. If it fails, money
+      // may ALREADY have moved — the outcome must stay SUBMITTED (with a
+      // best-effort durable SETTLEMENT_PENDING CAS), never blurred into a
+      // NETWORK_ERROR/RECONCILING state that implies "we do not know if the
+      // money moved".
+      try {
         await this.store.recordSubmissionResult(
           intent.paymentIntentId, "SETTLEMENT_PENDING",
           txHash || undefined, response.status, responseBody,
@@ -227,34 +324,47 @@ export class X402FacilitatorClient implements SettlementAdapter {
         if (intent.nonce) {
           await this.store.markNonceSubmitted(intent.nonce);
         }
-
-        return { status: "SUBMITTED", txHash, rawResponse: responseBody };
+      } catch (bookkeepingErr: unknown) {
+        const bookMsg = bookkeepingErr instanceof Error ? bookkeepingErr.message : "unknown bookkeeping error";
+        await this.store.compareAndSetState(
+          intent.paymentIntentId, "SUBMITTING", "SETTLEMENT_PENDING",
+          { txHash: txHash || undefined, errorReason: `SETTLE_OK_BOOKKEEPING_FAILED: ${bookMsg}` } as Partial<DurablePaymentIntent>,
+        ).catch(() => {});
       }
 
-      // §5 + P1-1: Facilitator error → RECONCILING (not FAILED)
-      const reason = (responseBody as any)?.error ?? (responseBody as any)?.message ?? `HTTP ${response.status}`;
-
-      await this.store.compareAndSetState(
-        intent.paymentIntentId, "SUBMITTING", "RECONCILING",
-        { facilitatorHttpStatus: response.status, errorReason: reason } as Partial<DurablePaymentIntent>,
-      ).catch(() => this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
-        facilitatorHttpStatus: response.status, errorReason: reason,
-      }));
-
-      return { status: "UNKNOWN", error: `FACILITATOR_AMBIGUOUS: HTTP ${response.status} — ${reason}` };
-    } catch (err: unknown) {
-      // P0-1: Timeout/network error → RECONCILING via DB
-      const errorMsg = err instanceof Error ? err.message : "Unknown network error";
-
-      await this.store.compareAndSetState(
-        intent.paymentIntentId, "SUBMITTING", "RECONCILING",
-        { errorReason: `NETWORK_ERROR: ${errorMsg}` } as Partial<DurablePaymentIntent>,
-      ).catch(() => this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING", {
-        errorReason: `NETWORK_ERROR: ${errorMsg}`,
-      })).catch(() => {});
-
-      return { status: "UNKNOWN", error: `NETWORK_ERROR: ${errorMsg}` };
+      return { status: "SUBMITTED", txHash, rawResponse: responseBody };
     }
+
+    // -----------------------------------------------------------------
+    // Non-2xx — classify definitive refusal vs genuine ambiguity.
+    // F-112/H-6: a 4xx is the facilitator's FINAL answer about THIS payload
+    // (invalid signature, expired, malformed) — the caller must see REJECTED.
+    // 409 (authorization_used) is the exception: the authorization may have
+    // settled on-chain earlier — only the reconciler may resolve it.
+    // 408/429/5xx are transient/infrastructural → UNKNOWN → RECONCILING.
+    // §5: in EVERY non-2xx branch the durable state still goes to
+    // RECONCILING (CAS-guarded) — the reconciler remains the truth owner.
+    // -----------------------------------------------------------------
+    const reason = body.errorReason ?? body.error ?? body.message ?? `HTTP ${response.status}`;
+    const replayish =
+      response.status === 409 ||
+      /authorization[_ ]?used|already[_ ]?used|duplicate[_ ]?settlement/i.test(reason);
+    const definitiveRefusal =
+      response.status >= 400 && response.status < 500 &&
+      response.status !== 408 && response.status !== 429 && !replayish;
+
+    await this.reconcileAmbiguous(intent.paymentIntentId, {
+      facilitatorHttpStatus: response.status,
+      facilitatorResponseBody: responseBody,
+      errorReason: definitiveRefusal
+        ? `FACILITATOR_REJECTED: ${reason}`
+        : `FACILITATOR_AMBIGUOUS: HTTP ${response.status} — ${reason}`,
+    });
+
+    if (definitiveRefusal) {
+      return { status: "REJECTED", reason, rawResponse: responseBody };
+    }
+    return { status: "UNKNOWN", error: `FACILITATOR_AMBIGUOUS: HTTP ${response.status} — ${reason}` };
   }
   /**
    * Check if an intent has already been submitted (for external callers).
@@ -332,14 +442,25 @@ export class MockX402FacilitatorClient implements SettlementAdapter {
       };
     }
 
-    // Simulate HTTP error
+    // Simulate HTTP error — F-112/H-6: the mock MUST mirror the real
+    // client's status classification so unit tests stop lying about prod
+    // behavior: 4xx (except 408/409/429) is a definitive REJECTED; 409 and
+    // 5xx are ambiguous → UNKNOWN (durable RECONCILING, reconciler owns it).
     if (this.behavior.forceStatus && this.behavior.forceStatus >= 400) {
+      const s = this.behavior.forceStatus;
+      const replayish = s === 409;
+      const definitive = s < 500 && s !== 408 && s !== 429 && !replayish;
       await this.store.updatePaymentIntentStatus(intent.paymentIntentId, "RECONCILING");
-      return {
-        status: "REJECTED",
-        reason: `FACILITATOR_ERROR: HTTP ${this.behavior.forceStatus}`,
-        rawResponse: { error: "simulated error" },
-      };
+      return definitive
+        ? {
+            status: "REJECTED",
+            reason: `FACILITATOR_ERROR: HTTP ${s}`,
+            rawResponse: { error: "simulated error" },
+          }
+        : {
+            status: "UNKNOWN",
+            error: `FACILITATOR_AMBIGUOUS: HTTP ${s} — simulated error`,
+          };
     }
 
     // Success

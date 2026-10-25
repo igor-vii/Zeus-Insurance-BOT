@@ -490,7 +490,11 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
 
   // ---- Test AI: Facilitator rejection ----
 
-  test("AI: facilitator HTTP error returns REJECTED", async () => {
+  // F-112/H-6: status classification now mirrors the REAL client — a 5xx is
+  // transient/infrastructural ambiguity (UNKNOWN → RECONCILING), while a 4xx
+  // is the facilitator's definitive refusal (REJECTED). The old test asserted
+  // REJECTED for 500 — that was the mock contradicting the real adapter.
+  test("AI: facilitator HTTP 500 returns UNKNOWN (transient), durable RECONCILING", async () => {
     const facilitator = new MockX402FacilitatorClient(store, {
       forceStatus: 500,
     });
@@ -500,15 +504,54 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
 
     const result = await facilitator.submit(intent, mockPayload);
 
-    expect(result.status).toBe("REJECTED");
-    if (result.status === "REJECTED") {
-      // R0 repair: assert the rejection reason directly (see AH note).
-      expect((result as any).reason).toContain("FACILITATOR_ERROR");
-      expect((result as any).reason).toContain("500");
+    expect(result.status).toBe("UNKNOWN");
+    if (result.status === "UNKNOWN") {
+      expect((result as any).error).toContain("FACILITATOR_AMBIGUOUS");
+      expect((result as any).error).toContain("500");
     }
 
     // R0 repair: per spec §timeout table "HTTP 500 → RECONCILING (blockchain
     // has priority)" — the DB must NOT be FAILED.
+    const updated = await store.getPaymentIntentByOperationId(intent.operationId);
+    expect(updated!.settlementState).toBe("RECONCILING");
+  });
+
+  // F-112/H-6: definitive 4xx refusal — the caller sees REJECTED, the durable
+  // state still routes through the reconciler (§5: blockchain has priority).
+  test("AI-2: facilitator HTTP 400 returns REJECTED (definitive), durable RECONCILING", async () => {
+    const facilitator = new MockX402FacilitatorClient(store, {
+      forceStatus: 400,
+    });
+
+    const intent = makeIntent();
+    await store.createPaymentIntent(intent);
+
+    const result = await facilitator.submit(intent, mockPayload);
+
+    expect(result.status).toBe("REJECTED");
+    if (result.status === "REJECTED") {
+      expect((result as any).reason).toContain("FACILITATOR_ERROR");
+      expect((result as any).reason).toContain("400");
+    }
+
+    const updated = await store.getPaymentIntentByOperationId(intent.operationId);
+    expect(updated!.settlementState).toBe("RECONCILING");
+  });
+
+  // F-112/H-6: 409 authorization_used is REPLAYISH — the authorization may
+  // have settled on-chain earlier, so the caller must see UNKNOWN (the
+  // reconciler's truth-scan decides), never a flat REJECTED.
+  test("AI-3: facilitator HTTP 409 returns UNKNOWN (replay ambiguity)", async () => {
+    const facilitator = new MockX402FacilitatorClient(store, {
+      forceStatus: 409,
+    });
+
+    const intent = makeIntent();
+    await store.createPaymentIntent(intent);
+
+    const result = await facilitator.submit(intent, mockPayload);
+
+    expect(result.status).toBe("UNKNOWN");
     const updated = await store.getPaymentIntentByOperationId(intent.operationId);
     expect(updated!.settlementState).toBe("RECONCILING");
   });
