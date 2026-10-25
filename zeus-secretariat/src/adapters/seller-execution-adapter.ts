@@ -13,6 +13,8 @@
  * connection lost ≠ execution did not happen
  */
 
+import { egressFetch } from "../core/egress-guard.js";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -82,7 +84,11 @@ export class HttpSellerExecutionAdapter implements SellerExecutionAdapter {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(request.url, {
+      // F-09 fix (external audit 2026-10-25): the execution/retrieval URL is
+      // client-influenced (operation.target / discovered retrieval endpoint).
+      // Validate against the egress policy and forbid redirects, same as the
+      // discovery path.
+      const response = await egressFetch(request.url, {
         method: request.method,
         headers: {
           "Content-Type": "application/json",

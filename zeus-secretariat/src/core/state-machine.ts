@@ -34,6 +34,7 @@ import type { ReconciliationEngine, ReconciliationOutcome } from './reconciliati
 import type { RecoveryJob, ExecutionAttempt, AtomicSettlementHandoff } from './post-settlement-engine.js';
 import type { PaymentAuthorizationRequest, PaymentSignatureResult } from './payment-types.js';
 import { CryptoNonceGenerator } from './nonce-generator.js';
+import { egressFetch } from './egress-guard.js';
 import { keccak256, toBytes } from 'viem';
 
 // Legacy types used internally by StateMachine (Phase 2.1 payment flow)
@@ -573,8 +574,10 @@ export class Secretariat {
     });
 
     try {
-      // Make initial request to discover if payment is required
-      const response = await fetch(operation.target, {
+      // Make initial request to discover if payment is required.
+      // F-09 fix: client-supplied target is validated against the egress
+      // policy (no loopback/private/metadata destinations, no redirects).
+      const response = await egressFetch(operation.target, {
         method: operation.method,
         headers: {
           'Content-Type': 'application/json',
@@ -1230,7 +1233,8 @@ export class Secretariat {
 
     try {
       // Attempt to get execution result
-      const response = await fetch(operation.target, {
+      // F-09 fix: guarded egress (same policy as discovery).
+      const response = await egressFetch(operation.target, {
         method: operation.method,
         headers: {
           'Content-Type': 'application/json',
@@ -1357,7 +1361,9 @@ export class Secretariat {
 
     try {
       const url = `${endpoint}/${operation.operationId}`;
-      const response = await fetch(url, { method: 'GET' });
+      // F-09 fix: guarded egress — retrieval endpoints may also come from the
+      // client-discovered seller metadata.
+      const response = await egressFetch(url, { method: 'GET' });
 
       if (response.ok) {
         const body = await response.json().catch(() => null);
@@ -1398,7 +1404,8 @@ export class Secretariat {
     const headerName = operation.sellerCapability?.idempotencyHeader ?? 'Idempotency-Key';
     
     try {
-      const response = await fetch(operation.target, {
+      // F-09 fix: guarded egress (same policy as discovery).
+      const response = await egressFetch(operation.target, {
         method: operation.method,
         headers: {
           'Content-Type': 'application/json',
