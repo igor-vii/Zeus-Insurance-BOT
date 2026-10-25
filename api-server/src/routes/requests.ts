@@ -12,7 +12,13 @@ import type { SecretariatComposition } from "../lib/secretariat-composition.js";
 import { logger } from "../lib/logger.js";
 
 const paymentPolicySchema = z.object({
-  maxPrice: z.string().min(1),
+  // F-08 fix (external audit 2026-10-25): maxPrice is MONEY — it must be a
+  // well-formed non-negative decimal string. The previous `z.string().min(1)`
+  // accepted "abc" / "1.2.3", which later made the policy comparison a NaN
+  // no-op (`amount > NaN === false`) and let the payment through.
+  maxPrice: z
+    .string()
+    .regex(/^\d+(\.\d{1,18})?$/, "maxPrice must be a non-negative decimal number string, e.g. \"10\" or \"1.25\""),
   allowedNetworks: z.array(z.string()),
   allowedAssets: z.array(z.string()),
   allowedSellers: z.array(z.string()).optional(),
@@ -226,6 +232,13 @@ export function createRequestsRouter(
     try {
       result = await secretariat.createRequest(executeRequest);
     } catch (error) {
+      // F-07 fix: a clientId-derived logical id colliding with a DIFFERENT
+      // paid contract is a client bug — answer 409 with the actionable
+      // message instead of a generic 500.
+      if (error instanceof Error && error.message.startsWith("REQUEST_COLLISION")) {
+        sendError(response, 409, "REQUEST_COLLISION", error.message);
+        return;
+      }
       logger.error({ err: error }, "Secretariat request creation failed");
       sendError(
         response,

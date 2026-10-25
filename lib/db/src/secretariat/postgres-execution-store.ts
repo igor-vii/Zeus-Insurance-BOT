@@ -198,6 +198,15 @@ export class PostgresExecutionStore {
       ...(extra?.completedAt !== undefined ? { completedAt: new Date(extra.completedAt) } : {}),
     };
 
+    // F-14 fix (external audit 2026-10-25): absent JSONB fields must be bound
+    // as SQL NULL — not as JSON "null". The previous
+    // `${JSON.stringify(x ?? null)}::jsonb` produced 'null'::jsonb (a JSON
+    // null value, NOT SQL NULL), so COALESCE always picked it and silently
+    // OVERWROTE previously stored response bodies/headers on plain status
+    // updates that carried no new payload.
+    const responseBodyParam = setObj.responseBody !== undefined ? JSON.stringify(setObj.responseBody) : null;
+    const responseHeadersParam = setObj.responseHeaders !== undefined ? JSON.stringify(setObj.responseHeaders) : null;
+
     // Atomic update with fence check + terminal monotonicity guard.
     // Joins recovery_jobs via operation_id to verify current ownership generation.
     // Excludes all terminal states to enforce irreversibility.
@@ -211,8 +220,8 @@ export class PostgresExecutionStore {
       UPDATE execution_attempts ea
       SET status = ${status},
           response_status_code = COALESCE(${setObj.responseStatusCode ?? null}, ea.response_status_code),
-          response_body = COALESCE(${JSON.stringify(setObj.responseBody ?? null)}::jsonb, ea.response_body),
-          response_headers = COALESCE(${JSON.stringify(setObj.responseHeaders ?? null)}::jsonb, ea.response_headers),
+          response_body = COALESCE(${responseBodyParam}::jsonb, ea.response_body),
+          response_headers = COALESCE(${responseHeadersParam}::jsonb, ea.response_headers),
           error_reason = COALESCE(${setObj.errorReason ?? null}, ea.error_reason),
           started_at = COALESCE(${setObj.startedAt ?? null}, ea.started_at),
           completed_at = COALESCE(${setObj.completedAt ?? null}, ea.completed_at)

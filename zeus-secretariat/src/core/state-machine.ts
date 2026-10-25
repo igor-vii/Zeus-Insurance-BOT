@@ -663,22 +663,64 @@ export class Secretariat {
       return false;
     }
 
-    // Check max price
+    // Check max price.
     // R0 repair: unit-consistent comparison. x402 requirement amounts are
     // smallest-unit integers ("500000"), while legacy human quotes are decimal
-    // strings ("1.00"). Comparing a smallest-unit integer against a human
-    // decimal with parseFloat() mixes units (500000 > 1.0 → always rejects).
-    // When BOTH sides are integer strings, compare exact BigInt magnitudes;
-    // otherwise fall back to the legacy parseFloat behavior.
-    const isInt = (s: string) => /^\d+$/.test(String(s).trim());
-    const exceeds = isInt(requirement.amount) && isInt(policy.maxPrice)
-      ? BigInt(requirement.amount) > BigInt(policy.maxPrice)
-      : parseFloat(requirement.amount) > parseFloat(policy.maxPrice);
+    // strings ("1.00").
+    // F-08 fix (external audit 2026-10-25): the legacy parseFloat fallback
+    // made malformed limits a silent no-op (NaN comparisons are false → the
+    // payment PASSED), and mixed-unit comparisons (smallest-unit integer vs
+    // human decimal) were unit errors, not arithmetic. Now:
+    //   1. A non-decimal maxPrice REJECTS the policy (fail closed);
+    //   2. int vs int       → exact BigInt magnitudes (unchanged);
+    //   3. decimal vs decimal → exact scaled-BigInt comparison (no float math);
+    //   4. int vs decimal   → INCOMPARABLE units → REJECT (fail closed).
+    const isInt = (s: string) => /^\d+$/.test(s);
+    const isDecimal = (s: string) => /^\d+(\.\d+)?$/.test(s);
+    const hasDot = (s: string) => s.includes(".");
+    const reqAmount = String(requirement.amount).trim();
+    const maxPrice = String(policy.maxPrice).trim();
+    if (!isDecimal(maxPrice)) {
+      this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
+        reason: 'Invalid maxPrice format (expected a non-negative decimal number)',
+        required: reqAmount,
+        maxAllowed: policy.maxPrice,
+      });
+      return false;
+    }
+    const scaled = (s: string, scale: number): bigint => {
+      const [intPart, fracPart = ""] = s.split(".");
+      return BigInt(intPart + fracPart.padEnd(scale, "0"));
+    };
+    let exceeds: boolean;
+    let rejectUnits = false;
+    if (isInt(reqAmount) && isInt(maxPrice)) {
+      // Same canonical (unit-less integer) representation → exact magnitudes.
+      exceeds = BigInt(reqAmount) > BigInt(maxPrice);
+    } else if (hasDot(reqAmount) && hasDot(maxPrice)) {
+      // Both are human decimals → exact scaled comparison, no float math.
+      const scale = Math.max(reqAmount.split(".")[1].length, maxPrice.split(".")[1].length);
+      exceeds = scaled(reqAmount, scale) > scaled(maxPrice, scale);
+    } else {
+      // Mixed units: one side is a smallest-unit integer, the other a human
+      // decimal. Without asset decimals the conversion is unknowable —
+      // comparing them is a unit error, not arithmetic. Fail closed.
+      exceeds = false;
+      rejectUnits = true;
+    }
+    if (rejectUnits) {
+      this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
+        reason: 'INCOMPARABLE_UNITS: requirement.amount is a smallest-unit integer while maxPrice is a human decimal — provide maxPrice in the same unit',
+        required: reqAmount,
+        maxAllowed: policy.maxPrice,
+      });
+      return false;
+    }
     if (exceeds) {
       this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
         reason: 'Amount exceeds maxPrice',
-        required: requirement.amount,
-        maxAllowed: policy.maxPrice,
+        required: reqAmount,
+        maxAllowed: maxPrice,
       });
       return false;
     }
@@ -1766,8 +1808,18 @@ export class Secretariat {
     options: StageAOptions = { persistPendingIntent: true },
   ): Promise<StageAPreparation> {
     const requestId = resolveLogicalRequestId(request);
+    // F-07 fix (external audit 2026-10-25): the `cid:${clientId}` derivation
+    // (B8-001, anti double-settlement) collapses every requestId-less request
+    // of a client into ONE logical operation. That is correct for RETRIES of
+    // the same request and DANGEROUS for genuinely new requests: the second
+    // different request would silently return (and eventually re-execute)
+    // the first operation. Guard: a derived id may only resolve to an
+    // operation whose paid contract (target/method) matches the incoming
+    // request; otherwise the client must supply an explicit requestId.
+    const derivedWithoutRequestId = !request.requestId && Boolean(request.clientId);
     const existing = await this.findExistingOperation(request.clientId, requestId);
     if (existing) {
+      this.assertNoLogicalRequestCollision(derivedWithoutRequestId, request, existing, requestId);
       if (existing.currentState === 'AWAITING_SIGNATURE') {
         const dpi = await this.getDurableIntent(existing.operationId);
         const requirement = await this.getPaymentRequirementFromEvidence(existing)
@@ -1802,6 +1854,7 @@ export class Secretariat {
         if (pgError.code === '23505' && request.clientId) {
           const resolved = await this.findExistingOperation(request.clientId, requestId);
           if (resolved) {
+            this.assertNoLogicalRequestCollision(derivedWithoutRequestId, request, resolved, requestId);
             return {
               status: 'EXISTING',
               operation: resolved,
@@ -1853,6 +1906,31 @@ export class Secretariat {
       );
       return { status: 'REJECTED', operation, result };
     }
+  }
+
+  /**
+   * F-07 fix: a clientId-derived logical id (`cid:${clientId}`) must only
+   * resolve to an operation with the SAME paid contract. A different
+   * target/method under the same derived id is a client bug — reject with a
+   * dedicated, actionable error instead of silently reusing the old
+   * operation (which would execute the WRONG request after payment).
+   */
+  private assertNoLogicalRequestCollision(
+    derivedWithoutRequestId: boolean,
+    request: ExecuteRequest,
+    existing: Operation,
+    requestId: string,
+  ): void {
+    if (!derivedWithoutRequestId) return;
+    const normalize = (u: string) => String(u ?? '').replace(/\/+$/, '');
+    const sameTarget = normalize(existing.target) === normalize(request.target);
+    const sameMethod = String(existing.method ?? '').toUpperCase() === String(request.method ?? '').toUpperCase();
+    if (sameTarget && sameMethod) return;
+    throw new Error(
+      `REQUEST_COLLISION: client ${request.clientId} already owns logical request "${requestId}" ` +
+      `for ${existing.method} ${existing.target}. The new request (${request.method} ${request.target}) ` +
+      `differs — send an explicit requestId for each new logical request.`,
+    );
   }
 
   private async findExistingOperation(
