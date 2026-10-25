@@ -71,6 +71,18 @@ function parseSignerMode(): SignerConfig["mode"] {
       `Secretariat config: ZEUS_SIGNER_MODE must be "non_custodial" or "custodial_test", got "${mode}"`,
     );
   }
+  // F-113/C-4 (external audit 2026-10-26, Major): custodial_test installs an
+  // EOA key held in an env var as the signing authority — TEST-ONLY
+  // infrastructure. Until now it was accepted on any network in any
+  // environment; deploying a mainnet stack with it would put production
+  // funds under a hot key (and the e2e recipe's Hardhat/Anvil key would let
+  // anyone drain the signer). Hard-refuse in production builds.
+  if (mode === "custodial_test" && process.env["NODE_ENV"] === "production") {
+    throw new Error(
+      `Secretariat config: ZEUS_SIGNER_MODE=custodial_test is TEST-ONLY and is forbidden when NODE_ENV=production ` +
+      `(non-custodial signing is the only production path)`,
+    );
+  }
   return mode;
 }
 

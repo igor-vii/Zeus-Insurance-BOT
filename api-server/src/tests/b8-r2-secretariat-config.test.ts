@@ -136,6 +136,23 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
     expect(loadSecretariatProductionConfig().signer.mode).toBe("custodial_test");
   });
 
+  // F-113/C-4 (external audit 2026-10-26): custodial_test is TEST-ONLY — it
+  // must be hard-refused in production builds, not merely discouraged.
+  test("R2.0-9b: custodial_test is forbidden when NODE_ENV=production", async () => {
+    setValidEnv();
+    const prevNodeEnv = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "production";
+    process.env["ZEUS_SIGNER_MODE"] = "custodial_test";
+    try {
+      const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
+      expect(() => loadSecretariatProductionConfig()).toThrow(/TEST-ONLY/);
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = prevNodeEnv;
+      process.env["ZEUS_SIGNER_MODE"] = "custodial_test";
+    }
+  });
+
   // R2.0-10: Config module does not create runtime services
   test("R2.0-10: config loading creates no DB/RPC/runtime services", async () => {
     setValidEnv();

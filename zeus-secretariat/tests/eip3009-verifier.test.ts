@@ -138,6 +138,39 @@ describe("EIP-3009 external payment verification primitive", () => {
     });
   });
 
+  // F-113/C-3 (external audit 2026-10-26): on canonical v2 EVM payloads the
+  // EIP-712 domain binding (accepted.extra.name/.version) is REQUIRED — the
+  // old optional check silently skipped domain validation when extra was
+  // absent, so a signer could produce a signature the facilitator's token
+  // domain would reject (or sign under an unintended domain).
+  test("rejects a v2 EVM payload without accepted.extra domain binding", async () => {
+    const payload = await makePayload();
+    const noExtra = {
+      ...payload,
+      accepted: { ...payload.accepted, extra: undefined },
+    };
+    const result = await verifier().verify(INTENT.requestId!, noExtra);
+
+    expect(result).toMatchObject({
+      status: "INVALID",
+      code: "DOMAIN_MISMATCH",
+      field: "domain.extra",
+    });
+  });
+
+  test("rejects a v2 EVM payload with an empty extra.name", async () => {
+    const result = await verifier().verify(
+      INTENT.requestId!,
+      await makePayload({ extra: { name: "", version: DOMAIN.version } }),
+    );
+
+    expect(result).toMatchObject({
+      status: "INVALID",
+      code: "DOMAIN_MISMATCH",
+      field: "domain.extra",
+    });
+  });
+
   test.each([
     ["authorizer", { from: otherAccount.address }, "AUTHORIZER_MISMATCH"],
     ["payTo", { to: "0x4444444444444444444444444444444444444444" }, "PAY_TO_MISMATCH"],

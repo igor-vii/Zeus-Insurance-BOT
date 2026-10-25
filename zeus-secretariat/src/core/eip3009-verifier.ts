@@ -188,6 +188,25 @@ function checkBinding(
   }
 
   const extra = getDomainExtra(payload);
+  // F-113/C-3 (external audit 2026-10-26, Major): on canonical v2 EVM
+  // payloads the domain metadata (accepted.extra.name / .version) is
+  // REQUIRED. It is the only way to bind the signature to the EIP-712 domain
+  // the on-chain token will actually enforce — without it the verifier's
+  // domain check was silently skipped and a signer could unknowingly sign
+  // under a different domain than the facilitator settles with. Non-EVM
+  // networks and v1 payloads keep the old optional behavior.
+  if (payload.x402Version === 2 && isEvmNetwork(payload.accepted.network)) {
+    const extraName = extra ? extra.name : undefined;
+    const extraVersion = extra ? extra.version : undefined;
+    if (typeof extraName !== "string" || extraName === "" || typeof extraVersion !== "string" || extraVersion === "") {
+      return invalid(
+        requestId,
+        "DOMAIN_MISMATCH",
+        "v2 EVM payload must carry accepted.extra.name and accepted.extra.version (EIP-712 domain binding)",
+        "domain.extra",
+      );
+    }
+  }
   if (
     extra &&
     (!sameOptionalDomainValue(extra.name, domain.name) ||
@@ -198,6 +217,16 @@ function checkBinding(
     return invalid(requestId, "DOMAIN_MISMATCH", "payload domain metadata does not match the persisted domain", "domain");
   }
   return null;
+}
+
+/**
+ * CAIP-2 or alias form of an EVM network id (eip155:*; the repo's patched
+ * x402 stack also speaks named aliases which all resolve to EVM chains).
+ */
+function isEvmNetwork(network: string): boolean {
+  if (/^eip155:\d+$/.test(network)) return true;
+  // Named aliases used by this repo / x402 v1 (all EVM).
+  return /^(base|base-sepolia|base-mainnet|x-layer|xlayer|bot-chain|ethereum|sepolia|optimism|arbitrum|polygon|avalanche|abstract|peaq|story|educhain)/i.test(network);
 }
 
 export class Eip3009PaymentVerifier {

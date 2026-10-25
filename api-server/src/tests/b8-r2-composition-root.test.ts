@@ -246,3 +246,45 @@ describe("BLOCK 8 R2.1-FIX-6: Strengthened Composition Tests", () => {
     expect(source).not.toMatch(/executionStore\s+as\s+any/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F-113/C-2 + C-3 (external audit 2026-10-26): network-id and EIP-712 domain
+// resolution hardening.
+// ---------------------------------------------------------------------------
+describe("BLOCK 8 R2.1+: chainIdForNetwork / resolvePaymentDomain", () => {
+  test("chainIdForNetwork parses CAIP-2 eip155:<n> ids (Zeus x402 routes)", async () => {
+    const { chainIdForNetwork } = await import("../lib/secretariat-composition.js");
+    expect(chainIdForNetwork("eip155:196")).toBe(196);
+    expect(chainIdForNetwork("eip155:8453")).toBe(8453);
+    expect(chainIdForNetwork("eip155:84532")).toBe(84532);
+    expect(chainIdForNetwork("EIP155:196")).toBe(196);
+    // named aliases keep working
+    expect(chainIdForNetwork("x-layer")).toBe(196);
+    expect(chainIdForNetwork("base-sepolia")).toBe(84532);
+    expect(() => chainIdForNetwork("solana-mainnet")).toThrow(/not configured/);
+  });
+
+  test("resolvePaymentDomain fails fast on production chains without pinned domain env", async () => {
+    const prevName = process.env["ZEUS_EIP3009_DOMAIN_NAME"];
+    const prevVersion = process.env["ZEUS_EIP3009_DOMAIN_VERSION"];
+    delete process.env["ZEUS_EIP3009_DOMAIN_NAME"];
+    delete process.env["ZEUS_EIP3009_DOMAIN_VERSION"];
+    try {
+      const { resolvePaymentDomain } = await import("../lib/secretariat-composition.js");
+      // eip155:196 (X Layer mainnet) — production chain
+      expect(() => resolvePaymentDomain({ network: "eip155:196", asset: "0x74b7f16337b8972027f6196a17a631ac6de26d22" }))
+        .toThrow(/ZEUS_EIP3009_DOMAIN_NAME/);
+      // x-layer alias — same chain
+      expect(() => resolvePaymentDomain({ network: "x-layer", asset: "0x74b7f16337b8972027f6196a17a631ac6de26d22" }))
+        .toThrow(/ZEUS_EIP3009_DOMAIN_NAME/);
+      // base-sepolia (testnet) keeps the documented default
+      const d = resolvePaymentDomain({ network: "base-sepolia", asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" });
+      expect(d.name).toBe("USD Coin");
+      expect(d.version).toBe("2");
+      expect(d.chainId).toBe(84532);
+    } finally {
+      if (prevName === undefined) delete process.env["ZEUS_EIP3009_DOMAIN_NAME"]; else process.env["ZEUS_EIP3009_DOMAIN_NAME"] = prevName;
+      if (prevVersion === undefined) delete process.env["ZEUS_EIP3009_DOMAIN_VERSION"]; else process.env["ZEUS_EIP3009_DOMAIN_VERSION"] = prevVersion;
+    }
+  });
+});

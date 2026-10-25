@@ -9,11 +9,18 @@ echo "== [1/4] start embedded-free prerequisite check: DATABASE_URL =="
 
 echo "== [2/4] boot Secretariat standalone =="
 cd api-server
+# F-113/C-4 (external audit 2026-10-26): the well-known Hardhat/Anvil key is
+# E2E-ONLY. It stays the default so the recipe remains reproducible offline,
+# but a real key can be injected without editing the script, and the
+# custodial_test mode itself is hard-refused by the config loader when
+# NODE_ENV=production — copying this recipe to a mainnet deployment fails at
+# boot instead of moving real funds under a public key.
+E2E_SIGNER_KEY="${ZEUS_E2E_SIGNER_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 env DATABASE_URL="$DATABASE_URL" \
   SECRETARIAT_PORT=8080 \
   RATE_LIMIT_MAX=10000 \
   ZEUS_SIGNER_MODE=custodial_test \
-  ZEUS_SIGNER_PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" \
+  ZEUS_SIGNER_PRIVATE_KEY="$E2E_SIGNER_KEY" \
   ZEUS_RPC_PROVIDERS='[{"providerId":"mock-a","underlyingProvider":"provider-a","rpcUrl":"http://127.0.0.1:9977/rpc","maxStalenessBlocks":10},{"providerId":"mock-b","underlyingProvider":"provider-b","rpcUrl":"http://127.0.0.1:9977/rpc","maxStalenessBlocks":10}]' \
   ZEUS_FACILITATOR_URL="http://127.0.0.1:9977/facilitator" \
   ZEUS_SELLER_URL="http://127.0.0.1:9977/seller" \

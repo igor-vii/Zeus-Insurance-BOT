@@ -96,6 +96,17 @@ if (ZEUS_TREASURY) {
     ? { url: X402_FACILITATOR_URL }
     : undefined;
   if (!facilitator) {
+    // F-113/M-15 (external audit 2026-10-26): fail fast in production — the
+    // default public facilitator does NOT support eip155:196 (the only
+    // network x402Routes targets), so "start anyway and warn" guarantees that
+    // every settlement of a protected route fails at runtime, after the
+    // payment was already accepted. In development the warning is enough.
+    if (process.env["NODE_ENV"] === "production") {
+      throw new Error(
+        "X402_FACILITATOR_URL is required when ZEUS_TREASURY is set in production: " +
+        "the default facilitator does not support eip155:196, protected routes would fail settlement",
+      );
+    }
     logger.warn(
       "X402_FACILITATOR_URL not set — falling back to default facilitator " +
         "(does NOT support eip155:196; protected routes will fail settlement)",
