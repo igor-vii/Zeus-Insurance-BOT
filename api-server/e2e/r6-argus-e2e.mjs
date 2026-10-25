@@ -815,6 +815,14 @@ async function main() {
 
   const results = [];
 
+  // F-19: the POLICY_REJECTED baseline must be captured BEFORE the first
+  // probe. The previous implementation read it AFTER the scenario loop,
+  // which made the baseline include this run's own rejections and the
+  // run-window delta structurally zero — the aggregate/over-budget PG
+  // assertions were unsatisfiable by construction (CI first red on
+  // 2d936afe1 with delta=0, baseline=5 = this run's own rows).
+  const policyBaseline = await policyRejectedBaseline();
+
   for (const scenario of CATALOG) {
     const entry = {
       scenario: scenario.id,
@@ -959,7 +967,8 @@ async function main() {
   // ---- PostgreSQL observation assertions ----
   let pgChecks;
   try {
-    const policyBaseline = await policyRejectedBaseline();
+    // policyBaseline was captured pre-run (above); reading it here instead
+    // would fold this run's own POLICY_REJECTED rows into the baseline.
     pgChecks = await assertObservations(results, policyBaseline);
   } catch (e) {
     pgChecks = [{ scenario: "PG", ok: false, note: String(e).slice(0, 200) }];
