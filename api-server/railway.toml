@@ -2,7 +2,9 @@
 # pnpm install must run from the monorepo root so workspace packages
 # (@workspace/db, @workspace/api-zod, @zeus/sdk) are resolved correctly.
 # Then we drop back into api-server/ to run the esbuild bundle step.
-buildCommand = "cd .. && pnpm install --no-frozen-lockfile && cd api-server && node ./build.mjs"
+# F-115/H-11 (external audit 2026-10-26): build the externalized workspace
+# deps (db, secretariat) before bundling the API server.
+buildCommand = "cd .. && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/db run build && pnpm --filter zeus-secretariat run build && cd api-server && node ./build.mjs"
 
 [deploy]
 startCommand = "node --enable-source-maps ./dist/index.mjs"

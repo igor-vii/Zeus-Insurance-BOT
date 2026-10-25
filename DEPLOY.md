@@ -36,12 +36,28 @@ Required:
 - DATABASE_URL - PostgreSQL connection string
 - PORT=3000
 - NODE_ENV=production
-- SERVER_PRIVATE_KEY - Private key for automatic mode
+- SERVER_PRIVATE_KEY - Private key for the LEGACY on-chain automatic mode of
+  the escrow/insurance services (services/escrow.ts, services/insurance.ts).
+  This is NOT the Secretariat signer — see below.
 - ZEUS_INSURANCE_NETWORK - bot-chain or x-layer
 - BOT_CHAIN_MAINNET_RPC_URL
 - XLAYER_MAINNET_RPC_URL
 - ADMIN_JWT_SECRET - NEW: generate a strong 32+ char secret
 - CORS_ORIGINS - https://zeus-insurance-bot-frontend.vercel.app
+
+Secretariat signer (F-116/M-16, external audit 2026-10-26 — the two keys
+must never be confused; they authorize DIFFERENT wallets):
+- ZEUS_SIGNER_MODE - non_custodial (production default; the client signs
+  externally) or custodial_test (TEST-ONLY EOA hot key — hard-refused by the
+  config loader when NODE_ENV=production).
+- ZEUS_SIGNER_PRIVATE_KEY - the key env var read when custodial_test is
+  explicitly enabled in a test environment. NEVER set a production-funded
+  key here.
+- ZEUS_EIP3009_DOMAIN_NAME / ZEUS_EIP3009_DOMAIN_VERSION - REQUIRED on
+  production chains (eip155:196 / 8453 / 677): the EIP-712 domain the token
+  contract enforces (verify on-chain via name()/version() before deploy).
+- ZEUS_RPC_PROVIDERS, ZEUS_FACILITATOR_URL, ZEUS_SELLER_URL - required by
+  the standalone Secretariat boot (secretariat-index.mjs).
 
 Generate ADMIN_JWT_SECRET:
   openssl rand -hex 32

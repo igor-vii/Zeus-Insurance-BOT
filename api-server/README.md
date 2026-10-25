@@ -211,7 +211,9 @@ Variable	Description
 SESSION_SECRET	Cookie signing secret (required)
 ZEUS_NETWORK	Default network (bot-chain or x-layer)
 ZEUS_INSURANCE_NETWORK	Override network for insurance contract only
-SERVER_PRIVATE_KEY	Enables automatic mode — server signs transactions
+SERVER_PRIVATE_KEY	Enables automatic mode — server signs transactions (legacy escrow/insurance services only; NOT the Secretariat signer)
+ZEUS_SIGNER_MODE	Secretariat signer: non_custodial (prod) | custodial_test (test-only; refused when NODE_ENV=production)
+ZEUS_SIGNER_PRIVATE_KEY	Secretariat custodial_test key env var (test environments only)
 BOT_CHAIN_RPC_URL	Custom RPC for BOT Chain
 XLAYER_MAINNET_RPC_URL	Custom RPC for X Layer
 ZEUS_TREASURY	Wallet receiving x402 API fees
