@@ -181,6 +181,9 @@ async function signedPayload(): Promise<PaymentPayload> {
       asset,
       payTo,
       maxTimeoutSeconds: validBefore - validAfter,
+      // F-113/C-3: v2 EVM payloads carry the EIP-712 domain binding — the
+      // verifier now requires accepted.extra.name/.version on canonical v2.
+      extra: { name: domain.name, version: domain.version },
     },
     payload: {
       signature,
