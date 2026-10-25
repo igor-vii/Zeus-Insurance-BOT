@@ -59,8 +59,18 @@ jobs:
       - name: Build workspace deps (db)
         run: pnpm --filter "@workspace/db" run build
 
+      # The live-PG jest suites do not self-provision their schema: the
+      # canonical migration set (0000 + 0005..0010) must reach the service
+      # database first, exactly as in the e2e job below.
+      - name: Apply canonical migrations
+        run: bash scripts/apply-migrations.sh
+
+      # F-114 follow-up (CI post-push fix): `pnpm test --ci` is invalid —
+      # pnpm consumes `--ci` as its own CLI option ("Unknown option: 'ci'")
+      # and jest never ran. `--` forwards the flag to the package script;
+      # CI-mode is additionally auto-detected from the CI=true environment.
       - name: Run zeus-secretariat jest suite
-        run: pnpm --filter "zeus-secretariat" test --ci
+        run: pnpm --filter "zeus-secretariat" test -- --ci
 
       - name: Run api-server jest suite (R4 BLOCK 8)
         run: cd api-server && NODE_OPTIONS=--experimental-vm-modules npx jest --ci

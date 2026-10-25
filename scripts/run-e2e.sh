@@ -16,6 +16,12 @@ cd api-server
 # NODE_ENV=production — copying this recipe to a mainnet deployment fails at
 # boot instead of moving real funds under a public key.
 E2E_SIGNER_KEY="${ZEUS_E2E_SIGNER_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
+# F-09 egress guard (block-3) blocks loopback by default (anti-SSRF), which
+# killed every E2E discovery fetch to the loopback mock rail — all 20
+# scenarios came back 422 REQUEST_REJECTED from the catch-all handler.
+# The mock rail on 127.0.0.1:9977 is the documented approved exception:
+# the guard STAYS ACTIVE (block-private + redirect-forbidden) for every
+# other destination, so the adversarial suite still exercises it.
 env DATABASE_URL="$DATABASE_URL" \
   SECRETARIAT_PORT=8080 \
   RATE_LIMIT_MAX=10000 \
@@ -24,6 +30,7 @@ env DATABASE_URL="$DATABASE_URL" \
   ZEUS_RPC_PROVIDERS='[{"providerId":"mock-a","underlyingProvider":"provider-a","rpcUrl":"http://127.0.0.1:9977/rpc","maxStalenessBlocks":10},{"providerId":"mock-b","underlyingProvider":"provider-b","rpcUrl":"http://127.0.0.1:9977/rpc","maxStalenessBlocks":10}]' \
   ZEUS_FACILITATOR_URL="http://127.0.0.1:9977/facilitator" \
   ZEUS_SELLER_URL="http://127.0.0.1:9977/seller" \
+  ZEUS_EGRESS_ALLOWED_HOSTS="127.0.0.1" \
   node --enable-source-maps ./dist/secretariat-index.mjs > /tmp/secretariat-e2e-boot.log 2>&1 &
 SRV_PID=$!
 trap 'kill $SRV_PID 2>/dev/null || true' EXIT
