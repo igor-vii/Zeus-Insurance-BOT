@@ -76,7 +76,12 @@ const ATTACKER_ADDR = "0xdddddddddddddddddddddddddddddddddddddddd";
 
 const USDC_NAME = "USD Coin";
 const USDC_VERSION = "2";
-const USDC_ASSET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // base-sepolia USDC
+// F-12 fix (external audit 2026-10-25): 0x833589fC…A02913 is USDC on Base
+// MAINNET. On Base Sepolia (chain 84532) the canonical test-token address is
+// 0x036CbD53842c5426634e7929541eC2318f3dCF7e. The mock rail stays internally
+// consistent either way, but the fixture must not teach mainnet-vs-testnet
+// confusion — override with USDC_ASSET when a different test token is used.
+const USDC_ASSET = process.env.USDC_ASSET ?? "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // Base Sepolia USDC
 const CHAIN_ID = 84532;
 const NETWORK = "base-sepolia";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -236,7 +241,7 @@ function buildArgus() {
   // finding F1 lesson: the mock must mirror the rail's real contract,
   // otherwise the SUT is punished for the mock's fidelity, not its own.
   const usedNonces = new Map(); // nonce → txHash of the first settle
-  const facilitatorStats = { settlesAccepted: 0, replaysRejected: 0 };
+  const facilitatorStats = { settlesAccepted: 0, replaysRejected: 0, malformedRejected: 0 };
   app.post("/facilitator/settle", (req, res) => {
     try {
       const header = String(req.body?.paymentHeader ?? "");
@@ -262,13 +267,13 @@ function buildArgus() {
       facilitatorStats.settlesAccepted++;
       res.status(200).json({ success: true, transactionHash: txHash, network: NETWORK });
     } catch {
-      const txHash = `0xsettle${Date.now().toString(16)}`;
-      settledTx.set(txHash.toLowerCase(), {
-        from: CLIENT_ADDR.toLowerCase(), to: SELLER_ADDR, value: HONEST_AMOUNT,
-        nonce: "0x" + "0".repeat(64),
-      });
-      facilitatorStats.settlesAccepted++;
-      res.status(200).json({ success: true, transactionHash: txHash, network: NETWORK });
+      // F-10 fix (external audit 2026-10-25): a malformed payment header is a
+      // REJECTION, not a settlement. The previous catch branch minted a fake
+      // tx, incremented settlesAccepted and answered 200 success:true — the
+      // mock rail violated its own verification contract and could bless a
+      // corrupted payload as a settled payment.
+      facilitatorStats.malformedRejected++;
+      res.status(400).json({ success: false, errorReason: "malformed_payment_header" });
     }
   });
   app.post("/facilitator/verify", (_req, res) => res.json({ isValid: true }));
@@ -545,7 +550,22 @@ async function runOverBudget(argus, entry, account) {
 // ---------------------------------------------------------------------------
 // PostgreSQL observation assertions
 // ---------------------------------------------------------------------------
-async function assertObservations(results) {
+// F-19 fix (external audit 2026-10-25): run-scoped evidence baseline. The
+// stage-a/over-budget PG checks must prove THIS run produced rejections —
+// compare against the pre-run POLICY_REJECTED count (delta), not an all-time
+// aggregate that foreign rows could satisfy.
+async function policyRejectedBaseline() {
+  try {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://zeus@localhost:5432/zeus" });
+    const b = await pool.query(`SELECT count(*)::int AS n FROM reconciliation_observations WHERE result = 'POLICY_REJECTED'`);
+    await pool.end();
+    return b.rows[0]?.n ?? 0;
+  } catch {
+    return -1; // PG unreachable — assertObservations will surface it
+  }
+}
+
+async function assertObservations(results, policyBaseline) {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://zeus@localhost:5432/zeus" });
   const out = [];
   try {
@@ -660,13 +680,15 @@ async function assertObservations(results) {
           note: `intents=${rows.length} settled=${rows.filter((x) => x.settlement_state === "SETTLED").length} tx=${rows[0]?.tx_hash ? "single" : "none"} verified>=${verified >= 1 ? 1 : 0} attempts=${att.rows[0]?.n}`,
         });
       } else if (r.kind === "over-budget") {
-        // Over leg: pre-money refusal adds one more POLICY_REJECTED row to
-        // the run window (4 stage-a + B-BS-18 => >= 5).
+        // Over leg: THIS run's refusals — pre-money refusal adds one
+        // POLICY_REJECTED row to the run-window DELTA over the pre-run
+        // baseline (F-19: 4 stage-a + B-BS-18 => delta >= 5).
         const g = await pool.query(
           `SELECT count(*)::int AS n FROM reconciliation_observations
            WHERE result = 'POLICY_REJECTED' AND observed_at >= to_timestamp($1 / 1000.0)`,
           [RUN_STARTED_AT],
         );
+        const runDelta = policyBaseline >= 0 ? (g.rows[0]?.n ?? 0) - policyBaseline : null;
         // Boundary leg: priced EXACTLY at the cap, settled exactly once.
         const q = await pool.query(
           `SELECT value, settlement_state, tx_hash, reconciliation_observations FROM payment_intents WHERE request_id = $1 LIMIT 1`,
@@ -683,8 +705,8 @@ async function assertObservations(results) {
           && row.settlement_state === "SETTLED" && !!row.tx_hash && verified >= 1 && att.rows[0]?.n === 1;
         out.push({
           scenario: r.scenario,
-          ok: g.rows[0]?.n >= 5 && boundaryOk,
-          note: `policyRejected=${g.rows[0]?.n} boundaryValue=${row?.value ?? "-"} state=${row?.settlement_state ?? "-"} tx=${row?.tx_hash ? "single" : "none"} successAttempts=${att.rows[0]?.n}`,
+          ok: runDelta !== null && runDelta >= 5 && boundaryOk,
+          note: `policyRejectDelta=${runDelta ?? "PG-unreachable"} boundaryValue=${row?.value ?? "-"} state=${row?.settlement_state ?? "-"} tx=${row?.tx_hash ? "single" : "none"} successAttempts=${att.rows[0]?.n}`,
         });
       } else if (r.scenario === "S8") {
         const q = await pool.query(
@@ -707,24 +729,38 @@ async function assertObservations(results) {
         );
         out.push({ scenario: "S9", ok: q.rows[0]?.n === 1, note: `intents for retried requestId = ${q.rows[0]?.n} (must be 1)` });
       } else if (r.kind === "stage-a") {
-        const q = await pool.query(
-          `SELECT count(*)::int AS n FROM reconciliation_observations
-           WHERE result = 'POLICY_REJECTED' AND observed_at >= to_timestamp($1 / 1000.0)
-             AND attempt_id = $2`,
-          [RUN_STARTED_AT, r.operationId ?? ""],
-        );
-        // Stage-A rejections record evidence under the OPERATION id, which the
-        // HTTP API does not expose for rejected requests — assert globally that
-        // policy rejections happened during the run window instead.
-        const global = await pool.query(
-          `SELECT count(*)::int AS n FROM reconciliation_observations
-           WHERE result = 'POLICY_REJECTED' AND observed_at >= to_timestamp($1 / 1000.0)`,
-          [RUN_STARTED_AT],
-        );
-        out.push({ scenario: r.scenario, ok: global.rows[0]?.n >= 4, note: `POLICY_REJECTED rows in run window: ${global.rows[0]?.n}` });
+        // F-19 fix: the SPECIFIC per-scenario proof is the HTTP verdict of
+        // THIS probe (422 REQUEST_REJECTED). The global run-window count is
+        // no longer a substitute for per-scenario evidence — it is checked
+        // once as an aggregate row below (POLICY-REJECT-AGGREGATE).
+        const specific = r.verdict?.outcome === "BLOCKED" && r.verdict?.code === "REQUEST_REJECTED";
+        out.push({
+          scenario: r.scenario,
+          ok: specific,
+          note: `http=${r.verdict?.httpStatus ?? "-"} code=${r.verdict?.code ?? "-"} (specific, per-probe)`,
+        });
       } else {
         out.push({ scenario: r.scenario, ok: true, note: "no PG assertion" });
       }
+    }
+
+    // F-19: run-window aggregate — THIS run must have produced at least one
+    // POLICY_REJECTED row per BLOCKED stage-a/over-budget probe.
+    const blockedProbes = results.filter(
+      (r) => ["stage-a", "over-budget"].includes(r.kind) && r.verdict?.outcome === "BLOCKED",
+    ).length;
+    if (blockedProbes > 0 && policyBaseline >= 0) {
+      const total = await pool.query(
+        `SELECT count(*)::int AS n FROM reconciliation_observations
+         WHERE result = 'POLICY_REJECTED' AND observed_at >= to_timestamp($1 / 1000.0)`,
+        [RUN_STARTED_AT],
+      );
+      const delta = (total.rows[0]?.n ?? 0) - policyBaseline;
+      out.push({
+        scenario: "POLICY-REJECT-AGGREGATE",
+        ok: delta >= blockedProbes,
+        note: `run-window delta=${delta} >= blocked probes=${blockedProbes} (baseline=${policyBaseline})`,
+      });
     }
   } finally {
     await pool.end();
@@ -847,7 +883,13 @@ async function main() {
         continue;
       }
 
-      // S9: retry the EXACT same payload — must be idempotent, single payment
+      // S9: retry the EXACT same payload — must be idempotent, single payment.
+      // F-11 fix (external audit 2026-10-25): the verdict requires PROOF, not
+      // plausibility: (1) a CONFIRMED first txHash exists, (2) the retry
+      // returns the SAME txHash, (3) the rail-side settle counter did not
+      // move across the retry. A missing firstTx makes the scenario
+      // INCONCLUSIVE — never PASSED.
+      const statsBeforeRetry = await getFacilitatorStats();
       const retryRes = await fetch(`${SECRETARIAT}/v1/requests/${entry.requestId}/payment`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -855,17 +897,23 @@ async function main() {
       });
       const retryBody = await retryRes.json().catch(() => ({}));
       const retryTx = retryBody?.settlementTxHash ?? null;
+      const statsAfterRetry = await getFacilitatorStats();
+      const settlesDelta = (statsAfterRetry?.settlesAccepted ?? 0) - (statsBeforeRetry?.settlesAccepted ?? 0);
       const idempotent =
         retryRes.status === 200 &&
         retryBody?.requestId === entry.requestId &&
-        (retryTx === firstTx || firstTx === null);
+        firstTx !== null &&
+        retryTx === firstTx &&
+        settlesDelta === 0;
+      const s9Outcome = idempotent ? "PASSED" : firstTx === null ? "INCONCLUSIVE" : "NOT_IDEMPOTENT";
 
       entry.verdict = {
-        outcome: idempotent ? "PASSED" : "NOT_IDEMPOTENT",
+        outcome: s9Outcome,
         httpStatus: retryRes.status,
         finalStatus: retryBody?.status ?? first.status,
         txHashFirst: firstTx,
         txHashRetry: retryTx,
+        settlesDelta,
       };
       results.push(entry);
     } catch (e) {
@@ -877,7 +925,8 @@ async function main() {
   // ---- PostgreSQL observation assertions ----
   let pgChecks;
   try {
-    pgChecks = await assertObservations(results);
+    const policyBaseline = await policyRejectedBaseline();
+    pgChecks = await assertObservations(results, policyBaseline);
   } catch (e) {
     pgChecks = [{ scenario: "PG", ok: false, note: String(e).slice(0, 200) }];
   }

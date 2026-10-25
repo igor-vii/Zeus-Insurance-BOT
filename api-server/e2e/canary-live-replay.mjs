@@ -35,7 +35,11 @@ const CLIENT_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const SELLER_ADDR = "0xcccccccccccccccccccccccccccccccccccccccc";
 const USDC_NAME = "USD Coin";
 const USDC_VERSION = "2";
-const USDC_ASSET = process.env.USDC_ASSET ?? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+// F-12 fix (external audit 2026-10-25): default USDC address must match the
+// default network (base-sepolia, chain 84532). 0x833589fC…A02913 is Base
+// MAINNET USDC — against the real testnet the EIP-3009 domain would not
+// verify. Override USDC_ASSET/CHAIN_ID/NETWORK together.
+const USDC_ASSET = process.env.USDC_ASSET ?? "0x036CbD53842c5426634e7929541eC2318f3dCF7e"; // Base Sepolia USDC
 const CHAIN_ID = Number(process.env.CHAIN_ID ?? 84532);
 const NETWORK = process.env.NETWORK ?? "base-sepolia";
 const AMOUNT = process.env.AMOUNT ?? "10000";
@@ -130,9 +134,16 @@ async function main() {
   }
 
   // ---- Ledger: the Secretariat must still hold exactly one settlement ----
+  // F-13 fix (external audit 2026-10-25): a SKIPPED check is not a PASSED
+  // check. Without DATABASE_URL the ledger uniqueness was never verified,
+  // yet ledgerOk defaulted to true and the run printed GREEN. Three verdicts
+  // now exist: GREEN (all checks ran and held), LEAK (double-spend),
+  // INCONCLUSIVE (required evidence missing — fix the environment).
   let ledgerNote = "PG check skipped (no DATABASE_URL)";
-  let ledgerOk = true;
+  let ledgerChecked = false;
+  let ledgerOk = false;
   if (process.env.DATABASE_URL) {
+    ledgerChecked = true;
     try {
       const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
       const q = await pool.query(
@@ -156,6 +167,10 @@ async function main() {
   if (accepted > 0) {
     console.error(`[canary] VERDICT: LEAK — ${accepted} replay(s) were ACCEPTED (double-spend!)`);
     process.exit(2);
+  }
+  if (!ledgerChecked) {
+    console.error("[canary] VERDICT: INCONCLUSIVE — ledger check skipped: set DATABASE_URL (a skipped uniqueness check is not a passed check)");
+    process.exit(3);
   }
   if (!ledgerOk) {
     console.error("[canary] VERDICT: LEDGER_ANOMALY — replays rejected but the ledger is not single-settle");
