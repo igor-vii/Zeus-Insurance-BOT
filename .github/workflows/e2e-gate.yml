@@ -72,6 +72,14 @@ jobs:
       - name: Run zeus-secretariat jest suite
         run: pnpm --filter "zeus-secretariat" test -- --ci
 
+      # D2: the Zeus-operated facilitator (canonical x402 v2 /verify + /settle)
+      # has its own hermetic suites — no PG needed, same jest rig.
+      - name: Run zeus-facilitator jest suite
+        run: pnpm --filter "zeus-facilitator" test -- --ci
+
+      - name: Build zeus-facilitator (dist compile check)
+        run: pnpm --filter "zeus-facilitator" run build
+
       - name: Run api-server jest suite (R4 BLOCK 8)
         run: cd api-server && NODE_OPTIONS=--experimental-vm-modules npx jest --ci
 

@@ -56,7 +56,7 @@ must never be confused; they authorize DIFFERENT wallets):
 - ZEUS_EIP3009_DOMAIN_NAME / ZEUS_EIP3009_DOMAIN_VERSION - REQUIRED on
   production chains (eip155:196 / 8453 / 677): the EIP-712 domain the token
   contract enforces. For eip155:196 (X Layer) VERIFIED on-chain 2026-10-26:
-  USDC 0x74b7F16337B8972027F6196A17a631aC6dE26d22 returns name()="USD Coin",
+  USDC 0x74b7F16337b8972027F6196A17a631aC6dE26d22 returns name()="USD Coin",
   version()="2" and its on-chain DOMAIN_SEPARATOR() matches the domain
   computed from these values — set ZEUS_EIP3009_DOMAIN_NAME="USD Coin",
   ZEUS_EIP3009_DOMAIN_VERSION="2" (see zeus-secretariat/docs/
@@ -66,6 +66,52 @@ must never be confused; they authorize DIFFERENT wallets):
 
 Generate ADMIN_JWT_SECRET:
   openssl rand -hex 32
+
+#### Zeus Facilitator (own, D2) — two-facilitator architecture
+
+The protocol runs TWO facilitators (user decision, 2026-10-26):
+
+1. EXTERNAL FREE (library default, e.g. Coinbase CDP / x402.org) — free,
+   zero infrastructure, used for base-sepolia dev/test. It does NOT support
+   eip155:196 (X Layer) — that is why the second one exists.
+2. ZEUS-OPERATED — shipped in this repo as the `zeus-facilitator` package.
+   Canonical x402 v2 remote-facilitator contract, identical to the F-112
+   mock enforcement:
+     POST /verify {x402Version, paymentPayload, paymentRequirements}
+       → 200 {isValid, payer} | {isValid:false, invalidReason}
+     POST /settle same → 200 {success, transaction, transactionHash,
+       network, payer} | 200 {success:false, errorReason} (definitive,
+       pre-broadcast) | 409 duplicate | 503/504 ambiguous (client MUST go
+       RECONCILING).
+   Verification: exact scheme, pinned network/asset/domain (eip155:196 →
+   USDC 0x74b7F16337b8972027F6196A17a631aC6dE26d22, domain "USD Coin"/"2",
+   D1-verified on-chain), EIP-712 recovery == authorization.from, time
+   window, on-chain authorizationState(nonce unused), payer balance.
+   Settlement: gas payer broadcasts transferWithAuthorization (EIP-1559),
+   waits for the receipt; per-nonce guard prevents double broadcast.
+
+Deploy as a separate Railway service (root dir `zeus-facilitator`):
+  Build:  pnpm install && pnpm --filter zeus-facilitator run build
+  Start:  node zeus-facilitator/dist/server.js
+  Health: GET /health → {ok, network, testnet, payer}
+Required env:
+  ZEUS_FACILITATOR_RPC_URLS - comma-separated X Layer RPC endpoints
+    (public: https://xlayerrpc.okx.com — verify reachability from Railway)
+  ZEUS_FACILITATOR_GAS_PRIVATE_KEY - dedicated gas-payer key funded with
+    OKB. NEVER reuse ZEUS_SIGNER_PRIVATE_KEY (F-116: the two roles must
+    never share a key).
+  ZEUS_FACILITATOR_API_KEY - static bearer key; the api-server and
+    Secretariat both send `Authorization: Bearer <ZEUS_FACILITATOR_API_KEY>`
+    when ZEUS_FACILITATOR_API_KEY is set on THEIR side. Required in prod.
+Optional env:
+  ZEUS_FACILITATOR_NETWORK (default eip155:196; eip155:84532 = base-sepolia
+    staging, refused under NODE_ENV=production)
+  PORT (default 3001), ZEUS_FACILITATOR_RECEIPT_TIMEOUT_MS (default 45000),
+  ZEUS_FACILITATOR_CHECK_PAYER_BALANCE (default true)
+
+Point BOTH consumers at it (api-server X402_FACILITATOR_URL and Secretariat
+ZEUS_FACILITATOR_URL = the deployed facilitator base URL). Never point
+production at the free public facilitator for eip155:196 traffic.
 
 #### Build and Deploy
 

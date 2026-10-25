@@ -44,10 +44,10 @@ packages:
   - lib/*
   - lib/integrations/*
   - zeus-secretariat
+  - zeus-facilitator
   - scripts
   - sdk
   - watcher
-  - zeus-secretariat
 
 catalog:
   '@replit/vite-plugin-cartographer': ^0.5.21
