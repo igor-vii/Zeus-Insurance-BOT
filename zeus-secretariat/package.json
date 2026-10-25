@@ -13,6 +13,10 @@
     "./adapters/local-eoa-signer": {
       "types": "./dist/adapters/local-eoa-signer.d.ts",
       "default": "./dist/adapters/local-eoa-signer.js"
+    },
+    "./core/types": {
+      "types": "./dist/core/types.d.ts",
+      "default": "./dist/core/types.js"
     }
   },
   "directories": {
@@ -20,9 +24,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "jest",
-    "test:durable": "ZEUS_REQUIRE_DATABASE=1 jest tests/durable-storage.test.ts -t \"AE: pre-intent append\"",
-    "test:watch": "jest --watch",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:durable": "ZEUS_REQUIRE_DATABASE=1 NODE_OPTIONS=--experimental-vm-modules jest tests/durable-storage.test.ts -t \"AE: pre-intent append\"",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "lint": "echo 'No linter configured'",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit"

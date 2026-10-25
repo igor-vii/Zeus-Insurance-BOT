@@ -5,7 +5,14 @@
  * We must first determine settlement status before any recovery action.
  */
 import { CryptoNonceGenerator } from './nonce-generator.js';
+import { egressFetch } from './egress-guard.js';
 import { keccak256, toBytes } from 'viem';
+// F-110 (external audit 2026-10-26): single source of truth for the Operation
+// FSM — the table lives in operation-fsm.ts and is shared with
+// execution-feedback-service.ts (the hand-mirrored ALLOWED_EDGES copy is gone).
+import { VALID_TRANSITIONS, isValidTransition } from './operation-fsm.js';
+// Backwards-compatible re-export for existing imports from this module.
+export { VALID_TRANSITIONS, isValidTransition };
 import { X402Parser } from './x402-parser.js';
 import { SellerCapabilityResolver } from './capability-resolver.js';
 // ============================================================================
@@ -16,6 +23,28 @@ function generateOperationId() {
 }
 function generateRequestId() {
     return `req_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+/**
+ * S1/S5 live-matrix repair (2026-10-23, Argus Agent Test Lab vs real
+ * Secretariat): when the client does not supply a requestId, the previous
+ * code generated a FRESH one on every create call. The idempotency lookup
+ * (client_id, request_id) and the 0006 partial unique index therefore never
+ * matched for retries — a duplicate create (client retry after a network
+ * timeout) or a concurrent duplicate created a NEW operation and could
+ * settle TWICE for one logical request (observed live: S1 → 2 settled
+ * intents, S5 → 5, all with the same clientId).
+ *
+ * B8-001 contract: clientId is the idempotency identity of the logical
+ * request. Derive the requestId deterministically from it when the client
+ * omits its own, so duplicate creates resolve to the SAME operation through
+ * the existing lookup + 0006 unique index arbiter.
+ */
+function resolveLogicalRequestId(request) {
+    if (request.requestId)
+        return request.requestId;
+    if (request.clientId)
+        return `cid:${request.clientId}`;
+    return generateRequestId();
 }
 function generatePaymentIntentId() {
     return `pi_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
@@ -32,34 +61,6 @@ function requireNonEmpty(value, field) {
 function toEpochSeconds(deadlineMs, currentMs) {
     const deadline = deadlineMs ?? currentMs + 300_000;
     return deadline > 10_000_000_000 ? Math.floor(deadline / 1000) : Math.floor(deadline);
-}
-// ============================================================================
-// STATE MACHINE TRANSITIONS
-// ============================================================================
-const VALID_TRANSITIONS = {
-    CREATED: ['DISCOVERING', 'FAILED'],
-    DISCOVERING: ['PAYMENT_REQUIRED', 'SUCCESS', 'FAILED'],
-    PAYMENT_REQUIRED: ['AWAITING_SIGNATURE', 'AUTHORIZED', 'POLICY_REJECTED', 'FAILED'],
-    AWAITING_SIGNATURE: ['AUTHORIZED', 'FAILED'],
-    AUTHORIZED: ['PAYMENT_SUBMITTED', 'FAILED'],
-    PAYMENT_SUBMITTED: ['SETTLEMENT_PENDING', 'SETTLEMENT_UNKNOWN', 'SETTLED', 'SETTLEMENT_FAILED'],
-    SETTLEMENT_PENDING: ['SETTLED', 'SETTLEMENT_UNKNOWN', 'SETTLEMENT_FAILED'],
-    SETTLEMENT_UNKNOWN: ['SETTLED', 'SETTLEMENT_FAILED'],
-    SETTLED: ['EXECUTION_PENDING', 'EXECUTION_UNKNOWN'],
-    EXECUTION_PENDING: ['EXECUTION_CONFIRMED', 'EXECUTION_UNKNOWN', 'FAILED'],
-    EXECUTION_CONFIRMED: ['DELIVERED', 'FAILED'],
-    DELIVERED: ['SUCCESS'],
-    SUCCESS: [], // Terminal state
-    FAILED: [], // Terminal state
-    POLICY_REJECTED: [], // Terminal state
-    SETTLEMENT_FAILED: ['FAILED'],
-    EXECUTION_UNKNOWN: ['RECOVERY_PENDING', 'FAILED'],
-    RECOVERY_PENDING: ['RECOVERED', 'SUCCESS', 'UNRESOLVABLE', 'FAILED'],
-    RECOVERED: [], // Terminal state
-    UNRESOLVABLE: [], // Terminal state
-};
-function isValidTransition(from, to) {
-    return VALID_TRANSITIONS[from]?.includes(to) ?? false;
 }
 export class Secretariat {
     config;
@@ -87,7 +88,7 @@ export class Secretariat {
     // MAIN ENTRY POINT: Execute an operation
     // ==========================================================================
     async execute(request) {
-        const requestId = request.requestId ?? generateRequestId();
+        const requestId = resolveLogicalRequestId(request);
         const canonicalV2 = Boolean(this.config.settlementAdapter);
         let stageARequest = request;
         // The Stage-A primitive never consults a signer. The existing signer-based
@@ -130,6 +131,9 @@ export class Secretariat {
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            if (process.env.ZEUS_DEBUG_STACK) {
+                console.error('[StateMachine.execute] failure:', error?.stack ?? error);
+            }
             return await this.failOperation(operation, 'FAILED', errorMessage);
         }
     }
@@ -196,6 +200,19 @@ export class Secretariat {
             // accepted for this request. Do this check before the state guard because
             // the first successful submission necessarily advances the operation.
             if (dpi.paymentPayloadHash === paymentPayloadHash) {
+                // F-05 fix (external audit 2026-10-25): AUTHORIZED with the SAME
+                // payload means a previous attempt crashed or failed AFTER persisting
+                // the authorization but BEFORE (or without durably completing) the
+                // facilitator submission. Returning buildResult() here left the
+                // payment stuck in AUTHORIZED forever while the retry LOOKED
+                // idempotent. Resume the submission instead; the EIP-3009 nonce
+                // (AuthorizationUsed on-chain) remains the double-settle guard.
+                if (dpi.settlementState === 'AUTHORIZED') {
+                    return await this.resumeAuthorizedSubmission(operation, dpi);
+                }
+                // Truly advanced states (SUBMITTING/SUBMITTED/RECONCILING/SETTLED/…)
+                // are owned by the in-flight submission or the reconciliation worker:
+                // keep the idempotent response — never blind-resubmit (§14).
                 return this.buildResult(operation);
             }
             throw new Error(`PAYMENT_PAYLOAD_RETRY_MISMATCH: ${operation.currentState}`);
@@ -209,16 +226,45 @@ export class Secretariat {
             throw new Error('PAYMENT_REQUIREMENT_NOT_FOUND');
         this.validateExternalPaymentPayload(externallySignedPaymentPayload, dpi, requirement);
         const serializedPayload = JSON.stringify(externallySignedPaymentPayload);
+        const paymentPayloadHash = keccak256(toBytes(serializedPayload));
         const durableStore = this.config.evidenceStore;
-        if (typeof durableStore.updatePaymentIntentAuthorization !== 'function' ||
-            typeof durableStore.updatePaymentIntentStatus !== 'function') {
-            throw new Error('Non-custodial flow requires payment intent authorization persistence');
+        // F-108/F-109 fix (external audit 2026-10-26): bind the signed payload AND
+        // the AUTHORIZED state in ONE CAS-guarded statement. The previous pair of
+        // blind writes (updatePaymentIntentAuthorization + updatePaymentIntentStatus)
+        // let two concurrent Stage B callers — both having passed the
+        // PENDING_SIGNATURE check above (TOCTOU) — overwrite each other's payload
+        // (last-writer-wins) and regress an intent a concurrent submission had
+        // already advanced back to AUTHORIZED. The CAS makes the payload
+        // immutable once bound: a conflicting payload fails closed.
+        if (typeof durableStore.authorizePaymentIntent === 'function') {
+            const won = await durableStore.authorizePaymentIntent(dpi.paymentIntentId, {
+                paymentPayload: serializedPayload,
+                paymentPayloadHash,
+            }, 'PENDING_SIGNATURE');
+            if (!won) {
+                // CAS lost, identical payload already durably bound: a concurrent
+                // duplicate owns the pipeline (it may be mid-submission). NEVER
+                // resubmit here (§14) — if the winner died before submitting, the
+                // F-05 resume path above handles it on the NEXT retry, once its
+                // AUTHORIZED state is actually stale. Report the freshest state.
+                const freshOp = await this.config.evidenceStore.getOperation(operation.operationId);
+                return this.buildResult(freshOp ?? operation);
+            }
         }
-        await durableStore.updatePaymentIntentAuthorization(dpi.paymentIntentId, {
-            paymentPayload: serializedPayload,
-            paymentPayloadHash: keccak256(toBytes(serializedPayload)),
-        });
-        await durableStore.updatePaymentIntentStatus(dpi.paymentIntentId, 'AUTHORIZED');
+        else {
+            // Legacy stores without the CAS primitive: retain the old pair.
+            // (Test fakes and third-party stores; both writes remain non-atomic
+            // there — documented, not silently fixed.)
+            if (typeof durableStore.updatePaymentIntentAuthorization !== 'function' ||
+                typeof durableStore.updatePaymentIntentStatus !== 'function') {
+                throw new Error('Non-custodial flow requires payment intent authorization persistence');
+            }
+            await durableStore.updatePaymentIntentAuthorization(dpi.paymentIntentId, {
+                paymentPayload: serializedPayload,
+                paymentPayloadHash,
+            });
+            await durableStore.updatePaymentIntentStatus(dpi.paymentIntentId, 'AUTHORIZED');
+        }
         if (typeof durableStore.markNonceSigned === 'function') {
             await durableStore.markNonceSigned(dpi.nonce);
         }
@@ -263,6 +309,38 @@ export class Secretariat {
         await this.persistOperation(operation);
         return this.buildResult(operation);
     }
+    /**
+     * F-05 fix: resume a submission whose durable intent reached AUTHORIZED but
+     * whose facilitator submission never durably completed (crash or failure
+     * between authorization persistence and submitPayment). The signed payload
+     * hash was already verified against the durable intent by the caller; the
+     * on-chain AuthorizationUsed nonce remains the double-settle guard.
+     */
+    async resumeAuthorizedSubmission(operation, dpi) {
+        const requirement = await this.getPaymentRequirementFromEvidence(operation)
+            ?? this.requirementFromIntent(dpi);
+        if (!requirement)
+            throw new Error('PAYMENT_REQUIREMENT_NOT_FOUND');
+        this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_RESUMED', {
+            paymentIntentId: dpi.paymentIntentId,
+            settlementState: dpi.settlementState,
+            reason: 'AUTHORIZED without durably completed submission — resuming Stage B',
+        });
+        // The durable intent is the authority on authorization state: force the
+        // in-memory FSM to AUTHORIZED (the durable state already IS authorized)
+        // and re-drive the same submission pipeline as the normal flow.
+        operation.paymentState = 'AUTHORIZED';
+        operation.currentState = 'AUTHORIZED';
+        await this.persistOperation(operation);
+        await this.submitPayment(operation);
+        await this.observeSettlement(operation);
+        const resumedState = String(operation.currentState);
+        if (resumedState === 'SETTLED' || resumedState === 'EXECUTION_PENDING') {
+            await this.persistSettlementAndExecutionObligation(operation);
+        }
+        await this.persistOperation(operation);
+        return this.buildResult(operation);
+    }
     // ==========================================================================
     // OPERATION CREATION
     // ==========================================================================
@@ -302,8 +380,10 @@ export class Secretariat {
             target: operation.target,
         });
         try {
-            // Make initial request to discover if payment is required
-            const response = await fetch(operation.target, {
+            // Make initial request to discover if payment is required.
+            // F-09 fix: client-supplied target is validated against the egress
+            // policy (no loopback/private/metadata destinations, no redirects).
+            const response = await egressFetch(operation.target, {
                 method: operation.method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -379,12 +459,66 @@ export class Secretariat {
             });
             return false;
         }
-        // Check max price
-        if (parseFloat(requirement.amount) > parseFloat(policy.maxPrice)) {
+        // Check max price.
+        // R0 repair: unit-consistent comparison. x402 requirement amounts are
+        // smallest-unit integers ("500000"), while legacy human quotes are decimal
+        // strings ("1.00").
+        // F-08 fix (external audit 2026-10-25): the legacy parseFloat fallback
+        // made malformed limits a silent no-op (NaN comparisons are false → the
+        // payment PASSED), and mixed-unit comparisons (smallest-unit integer vs
+        // human decimal) were unit errors, not arithmetic. Now:
+        //   1. A non-decimal maxPrice REJECTS the policy (fail closed);
+        //   2. int vs int       → exact BigInt magnitudes (unchanged);
+        //   3. decimal vs decimal → exact scaled-BigInt comparison (no float math);
+        //   4. int vs decimal   → INCOMPARABLE units → REJECT (fail closed).
+        const isInt = (s) => /^\d+$/.test(s);
+        const isDecimal = (s) => /^\d+(\.\d+)?$/.test(s);
+        const hasDot = (s) => s.includes(".");
+        const reqAmount = String(requirement.amount).trim();
+        const maxPrice = String(policy.maxPrice).trim();
+        if (!isDecimal(maxPrice)) {
+            this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
+                reason: 'Invalid maxPrice format (expected a non-negative decimal number)',
+                required: reqAmount,
+                maxAllowed: policy.maxPrice,
+            });
+            return false;
+        }
+        const scaled = (s, scale) => {
+            const [intPart, fracPart = ""] = s.split(".");
+            return BigInt(intPart + fracPart.padEnd(scale, "0"));
+        };
+        let exceeds;
+        let rejectUnits = false;
+        if (isInt(reqAmount) && isInt(maxPrice)) {
+            // Same canonical (unit-less integer) representation → exact magnitudes.
+            exceeds = BigInt(reqAmount) > BigInt(maxPrice);
+        }
+        else if (hasDot(reqAmount) && hasDot(maxPrice)) {
+            // Both are human decimals → exact scaled comparison, no float math.
+            const scale = Math.max(reqAmount.split(".")[1].length, maxPrice.split(".")[1].length);
+            exceeds = scaled(reqAmount, scale) > scaled(maxPrice, scale);
+        }
+        else {
+            // Mixed units: one side is a smallest-unit integer, the other a human
+            // decimal. Without asset decimals the conversion is unknowable —
+            // comparing them is a unit error, not arithmetic. Fail closed.
+            exceeds = false;
+            rejectUnits = true;
+        }
+        if (rejectUnits) {
+            this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
+                reason: 'INCOMPARABLE_UNITS: requirement.amount is a smallest-unit integer while maxPrice is a human decimal — provide maxPrice in the same unit',
+                required: reqAmount,
+                maxAllowed: policy.maxPrice,
+            });
+            return false;
+        }
+        if (exceeds) {
             this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
                 reason: 'Amount exceeds maxPrice',
-                required: requirement.amount,
-                maxAllowed: policy.maxPrice,
+                required: reqAmount,
+                maxAllowed: maxPrice,
             });
             return false;
         }
@@ -510,7 +644,14 @@ export class Secretariat {
                     validBefore,
                     paymentPayload: pendingPayload,
                     paymentPayloadHash: keccak256(toBytes(pendingPayload)),
-                    settlementState: "AUTHORIZED",
+                    // F-109 fix (external audit 2026-10-26): the intent is created BEFORE
+                    // the signature exists, so its honest state is PENDING_SIGNATURE.
+                    // Claiming AUTHORIZED here opened a window where an intent was
+                    // durably "authorized" while still carrying the unsigned SIGNING
+                    // placeholder payload. authorizePaymentIntent() below performs the
+                    // single atomic PENDING_SIGNATURE → AUTHORIZED transition together
+                    // with the real payload.
+                    settlementState: "PENDING_SIGNATURE",
                     createdAt: now(),
                     updatedAt: now(),
                 };
@@ -597,9 +738,49 @@ export class Secretariat {
                 },
             };
             const serializedPayload = JSON.stringify(signedPayload);
-            const updateAuthorization = durableStore.updatePaymentIntentAuthorization;
-            if (preCreatedIntent && typeof updateAuthorization === "function") {
-                await updateAuthorization(preCreatedIntent.paymentIntentId, {
+            // R0 repair: call the method ON its receiver. The previous
+            // `const updateAuthorization = store.updatePaymentIntentAuthorization;`
+            // extraction dropped `this`, crashing every store whose implementation
+            // touches instance state (e.g. InMemoryEvidenceStore).
+            if (preCreatedIntent && typeof durableStore.authorizePaymentIntent === "function") {
+                // F-108/F-109 fix (external audit 2026-10-26): swap the SIGNING
+                // placeholder for the signed payload and flip PENDING_SIGNATURE →
+                // AUTHORIZED in ONE CAS-guarded statement. The previous blind
+                // updatePaymentIntentAuthorization() write let two concurrent signing
+                // attempts overwrite each other's payload (last-writer-wins).
+                let won;
+                try {
+                    won = await durableStore.authorizePaymentIntent(preCreatedIntent.paymentIntentId, {
+                        paymentPayload: serializedPayload,
+                        paymentPayloadHash: keccak256(toBytes(serializedPayload)),
+                    }, "PENDING_SIGNATURE");
+                }
+                catch (err) {
+                    // Auto flow only: a lost race re-signed the SAME intent binding
+                    // (unique operation_id → same nonce), so the concurrent duplicate's
+                    // signature is equally valid for this EIP-3009 authorization. The
+                    // durable payload is authoritative — proceed against it without
+                    // overwriting anything. Any OTHER error propagates.
+                    if (err instanceof Error &&
+                        err.message.startsWith("PAYMENT_INTENT_AUTHORIZATION_CONFLICT")) {
+                        won = false;
+                    }
+                    else {
+                        throw err;
+                    }
+                }
+                if (!won) {
+                    // Lost the CAS. Record the handoff honestly; submitPayment() below
+                    // re-reads the DURABLE intent and submits the durable payload.
+                    this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_AUTHORIZATION_CAS_LOSS', {
+                        paymentIntentId: preCreatedIntent.paymentIntentId,
+                        reason: 'concurrent signing attempt bound its payload first — durable payload kept',
+                    });
+                }
+            }
+            else if (preCreatedIntent && typeof durableStore.updatePaymentIntentAuthorization === "function") {
+                // Legacy stores without the CAS primitive: retain the blind pair.
+                await durableStore.updatePaymentIntentAuthorization.call(durableStore, preCreatedIntent.paymentIntentId, {
                     paymentPayload: serializedPayload,
                     paymentPayloadHash: keccak256(toBytes(serializedPayload)),
                 });
@@ -669,8 +850,13 @@ export class Secretariat {
         if (!dpi) {
             throw new Error('No DurablePaymentIntent found for submission — B.1 persistence required');
         }
-        // 2. Retrieve authorization from evidence (created in authorizePayment)
-        const authorization = await this.getAuthorizationFromEvidence(operation);
+        // 2. Retrieve authorization from evidence (created in authorizePayment).
+        // F-05 fix: fall back to the DURABLE signed payload when the evidence
+        // record was not yet persisted (crash between updatePaymentIntentAuthorization
+        // and persistOperation). The durable payload is the authoritative signed
+        // authorization — hash-verified before it was persisted.
+        const authorization = await this.getAuthorizationFromEvidence(operation)
+            ?? this.authorizationFromDurableIntent(dpi);
         if (!authorization) {
             throw new Error('No payment authorization found for submission');
         }
@@ -834,7 +1020,8 @@ export class Secretariat {
         this.transitionState(operation, 'EXECUTION_PENDING');
         try {
             // Attempt to get execution result
-            const response = await fetch(operation.target, {
+            // F-09 fix: guarded egress (same policy as discovery).
+            const response = await egressFetch(operation.target, {
                 method: operation.method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -942,7 +1129,9 @@ export class Secretariat {
         }
         try {
             const url = `${endpoint}/${operation.operationId}`;
-            const response = await fetch(url, { method: 'GET' });
+            // F-09 fix: guarded egress — retrieval endpoints may also come from the
+            // client-discovered seller metadata.
+            const response = await egressFetch(url, { method: 'GET' });
             if (response.ok) {
                 const body = await response.json().catch(() => null);
                 operation.resultData = body;
@@ -979,7 +1168,8 @@ export class Secretariat {
     async recoverViaIdempotentRetry(operation) {
         const headerName = operation.sellerCapability?.idempotencyHeader ?? 'Idempotency-Key';
         try {
-            const response = await fetch(operation.target, {
+            // F-09 fix: guarded egress (same policy as discovery).
+            const response = await egressFetch(operation.target, {
                 method: operation.method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -1216,9 +1406,21 @@ export class Secretariat {
             jobType: "EXECUTION",
             status: "PENDING",
             priority: 0,
-            maxAttempts: 3,
+            // F-01 fix: honor the configured execution-attempt bound
+            // (ZEUS_MAX_EXECUTION_ATTEMPTS) instead of a hardcoded 3.
+            maxAttempts: this.config.maxExecutionAttempts ?? 3,
             currentAttempt: 0,
-            metadata: { capability: "EXECUTION_IDEMPOTENT", requestBody: operation.requestPayload },
+            // F-01 fix: carry the DISCOVERED recovery capability — fail-closed to
+            // NONE (payment idempotency does NOT prove execution idempotency) —
+            // instead of a hardcoded EXECUTION_IDEMPOTENT, plus the result-retrieval
+            // endpoint advertised by the seller when available.
+            metadata: {
+                capability: operation.sellerCapability?.recoveryCapability ?? "NONE",
+                requestBody: operation.requestPayload,
+                ...(operation.sellerCapability?.resultRetrievalEndpoint
+                    ? { resultRetrievalEndpoint: operation.sellerCapability.resultRetrievalEndpoint }
+                    : {}),
+            },
             createdAt: now,
             updatedAt: now,
         };
@@ -1228,6 +1430,11 @@ export class Secretariat {
             executionId: operation.operationId, // INV-10: executionId = operationId
             attemptNumber: 1,
             status: "PENDING",
+            // F-01 fix: the paid call must hit the EXACT target/method/payload the
+            // Secretariat discovered and priced — never a config-level fallback.
+            requestUrl: operation.target,
+            requestMethod: operation.method,
+            requestBody: operation.requestPayload,
             idempotencyKey: operation.operationId, // INV-11: stable idempotency key
             createdAt: now,
         };
@@ -1306,9 +1513,19 @@ export class Secretariat {
      * reachable from this primitive.
      */
     async prepareStageA(request, options = { persistPendingIntent: true }) {
-        const requestId = request.requestId ?? generateRequestId();
+        const requestId = resolveLogicalRequestId(request);
+        // F-07 fix (external audit 2026-10-25): the `cid:${clientId}` derivation
+        // (B8-001, anti double-settlement) collapses every requestId-less request
+        // of a client into ONE logical operation. That is correct for RETRIES of
+        // the same request and DANGEROUS for genuinely new requests: the second
+        // different request would silently return (and eventually re-execute)
+        // the first operation. Guard: a derived id may only resolve to an
+        // operation whose paid contract (target/method) matches the incoming
+        // request; otherwise the client must supply an explicit requestId.
+        const derivedWithoutRequestId = !request.requestId && Boolean(request.clientId);
         const existing = await this.findExistingOperation(request.clientId, requestId);
         if (existing) {
+            this.assertNoLogicalRequestCollision(derivedWithoutRequestId, request, existing, requestId);
             if (existing.currentState === 'AWAITING_SIGNATURE') {
                 const dpi = await this.getDurableIntent(existing.operationId);
                 const requirement = await this.getPaymentRequirementFromEvidence(existing)
@@ -1342,6 +1559,7 @@ export class Secretariat {
                 if (pgError.code === '23505' && request.clientId) {
                     const resolved = await this.findExistingOperation(request.clientId, requestId);
                     if (resolved) {
+                        this.assertNoLogicalRequestCollision(derivedWithoutRequestId, request, resolved, requestId);
                         return {
                             status: 'EXISTING',
                             operation: resolved,
@@ -1386,6 +1604,25 @@ export class Secretariat {
             const result = await this.failOperation(operation, 'FAILED', error instanceof Error ? error.message : String(error));
             return { status: 'REJECTED', operation, result };
         }
+    }
+    /**
+     * F-07 fix: a clientId-derived logical id (`cid:${clientId}`) must only
+     * resolve to an operation with the SAME paid contract. A different
+     * target/method under the same derived id is a client bug — reject with a
+     * dedicated, actionable error instead of silently reusing the old
+     * operation (which would execute the WRONG request after payment).
+     */
+    assertNoLogicalRequestCollision(derivedWithoutRequestId, request, existing, requestId) {
+        if (!derivedWithoutRequestId)
+            return;
+        const normalize = (u) => String(u ?? '').replace(/\/+$/, '');
+        const sameTarget = normalize(existing.target) === normalize(request.target);
+        const sameMethod = String(existing.method ?? '').toUpperCase() === String(request.method ?? '').toUpperCase();
+        if (sameTarget && sameMethod)
+            return;
+        throw new Error(`REQUEST_COLLISION: client ${request.clientId} already owns logical request "${requestId}" ` +
+            `for ${existing.method} ${existing.target}. The new request (${request.method} ${request.target}) ` +
+            `differs — send an explicit requestId for each new logical request.`);
     }
     async findExistingOperation(clientId, requestId) {
         const store = this.config.evidenceStore;
@@ -1567,6 +1804,25 @@ export class Secretariat {
         }
         const intent = evidence.payload.intent;
         return intent?.authorization;
+    }
+    /**
+     * F-05 fix: reconstruct the authorization from the DURABLE signed payload
+     * persisted on the payment intent (updatePaymentIntentAuthorization). Used
+     * when the PAYMENT_AUTHORIZED evidence record was lost to a crash window.
+     */
+    authorizationFromDurableIntent(dpi) {
+        if (!dpi.paymentPayload)
+            return null;
+        try {
+            const parsed = JSON.parse(dpi.paymentPayload);
+            const signature = parsed?.payload?.signature;
+            if (!signature)
+                return null;
+            return { signature, scheme: parsed?.accepted?.scheme || 'exact' };
+        }
+        catch {
+            return null;
+        }
     }
     async getSubmissionResultFromEvidence(operation) {
         const evidence = operation.evidence.find(e => e.phase === 'PAYMENT' && e.event === 'PAYMENT_SUBMITTED');

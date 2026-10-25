@@ -107,14 +107,44 @@ export interface RecoveryJob {
  */
 export interface ExecutionStore {
   saveAttempt(attempt: ExecutionAttempt): Promise<void>;
+  /**
+   * F-001 (external audit Blocker): atomic attempt+job creation.
+   * Both rows MUST persist in a single transaction — or neither does.
+   * Replaces the unfenced saveAttempt() → saveJob() pair whose crash window
+   * permanently orphaned SETTLED intents (attempt without job: the scanner
+   * excluded them, the seller was never called, the client never served).
+   */
+  saveAttemptWithJob(attempt: ExecutionAttempt, job: RecoveryJob): Promise<void>;
   getAttemptById(attemptId: string): Promise<ExecutionAttempt | null>;
   getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]>;
   /**
    * R2.2-R9: Requires fenceGeneration for stale-worker protection.
    * Terminal states (SUCCESS, HTTP_FAILURE, DELIVERY_UNKNOWN, UNRESOLVABLE) are irreversible.
    * Returns true if update succeeded, false if rejected (stale fence or terminal state).
+   *
+   * F-04 fix (external audit 2026-10-25): when `jobId` is provided the fence
+   * check is bound to THAT recovery job (not merely to the operation), so a
+   * worker holding generation N on job A can no longer mutate an attempt
+   * because an unrelated job B of the same operation happens to carry N.
+   * Optional for backward compatibility with existing store implementations.
    */
-  updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean>;
+  updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, fenceGeneration: number, extra?: Partial<ExecutionAttempt>, jobId?: string): Promise<boolean>;
+  /**
+   * F-04 fix: same jobId-bound fencing as updateAttemptStatus (optional param,
+   * backward-compatible with existing implementations).
+   */
+  markAttemptInProgress(attemptId: string, fenceGeneration: number, jobId?: string): Promise<boolean>;
+  /**
+   * F-02 fix (external audit 2026-10-25): atomically resolve a
+   * DELIVERY_UNKNOWN attempt to SUCCESS from a RETRIEVAL observation — the
+   * only legal terminal-terminal transition, and only with the retrieved
+   * proof attached. The attempt update and the owning job's COMPLETED
+   * transition MUST commit in one transaction, and both are fenced to the
+   * specific jobId. Optional: stores without it fall back to
+   * updateAttemptStatus (which correctly REJECTS the DELIVERY_UNKNOWN →
+   * SUCCESS transition — the caller must then NOT report success).
+   */
+  resolveRetrievalSuccessIfOwner?(jobId: string, attemptId: string, fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean>;
   /**
    * Atomically mark the original attempted delivery as unknown, create a
    * retry attempt, and requeue the owning job when the fence is still held.
@@ -159,7 +189,6 @@ export interface ExecutionStore {
    * Fence generation is atomically incremented with lease acquisition.
    */
   claimJob(jobId: string, workerId: string, lockDurationMs: number): Promise<number | null>;
-  markAttemptInProgress(attemptId: string, fenceGeneration: number): Promise<boolean>;
   /**
    * R2.2 Repair #1: Fenced job status update.
    * Requires current fenceGeneration to prevent stale workers from modifying job state.
@@ -233,6 +262,19 @@ export class InMemoryExecutionStore {
     this.attemptsByOp.set(attempt.operationId, list);
   }
 
+  /**
+   * F-001: in-memory parity for the atomic attempt+job creation.
+   * There are no awaits between the mutations, so a concurrent call cannot
+   * interleave on the JavaScript event loop — both rows or neither.
+   */
+  async saveAttemptWithJob(attempt: ExecutionAttempt, job: RecoveryJob): Promise<void> {
+    this.attempts.set(attempt.attemptId, { ...attempt });
+    const list = this.attemptsByOp.get(attempt.operationId) ?? [];
+    if (!list.includes(attempt.attemptId)) list.push(attempt.attemptId);
+    this.attemptsByOp.set(attempt.operationId, list);
+    this.jobs.set(job.jobId, { ...job });
+  }
+
   async getAttemptsByOperation(operationId: string): Promise<ExecutionAttempt[]> {
     const ids = this.attemptsByOp.get(operationId) ?? [];
     return ids.map((id) => this.attempts.get(id)!).filter(Boolean);
@@ -243,16 +285,50 @@ export class InMemoryExecutionStore {
   }
 
   // R2.2 Repair #9: enforce the current operation fence before mutating state.
-  async updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, fenceGeneration: number, extra?: Partial<ExecutionAttempt>): Promise<boolean> {
+  // F-04: when jobId is provided, the fence must come from THAT job.
+  async updateAttemptStatus(attemptId: string, status: ExecutionObligationStatus, fenceGeneration: number, extra?: Partial<ExecutionAttempt>, jobId?: string): Promise<boolean> {
     const attempt = this.attempts.get(attemptId);
     if (!attempt) return false;
-    const job = Array.from(this.jobs.values()).find((candidate) => candidate.operationId === attempt.operationId);
-    if (!job || job.currentAttempt !== fenceGeneration) return false;
+    const job = jobId
+      ? this.jobs.get(jobId)
+      : Array.from(this.jobs.values()).find((candidate) => candidate.operationId === attempt.operationId);
+    if (!job || job.operationId !== attempt.operationId || job.currentAttempt !== fenceGeneration) return false;
     // Terminal monotonicity: reject transitions from terminal states
     const terminalStates = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
     if (terminalStates.includes(attempt.status)) return false;
     attempt.status = status;
     if (extra) Object.assign(attempt, extra);
+    return true;
+  }
+
+  /**
+   * F-02: in-memory parity of the atomic DELIVERY_UNKNOWN → SUCCESS +
+   * job → COMPLETED transition, fenced to the specific job.
+   */
+  async resolveRetrievalSuccessIfOwner(
+    jobId: string,
+    attemptId: string,
+    fenceGeneration: number,
+    extra?: Partial<ExecutionAttempt>,
+  ): Promise<boolean> {
+    const job = this.jobs.get(jobId);
+    const attempt = this.attempts.get(attemptId);
+    if (
+      !job ||
+      job.status !== "RUNNING" ||
+      job.currentAttempt !== fenceGeneration ||
+      !attempt ||
+      attempt.operationId !== job.operationId ||
+      attempt.status !== "DELIVERY_UNKNOWN"
+    ) {
+      return false;
+    }
+    attempt.status = "SUCCESS";
+    if (extra) Object.assign(attempt, extra);
+    job.status = "COMPLETED";
+    job.lockedBy = undefined;
+    job.lockedUntil = undefined;
+    job.updatedAt = Date.now();
     return true;
   }
 
@@ -362,12 +438,15 @@ export class InMemoryExecutionStore {
   }
 
   // R2.2 Repair #1A: Mark attempt as in-progress with stale-worker protection.
-  async markAttemptInProgress(attemptId: string, fenceGeneration: number): Promise<boolean> {
+  // F-04: when jobId is provided, the fence must come from THAT job.
+  async markAttemptInProgress(attemptId: string, fenceGeneration: number, jobId?: string): Promise<boolean> {
     const attempt = this.attempts.get(attemptId);
     if (!attempt || attempt.status !== "PENDING") return false;
     // Stale-worker protection: verify fence via owning job
-    const job = Array.from(this.jobs.values()).find((j) => j.operationId === attempt.operationId);
-    if (!job || job.currentAttempt !== fenceGeneration) return false;
+    const job = jobId
+      ? this.jobs.get(jobId)
+      : Array.from(this.jobs.values()).find((j) => j.operationId === attempt.operationId);
+    if (!job || job.operationId !== attempt.operationId || job.currentAttempt !== fenceGeneration) return false;
     attempt.status = "ATTEMPTED";
     attempt.startedAt = Date.now();
     return true;
@@ -508,8 +587,13 @@ export class PostSettlementEngine {
       updatedAt: Date.now(),
     };
 
-    await this.executionStore.saveAttempt(attempt);
-    await this.executionStore.saveJob(job);
+    // F-001 (external audit Blocker): single transactional write.
+    // The previous saveAttempt() → saveJob() pair left a crash window: a
+    // failure between the two writes persisted the attempt without the job,
+    // and the obligation scanner excluded such intents forever — the seller
+    // was never called despite SETTLED payment. Now both rows are created
+    // atomically; if this throws, NOTHING persists and the next scan retries.
+    await this.executionStore.saveAttemptWithJob(attempt, job);
 
     await this.appendEvidence(operationId, "EXECUTION_INITIATED", {
       attemptId,
@@ -532,13 +616,18 @@ export class PostSettlementEngine {
    * Transitions attempt to ATTEMPTED (in-progress) BEFORE seller call
    * to durably distinguish "not started" from "call may be in flight".
    */
-  async executeAttempt(attemptId: string, fenceGeneration: number): Promise<SellerExecutionResult> {
+  async executeAttempt(
+    attemptId: string,
+    fenceGeneration: number,
+    jobId?: string,
+  ): Promise<SellerExecutionResult> {
     const attempt = await this.executionStore.getAttemptById(attemptId);
     if (!attempt) throw new Error("ATTEMPT_NOT_FOUND");
 
     // R2.2 Repair #9: Explicit IN_PROGRESS transition before seller call.
     // If this fails (stale fence or already transitioned), abort execution.
-    const marked = await this.executionStore.markAttemptInProgress(attemptId, fenceGeneration);
+    // F-04: fence bound to the specific job when the caller provides it.
+    const marked = await this.executionStore.markAttemptInProgress(attemptId, fenceGeneration, jobId);
     if (!marked) {
       throw new Error("FENCE_REJECTED: lost ownership before seller call");
     }
@@ -559,32 +648,51 @@ export class PostSettlementEngine {
       result,
     });
 
-    // NOW interpret and update status
+    // NOW interpret and update status.
+    // F-03 fix (external audit 2026-10-25): the caller MUST NOT report an
+    // outcome that the authoritative store rejected. A rejected write means
+    // the fence was lost or the attempt already terminal — throw so
+    // processJob cannot publish SUCCESS/FAILURE/UNKNOWN for a state that was
+    // never committed. The attempt keeps its ATTEMPTED status, so the next
+    // claim goes through the safe ATTEMPTED crash-recovery path.
+    let persisted: boolean;
     switch (result.kind) {
       case "SUCCESS":
-        await this.executionStore.updateAttemptStatus(attemptId, "SUCCESS", fenceGeneration, {
+        persisted = await this.executionStore.updateAttemptStatus(attemptId, "SUCCESS", fenceGeneration, {
           responseStatusCode: result.statusCode,
           responseBody: result.body,
           responseHeaders: result.headers,
           completedAt: Date.now(),
-        });
+        }, jobId);
         break;
 
       case "HTTP_FAILURE":
-        await this.executionStore.updateAttemptStatus(attemptId, "HTTP_FAILURE", fenceGeneration, {
+        persisted = await this.executionStore.updateAttemptStatus(attemptId, "HTTP_FAILURE", fenceGeneration, {
           responseStatusCode: result.statusCode,
           responseBody: result.body,
           responseHeaders: result.headers,
           completedAt: Date.now(),
-        });
+        }, jobId);
         break;
 
       case "DELIVERY_UNKNOWN":
-        await this.executionStore.updateAttemptStatus(attemptId, "DELIVERY_UNKNOWN", fenceGeneration, {
+        persisted = await this.executionStore.updateAttemptStatus(attemptId, "DELIVERY_UNKNOWN", fenceGeneration, {
           errorReason: result.reason,
           completedAt: Date.now(),
-        });
+        }, jobId);
         break;
+    }
+
+    if (!persisted) {
+      await this.appendEvidence(attempt.operationId, "EXECUTION_PERSIST_REJECTED", {
+        attemptId,
+        jobId: jobId ?? null,
+        outcome: result.kind,
+        note: "Authoritative store rejected the status write — outcome NOT published",
+      });
+      throw new Error(
+        `ATTEMPT_PERSIST_REJECTED: ${result.kind} outcome for attempt ${attemptId} was not durably committed`,
+      );
     }
 
     return result;
@@ -630,9 +738,11 @@ export class PostSettlementEngine {
       return { success: false, finalStatus: "FAILED" };
     }
 
-    // Check if already resolved
+    // Check if already resolved. F-03: the COMPLETED closure is verified —
+    // a rejected write (stale fence) must not be reported as success.
     if (latestAttempt.status === "SUCCESS") {
-      await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration);
+      const jobCompleted = await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration);
+      if (!jobCompleted) return { success: false, finalStatus: "RUNNING" };
       return { success: true, finalStatus: "SUCCESS" };
     }
 
@@ -755,10 +865,16 @@ export class PostSettlementEngine {
       // For PENDING with NONE capability, we still try once (first execution)
       // But for DELIVERY_UNKNOWN with NONE, we stop
       if (latestAttempt.status === "DELIVERY_UNKNOWN") {
-        await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration);
-        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+        // INV-10 close-out: the attempt is ALREADY terminal (DELIVERY_UNKNOWN) —
+        // the terminal monotonicity guard correctly rejects attempt-level
+        // writes, so the attempt marker is best-effort (it stays honest:
+        // DELIVERY_UNKNOWN). The JOB closure below is the operational decision
+        // and is fenced + mandatory (F-03: verified).
+        await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration, undefined, jobId).catch(() => false);
+        const jobResolved = await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
           lastError: "INV-10: DELIVERY_UNKNOWN with NONE capability — no blind retry",
         });
+        if (!jobResolved) return { success: false, finalStatus: "RUNNING" };
 
         await this.appendEvidence(job.operationId, "EXECUTION_UNRESOLVABLE", {
           reason: "NONE capability cannot recover from DELIVERY_UNKNOWN",
@@ -774,37 +890,46 @@ export class PostSettlementEngine {
       return await this.performRetrieval(job, latestAttempt, fenceGeneration);
     }
 
-    // Execute or retry
-    const result = await this.executeAttempt(latestAttempt.attemptId, fenceGeneration);
+    // Execute or retry.
+    // F-04: pass the jobId so every attempt mutation is fenced to THIS job.
+    const result = await this.executeAttempt(latestAttempt.attemptId, fenceGeneration, jobId);
 
-    // Handle result
+    // Handle result. F-03: every finality write below is verified — a rejected
+    // write (lost fence / already-terminal) must NOT be reported as success.
     switch (result.kind) {
-      case "SUCCESS":
-        await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration);
+      case "SUCCESS": {
+        const jobCompleted = await this.executionStore.updateJobStatus(jobId, "COMPLETED", fenceGeneration);
+        if (!jobCompleted) return { success: false, finalStatus: "RUNNING" };
         await this.appendEvidence(job.operationId, "EXECUTION_SUCCESS", {
           attemptId: latestAttempt.attemptId,
           statusCode: result.statusCode,
         });
         return { success: true, result, finalStatus: "SUCCESS" };
+      }
 
-      case "HTTP_FAILURE":
+      case "HTTP_FAILURE": {
         // HTTP failure is a definitive answer — execution happened but failed
-        await this.executionStore.updateJobStatus(jobId, "FAILED", fenceGeneration, {
+        const jobFailed = await this.executionStore.updateJobStatus(jobId, "FAILED", fenceGeneration, {
           lastError: `HTTP ${result.statusCode}`,
         });
+        if (!jobFailed) return { success: false, finalStatus: "RUNNING" };
         await this.appendEvidence(job.operationId, "EXECUTION_HTTP_FAILURE", {
           attemptId: latestAttempt.attemptId,
           statusCode: result.statusCode,
         });
         return { success: false, result, finalStatus: "HTTP_FAILURE" };
+      }
 
       case "DELIVERY_UNKNOWN":
         if (capability === "NONE") {
-          // INV-10: No blind retry
-          await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration);
-          await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+          // INV-10: No blind retry. Attempt marker is best-effort (already
+          // terminal — see the INV-10 close-out above); job closure is
+          // fenced + mandatory (F-03: verified).
+          await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration, undefined, jobId).catch(() => false);
+          const jobResolved2 = await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
             lastError: "INV-10: DELIVERY_UNKNOWN with NONE capability",
           });
+          if (!jobResolved2) return { success: false, finalStatus: "RUNNING" };
           return { success: false, result, finalStatus: "UNRESOLVABLE" };
         }
 
@@ -866,13 +991,24 @@ export class PostSettlementEngine {
             // Fence rejected — another worker owns this job now
             return { success: false, finalStatus: "RUNNING" };
           }
+          // B-BS-16 evidence gap (found by the r6 post-money gate): the
+          // ATTEMPTED crash-recovery branch records EXECUTION_RETRY_CREATED,
+          // but this live DELIVERY_UNKNOWN retry branch created the recovery
+          // attempt silently — the recovery DECISION was missing from the
+          // evidence trail. INV-13: record the decision.
+          await this.appendEvidence(job.operationId, "EXECUTION_RETRY_CREATED", {
+            reason: "DELIVERY_UNKNOWN — retry attempt created",
+            newAttemptId,
+            originalAttemptId: latestAttempt.attemptId,
+          });
           return { success: false, result, finalStatus: "DELIVERY_UNKNOWN" };
         }
 
         // Max attempts reached
-        await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+        const jobCapped = await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
           lastError: `Max attempts (${job.maxAttempts}) reached with DELIVERY_UNKNOWN`,
         });
+        if (!jobCapped) return { success: false, finalStatus: "RUNNING" };
         return { success: false, result, finalStatus: "UNRESOLVABLE" };
     }
   }
@@ -880,13 +1016,27 @@ export class PostSettlementEngine {
   /**
    * INV-11: Result retrieval — observation, NOT re-execution.
    * Uses GET to query result without sending the original request again.
+   *
+   * F-02 fix (external audit 2026-10-25): a successful retrieval resolves the
+   * DELIVERY_UNKNOWN attempt to SUCCESS through the dedicated atomic
+   * resolveRetrievalSuccessIfOwner (attempt → SUCCESS + job → COMPLETED in
+   * ONE transaction, fenced to this job). A REJECTED transition is never
+   * reported as success — the job stays claimable and the next pass re-probes.
+   *
+   * F-06 fix: the HTTP-404 branch is bounded — no more infinite observation
+   * loop. claimJob() increments current_attempt on every claim; once the job
+   * exhausts maxAttempts it is closed as UNRESOLVABLE (an explicit, final
+   * operational decision), otherwise requeued as PENDING for the next poll.
    */
   private async performRetrieval(
     job: RecoveryJob,
     attempt: ExecutionAttempt,
     fenceGeneration: number,
   ): Promise<{ success: boolean; finalStatus: ExecutionObligationStatus | RecoveryJobStatus }> {
-    const retrievalUrl = this.config.resultRetrievalUrl || `${this.config.sellerUrl}/result/${attempt.executionId}`;
+    const metadata = (job.metadata ?? {}) as { resultRetrievalEndpoint?: string };
+    const retrievalUrl = metadata.resultRetrievalEndpoint
+      || this.config.resultRetrievalUrl
+      || `${attempt.requestUrl ?? this.config.sellerUrl}/result/${attempt.executionId}`;
 
     const request: SellerExecutionRequest = {
       idempotencyKey: `retrieval-${attempt.executionId}`,
@@ -902,29 +1052,62 @@ export class PostSettlementEngine {
     });
 
     if (result.kind === "SUCCESS") {
-      await this.executionStore.updateAttemptStatus(attempt.attemptId, "SUCCESS", fenceGeneration, {
-        responseStatusCode: result.statusCode,
-        responseBody: result.body,
-        completedAt: Date.now(),
-      });
-      await this.executionStore.updateJobStatus(job.jobId, "COMPLETED", fenceGeneration);
+      // F-02: the ONLY legal path from DELIVERY_UNKNOWN to SUCCESS — atomic,
+      // jobId-fenced, proof attached. Stores without the method fall back to
+      // updateAttemptStatus, which correctly REJECTS the terminal transition;
+      // in that case we must NOT complete the job nor report success.
+      const resolved = typeof this.executionStore.resolveRetrievalSuccessIfOwner === "function"
+        ? await this.executionStore.resolveRetrievalSuccessIfOwner(job.jobId, attempt.attemptId, fenceGeneration, {
+            responseStatusCode: result.statusCode,
+            responseBody: result.body,
+            completedAt: Date.now(),
+          })
+        : await this.executionStore.updateAttemptStatus(attempt.attemptId, "SUCCESS", fenceGeneration, {
+            responseStatusCode: result.statusCode,
+            responseBody: result.body,
+            completedAt: Date.now(),
+          }, job.jobId);
+
+      if (!resolved) {
+        await this.appendEvidence(job.operationId, "RETRIEVAL_SUCCESS_NOT_COMMITTED", {
+          jobId: job.jobId,
+          attemptId: attempt.attemptId,
+          note: "Attempt transition DELIVERY_UNKNOWN→SUCCESS was rejected — outcome NOT published",
+        });
+        return { success: false, finalStatus: "RUNNING" };
+      }
       return { success: true, finalStatus: "SUCCESS" };
     }
 
     if (result.kind === "HTTP_FAILURE" && result.statusCode === 404) {
-      // Not found — result not available yet
-      await this.executionStore.updateJobStatus(job.jobId, "PENDING", fenceGeneration, {
+      // F-06: bounded observation. The result is not available YET — but the
+      // job must not circle PENDING forever. currentAttempt counts claims;
+      // when the bound is exhausted, close the job explicitly.
+      if (job.currentAttempt >= job.maxAttempts) {
+        const jobUnresolvable = await this.executionStore.updateJobStatus(job.jobId, "UNRESOLVABLE", fenceGeneration, {
+          lastError: `Retrieval exhausted maxAttempts (${job.maxAttempts}) — result still unavailable (404)`,
+        });
+        if (!jobUnresolvable) return { success: false, finalStatus: "RUNNING" };
+        await this.appendEvidence(job.operationId, "RETRIEVAL_UNRESOLVABLE", {
+          jobId: job.jobId,
+          reason: `Result unavailable after ${job.currentAttempt} observation attempts (404)`,
+        });
+        return { success: false, finalStatus: "UNRESOLVABLE" };
+      }
+      const requeued = await this.executionStore.updateJobStatus(job.jobId, "PENDING", fenceGeneration, {
         lockedBy: undefined,
         lockedUntil: undefined,
-        lastError: "Result not found yet — will retry observation",
+        lastError: `Result not found yet — observation ${job.currentAttempt}/${job.maxAttempts} (requeued with poll-interval backoff)`,
       });
+      if (!requeued) return { success: false, finalStatus: "RUNNING" };
       return { success: false, finalStatus: "DELIVERY_UNKNOWN" };
     }
 
     // Other failures
-    await this.executionStore.updateJobStatus(job.jobId, "UNRESOLVABLE", fenceGeneration, {
+    const jobFailed = await this.executionStore.updateJobStatus(job.jobId, "UNRESOLVABLE", fenceGeneration, {
       lastError: `Retrieval failed: ${result.kind}`,
     });
+    if (!jobFailed) return { success: false, finalStatus: "RUNNING" };
     return { success: false, finalStatus: "UNRESOLVABLE" };
   }
 
@@ -943,17 +1126,124 @@ export class PostSettlementEngine {
     return recovered;
   }
 
+  /**
+   * R0 repair: SETTLED-intent obligation scanner.
+   *
+   * Finds payment intents that reached SETTLED (by the synchronous execute()
+   * path or by the background ReconciliationWorker) but have NO durable
+   * EXECUTION job, and creates one:
+   *   - no attempt at all  → initiateExecution() (atomic attempt+job, F-001);
+   *   - attempt without job (legacy orphan) → the missing job is created and
+   *     linked to the surviving attempt (repair, F-001) instead of skipping.
+   *
+   * Why this exists: the settlement→execution handoff has two owners —
+   *   (a) StateMachine.persistSettlementAndExecutionObligation (atomic, only
+   *       when settlement happens inside execute()), and
+   *   (b) nobody — for payments settled by the ReconciliationWorker after
+   *       execute() returned.
+   * This scanner closes case (b) and crash windows between settlement and
+   * handoff. Idempotent: the (operation_id WHERE job_type='EXECUTION') unique
+   * index blocks duplicates under concurrent scanners.
+   */
+  async ensureExecutionObligations(): Promise<string[]> {
+    const scanner = this.paymentStore as DurableEvidenceStore & Partial<{
+      getSettledIntentsWithoutObligation(limit?: number): Promise<DurablePaymentIntent[]>;
+    }>;
+    if (typeof scanner.getSettledIntentsWithoutObligation !== "function") {
+      return []; // store does not support scanning (e.g. in-memory test stores)
+    }
+    const settled = await scanner.getSettledIntentsWithoutObligation();
+    const created: string[] = [];
+    for (const intent of settled) {
+      try {
+        // F-001 (external audit Blocker): the scanner selects SETTLED intents
+        // by a MISSING EXECUTION job. An intent that already has an attempt
+        // (a legacy orphan from a crash between the two unfenced writes) must
+        // be RECONCILED — the missing job is created and linked to the
+        // surviving attempt — never silently excluded forever.
+        let existingAttempt: ExecutionAttempt | null = null;
+        if (typeof this.executionStore.getAttemptsByOperation === "function") {
+          try {
+            const attempts = await this.executionStore.getAttemptsByOperation(intent.operationId);
+            if (Array.isArray(attempts) && attempts.length > 0) {
+              existingAttempt = attempts[attempts.length - 1];
+            }
+          } catch { /* fall through and attempt idempotent creation */ }
+        }
+
+        if (existingAttempt) {
+          // Legacy orphan repair: attempt survived, job did not.
+          //  - non-terminal attempt → PENDING job: the worker resumes the
+          //    obligation and processes the surviving attempt;
+          //  - terminal attempt    → COMPLETED marker job: the delivery
+          //    already concluded, the marker documents it and releases the
+          //    intent from future scanner windows without re-execution.
+          const terminalAttemptStates = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
+          const now = Date.now();
+          const repairJob: RecoveryJob = {
+            jobId: `job-${now}-${Math.random().toString(36).slice(2)}`,
+            operationId: intent.operationId,
+            jobType: "EXECUTION",
+            status: terminalAttemptStates.includes(existingAttempt.status) ? "COMPLETED" : "PENDING",
+            priority: 0,
+            maxAttempts: this.config.maxExecutionAttempts,
+            currentAttempt: 0,
+            metadata: {
+              capability: "EXECUTION_IDEMPOTENT",
+              repairedLegacyOrphan: true,
+              linkedAttemptId: existingAttempt.attemptId,
+              linkedAttemptStatus: existingAttempt.status,
+            },
+            createdAt: now,
+            updatedAt: now,
+          };
+          await this.executionStore.saveJob(repairJob);
+          created.push(`${intent.operationId}:${repairJob.jobId}:repaired`);
+          await this.appendEvidence(intent.operationId, "EXECUTION_OBLIGATION_REPAIRED", {
+            jobId: repairJob.jobId,
+            linkedAttemptId: existingAttempt.attemptId,
+            linkedAttemptStatus: existingAttempt.status,
+          });
+          continue;
+        }
+
+        const { jobId } = await this.initiateExecution(intent.operationId, "EXECUTION_IDEMPOTENT");
+        created.push(`${intent.operationId}:${jobId}`);
+      } catch {
+        // Duplicate obligation race (unique index) or transient store error —
+        // the next scan cycle will retry what actually failed.
+      }
+    }
+    return created;
+  }
+
   private async appendEvidence(
     operationId: string,
     event: string,
     payload: unknown,
   ): Promise<void> {
+    // F-111 (external audit 2026-10-26): assign the same Repair-C3
+    // per-operation sequence the state machine uses. The engine appends
+    // directly to the durable store, so the next free slot is derived from
+    // the durable evidence view; on a read failure the record is still
+    // appended WITHOUT a sequence (legacy payload-hash identity — correct,
+    // just weaker ordering) rather than blocking execution evidence.
+    let sequence: number | undefined;
+    try {
+      if (typeof this.paymentStore.getEvidence === "function") {
+        const existing = await this.paymentStore.getEvidence(operationId);
+        sequence = Array.isArray(existing) ? existing.length : undefined;
+      }
+    } catch {
+      sequence = undefined;
+    }
     await this.paymentStore.append({
       operationId,
       phase: "EXECUTION",
       timestamp: Date.now(),
       event,
       payload,
+      sequence,
     });
   }
 }

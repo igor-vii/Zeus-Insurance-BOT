@@ -36,12 +36,28 @@ Required:
 - DATABASE_URL - PostgreSQL connection string
 - PORT=3000
 - NODE_ENV=production
-- SERVER_PRIVATE_KEY - Private key for automatic mode
+- SERVER_PRIVATE_KEY - Private key for the LEGACY on-chain automatic mode of
+  the escrow/insurance services (services/escrow.ts, services/insurance.ts).
+  This is NOT the Secretariat signer — see below.
 - ZEUS_INSURANCE_NETWORK - bot-chain or x-layer
 - BOT_CHAIN_MAINNET_RPC_URL
 - XLAYER_MAINNET_RPC_URL
 - ADMIN_JWT_SECRET - NEW: generate a strong 32+ char secret
-- CORS_ORIGINS - https://zeus-insurance-frontend.onrender.com
+- CORS_ORIGINS - https://zeus-insurance-bot-frontend.vercel.app
+
+Secretariat signer (F-116/M-16, external audit 2026-10-26 — the two keys
+must never be confused; they authorize DIFFERENT wallets):
+- ZEUS_SIGNER_MODE - non_custodial (production default; the client signs
+  externally) or custodial_test (TEST-ONLY EOA hot key — hard-refused by the
+  config loader when NODE_ENV=production).
+- ZEUS_SIGNER_PRIVATE_KEY - the key env var read when custodial_test is
+  explicitly enabled in a test environment. NEVER set a production-funded
+  key here.
+- ZEUS_EIP3009_DOMAIN_NAME / ZEUS_EIP3009_DOMAIN_VERSION - REQUIRED on
+  production chains (eip155:196 / 8453 / 677): the EIP-712 domain the token
+  contract enforces (verify on-chain via name()/version() before deploy).
+- ZEUS_RPC_PROVIDERS, ZEUS_FACILITATOR_URL, ZEUS_SELLER_URL - required by
+  the standalone Secretariat boot (secretariat-index.mjs).
 
 Generate ADMIN_JWT_SECRET:
   openssl rand -hex 32
@@ -57,23 +73,29 @@ Wait for deployment to complete and check logs for errors.
 
 ---
 
-### 2. Render (Frontend: Static Site)
+### 2. Vercel (Frontend — canonical)
+
+Canonical frontend: https://zeus-insurance-bot-frontend.vercel.app
+Vercel auto-deploys on every push to main.
 
 #### Environment Variables
 
-Set these in your Render static site:
+Set these in your Vercel project:
 
 - VITE_API_BASE_URL=https://zeus-insurance-bot-api-production.up.railway.app/api
+- VITE_WALLETCONNECT_PROJECT_ID - required for the WalletConnect connector (without it only injected wallets are offered)
 - NODE_VERSION=20
 
-Build command (already configured in render.yaml):
+Build (already configured in the Vercel project):
 - pnpm install --no-frozen-lockfile --prefer-offline --filter @workspace/frontend...
 - pnpm --filter @zeus/sdk build
 - pnpm --filter @workspace/frontend build
 
-Publish path: frontend/dist
+Output: frontend/dist
 
-Render will automatically deploy on every push to main.
+Legacy hosts (do not use):
+- Render static site is retired (service returns instant 404); render.yaml kept for history only.
+- Netlify fully burned (netlify.toml removed in fcf6c02ee, site deleted).
 
 ---
 
@@ -118,7 +140,7 @@ Token expires in 30 days. Generate a new one before expiration.
 After deployment, verify:
 
 - Railway API responds to GET /health with status ok
-- Frontend loads correctly on Render URL
+- Frontend loads correctly at https://zeus-insurance-bot-frontend.vercel.app
 - CORS allows requests from frontend to API
 - JWT authentication works for /admin/reset-agent
 - All existing API endpoints still work
@@ -156,4 +178,4 @@ For issues or questions:
 
 ---
 
-Last updated: 2026-08-08 (Security Audit v1.0)
+Last updated: 2026-10-25 (canonical frontend -> Vercel)

@@ -107,8 +107,8 @@ export function WalletModal({ trigger, className }: WalletModalProps) {
             metadata: {
               name: "Zeus Insurance",
               description: "Decentralized insurance for AI agents",
-              url: "https://zeus-insurance-bot.netlify.app",
-              icons: ["https://zeus-insurance-bot.netlify.app/favicon.svg"],
+              url: "https://zeus-insurance-bot-frontend.vercel.app",
+              icons: ["https://zeus-insurance-bot-frontend.vercel.app/favicon.svg"],
             },
           }),
           installUrl: null,

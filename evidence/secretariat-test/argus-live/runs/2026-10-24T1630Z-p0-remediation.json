@@ -1,0 +1,52 @@
+{
+  "schema": "zeus-run-evidence/v1",
+  "run_id": "2026-10-24T1630Z-p0-remediation",
+  "kind": "p0-remediation",
+  "title": "P0-ремедиация внешнего аудита: перегенерация доказательной базы на вершине fcf6c02ee (F-001/F-002/F-009 закрыты)",
+  "started_at": "2026-10-24T16:24:00Z",
+  "finished_at": "2026-10-24T16:38:00Z",
+  "commit": {
+    "hash": "fcf6c02eed8eb832b8b4f74ded8269b9fa4f8099",
+    "committed_at": "2026-10-24T13:56:08Z"
+  },
+  "target": "Secretariat /v1 :8080 (standalone-бандл, migrations 0000+0005..0010) + embedded PostgreSQL 17.5 (17.5.0-beta.15) + argus-live-mock :9977",
+  "stages": {
+    "r6_gate": {
+      "verdict": "GREEN",
+      "total": "blocked=16/16 passed=4/4 leaked=0 other=0 | PG: ok=20 fail=0",
+      "detail": "20 сценарных входов (S8, S9, B-BS-01..18, 16 двуногих) — blocked=16/16, passed=4/4, leaked=0; PG-наблюдения: ok=20 fail=0. B-BS-16 recover-нога проходит через новый атомарный примитив saveAttemptWithJob (2 попытки, 1 сеттл); B-BS-17 реплей отбивается 409 authorization_used.",
+      "log": "p0-remediation/gate.log"
+    },
+    "live_canary_replay": {
+      "verdict": "GREEN",
+      "detail": "B-BS-17-live: честный сеттл http=200 tx=0xsettle1a16ea9a66eaade; 3/3 реплея использованного EIP-3009 нонса отбиты 409 authorization_used; леджер: settledIntents=1, distinctTx=1.",
+      "log": "p0-remediation/canary.log"
+    },
+    "jest_full": {
+      "verdict": "GREEN",
+      "detail": "45/45 сьютов PASSED, 364 теста: 362 passed, 2 skipped (исторические факультативные), 0 failed. Впервые ВСЕ 13 PostgreSQL-сьюитов исполнены против живой БД (embedded PG 17.5, тот же рецепт, что CI e2e-gate service container). P0-сьют p0-f001-f002-audit-remediation: 15/15, включая live-PG fault-injection F001-5 (инжекция сбоя МЕЖДУ двумя INSERT → полный rollback, сироты нет) и F001-6 (сканер переселектирует SETTLED-интент с сиротским attempt и лечит его).",
+      "log": "p0-remediation/jest.log"
+    }
+  },
+  "verdict_summary": {
+    "r6_gate": "GREEN — blocked=16/16 passed=4/4 leaked=0, PG ok=20 fail=0",
+    "canary": "GREEN — 3/3 реплея отбиты, single-settle",
+    "jest": "GREEN — 45/45 сьютов, 362 passed / 2 skipped / 0 failed (все DB-сьюиты живые)"
+  },
+  "invariants": [
+    "double-settle = 0 (facilitator-статистика: doubleSettleAttempts=0)",
+    "каждый блокированный сценарий оставляет POLICY_REJECTED/верификатор-отказ в PG",
+    "атомарность obligation: ни при каком инжектированном сбое не остаётся attempt-без-job",
+    "NOT_SETTLED невозможен без фактически исполненного скана AuthorizationUsed (negative-тест F002-1)",
+    "EVENT_FOUND → txHash-recovery; NOT_SETTLED по использованной авторизации запрещён (F002-5)"
+  ],
+  "verdict": "GREEN",
+  "notes": [
+    "Первый прогон на вершине P0-ремедиации fcf6c02ee: F-001 (атомарный handoff + самопочинка сирот), F-002 (честный скан AuthorizationUsed перед NOT_SETTLED CAS + §11-D freshness gate), F-009 (Netlify выжжен).",
+    "Все 13 ранее DB-зависимых сьютов jest впервые зелёные в песочнице — против embedded PostgreSQL 17.5 по рецепту CI (migrations 0000+0005..0010, 0004 skip).",
+    "Инфраструктура прогона (embedded PG, мигратор) — sandbox-скретч вне репозитория; воспроизведение в CI — штатный .github/workflows/e2e-gate.yml."
+  ],
+  "sources": [
+    "evidence/secretariat-test/argus-live/p0-remediation/{gate.log,canary.log,jest.log}"
+  ]
+}

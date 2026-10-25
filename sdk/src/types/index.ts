@@ -80,12 +80,20 @@ export const NETWORKS: Record<Network, NetworkConfig> = {
   "x-layer": {
     name: "x-layer",
     chainId: 196,
-    escrowAddress: "0x779Fcd0344c0DCaC0F8C45E2bB5Db72D6356AE56",
-    insuranceAddress: "0xe43e55d96925a3FBFdB5DE0a4AeC1a4bab4dDdB0",
-    reserveAddress: "0x6D84aa31073D4C51b579e468bdb02cc11343296E",
+    // R2 repair: canonical 2026-08-17 deployment generation. On-chain verified
+    // (eth_call, X Layer): Reserve.insuranceContract() == insuranceAddress,
+    // Escrow.token() == usdcAddress. The previous entries here pointed at the
+    // superseded 2026-08-13 generation (0xe43e55…/0x6D84aa…/0x779Fcd…) and —
+    // worse — duplicated bot-chain-mainnet's Reserve at 0x779Fcd… as escrow.
+    escrowAddress: "0x882c34d59E2d46a91534244e8B042e4A1fe01546",
+    insuranceAddress: "0xed65F223d7919B24263F4d6fe74e3DA42e7fD908",
+    reserveAddress: "0xeB6A9d8b1aD63898EfC2031A5572a84a567c591c",
     usdcAddress: "0x74b7f16337b8972027f6196a17a631ac6de26d22",
     rpcUrl: "https://rpc.xlayer.tech",
-    deployBlock: 67506529,
+    // Earliest block of the canonical generation (Reserve @ 67882545;
+    // Escrow @ 67882552, Insurance @ 68135485). Binary-searched via
+    // eth_getCode history on 2026-10-23.
+    deployBlock: 67882545,
   },
   "bot-chain-mainnet": {
     name: "bot-chain-mainnet",

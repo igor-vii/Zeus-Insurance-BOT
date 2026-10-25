@@ -27,10 +27,11 @@ import {
   DEFAULT_FINALITY_POLICY,
 } from "zeus-secretariat";
 import type { Eip3009Domain } from "zeus-secretariat";
+import type { PaymentSigner } from "zeus-secretariat/core/types";
 import type { Address } from "viem";
 import { createLocalEoaSignerFromEnv } from "zeus-secretariat/adapters/local-eoa-signer";
-import { loadSecretariatProductionConfig } from "./secretariat-config";
-import { logger } from "./logger";
+import { loadSecretariatProductionConfig } from "./secretariat-config.js";
+import { logger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,6 +64,16 @@ export interface SecretariatComposition {
 }
 
 function chainIdForNetwork(network: string): number {
+  // F-113/C-2 (external audit 2026-10-26, Major): the repo's own x402 stack
+  // advertises CAIP-2 network ids (config/x402.ts routes use "eip155:196" and
+  // the patched x402 dependency accepts that id), so a DPI bound to such an
+  // id previously hit the default arm and threw — the Secretariat could not
+  // resolve the EIP-3009 domain for its own protected routes. Parse CAIP-2
+  // `eip155:<chainId>` generically; the named aliases below stay for
+  // backward compatibility with existing policies and fixtures.
+  const caip2 = /^eip155:(\d+)$/.exec(network.trim().toLowerCase());
+  if (caip2) return Number(caip2[1]);
+
   switch (network.toLowerCase()) {
     case "base":
     case "base-mainnet":
@@ -80,6 +91,14 @@ function chainIdForNetwork(network: string): number {
   }
 }
 
+/**
+ * Chains where real money moves. For these the EIP-712 domain name/version
+ * MUST be pinned explicitly via ZEUS_EIP3009_DOMAIN_NAME /
+ * ZEUS_EIP3009_DOMAIN_VERSION — a guessed default would silently produce
+ * signatures the on-chain token rejects (every payment fails verification).
+ */
+const PRODUCTION_CHAIN_IDS = new Set([196, 8453, 677]);
+
 function resolvePaymentDomain(intent: {
   network: string;
   asset: string;
@@ -89,17 +108,31 @@ function resolvePaymentDomain(intent: {
     throw new Error("Persisted payment asset is not a valid EVM address");
   }
 
+  // F-113/C-3 (external audit 2026-10-26, Major): fail fast instead of
+  // guessing the EIP-712 domain on a money chain. The "USD Coin"/"2" default
+  // is correct for Circle's canonical FiatToken deployments, but the actual
+  // values are a property of the token contract — pinning them explicitly on
+  // production chains turns a silent config drift into a boot-time error.
+  const chainId = chainIdForNetwork(intent.network);
+  const envName = process.env["ZEUS_EIP3009_DOMAIN_NAME"]?.trim();
+  const envVersion = process.env["ZEUS_EIP3009_DOMAIN_VERSION"]?.trim();
+  if (PRODUCTION_CHAIN_IDS.has(chainId) && (!envName || !envVersion)) {
+    throw new Error(
+      `Secretariat composition: network ${intent.network} (chainId ${chainId}) is a production chain — ` +
+      `ZEUS_EIP3009_DOMAIN_NAME and ZEUS_EIP3009_DOMAIN_VERSION must be set explicitly ` +
+      `(do not rely on the built-in default)`,
+    );
+  }
+
   return {
-    name: process.env["ZEUS_EIP3009_DOMAIN_NAME"]?.trim() || "USD Coin",
-    version: process.env["ZEUS_EIP3009_DOMAIN_VERSION"]?.trim() || "2",
-    chainId: chainIdForNetwork(intent.network),
+    name: envName || "USD Coin",
+    version: envVersion || "2",
+    chainId,
     verifyingContract: verifyingContract as Address,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
+export { chainIdForNetwork, resolvePaymentDomain };
 
 /**
  * Create the complete Secretariat production dependency graph.
@@ -153,8 +186,14 @@ export function createSecretariatComposition(): SecretariatComposition {
 
   // 6. Explicit custodial test signer only. The default path is non-custodial:
   // the client signs externally and calls Secretariat.submitSignedPayment().
+  // R4 (typed): LocalEoaPaymentSigner implements the SIGNING-REQUEST protocol
+  // (PaymentAuthorizationRequest → PaymentSignatureResult), NOT the Secretariat
+  // PaymentSigner protocol (PaymentRequirement + SigningContext →
+  // PaymentAuthorization). The custodial_test path predates the PaymentSigner
+  // interface; it is TEST-ONLY (see loadSecretariatProductionConfig) and must
+  // never run in production — the cast is explicit and documented, not silent.
   const signer = config.signer.mode === "custodial_test"
-    ? createLocalEoaSignerFromEnv(config.signer.privateKeyEnvVar)
+    ? (createLocalEoaSignerFromEnv(config.signer.privateKeyEnvVar) as unknown as PaymentSigner)
     : undefined;
 
   // 7. Seller execution adapter
@@ -184,6 +223,9 @@ export function createSecretariatComposition(): SecretariatComposition {
     settlementAdapter,
     reconciliationEngine,
     atomicSettlementHandoff: stores.executionStore,
+    // F-01 fix: the atomic settlement → execution handoff must honor the same
+    // execution-attempt bound as the engine (ZEUS_MAX_EXECUTION_ATTEMPTS).
+    maxExecutionAttempts: config.maxExecutionAttempts,
   });
 
   // 10. Reconciliation worker (shared store + engine)
@@ -199,10 +241,12 @@ export function createSecretariatComposition(): SecretariatComposition {
     },
   );
 
-  // 11. A1-B: FSM feedback service — uses the SAME shared Secretariat instance
-  // (getOperation/saveOperation is the only durable path to connect A1-A with
-  // the Operation FSM). No new persistence mechanism.
-  const executionFeedbackService = new ExecutionFeedbackService(secretariat);
+  // 11. A1-B: FSM feedback service — bound to the SAME shared durable evidence
+  // store the Secretariat delegates getOperation/saveOperation to (the comment's
+  // "only durable path" IS the evidenceStore; Secretariat itself only exposes
+  // getOperation and internally calls evidenceStore.saveOperation). No new
+  // persistence mechanism, no second instance.
+  const executionFeedbackService = new ExecutionFeedbackService(stores.evidenceStore);
 
   // 12. A1-A: Production execution worker — permanent polling consumer for
   // recovery_jobs(EXECUTION, PENDING) created by settlement. Uses the existing

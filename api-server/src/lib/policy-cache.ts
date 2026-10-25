@@ -54,7 +54,7 @@ export async function getCachedPolicies(buyer: string): Promise<CachedPolicy[] |
     if (rows.length === 0) return null;
 
     const mostRecentSync = rows.reduce<Date>(
-      (best, r) => (r.syncedAt > best ? r.syncedAt : best),
+      (best, r) => (r.lastSyncedAt > best ? r.lastSyncedAt : best),
       new Date(0),
     );
     if (Date.now() - mostRecentSync.getTime() > CACHE_TTL_MS) return null;
@@ -78,7 +78,7 @@ export async function getCachedPolicy(id: string): Promise<CachedPolicy | null> 
       .limit(1);
 
     if (!row) return null;
-    if (Date.now() - row.syncedAt.getTime() > CACHE_TTL_MS) return null;
+    if (Date.now() - row.lastSyncedAt.getTime() > CACHE_TTL_MS) return null;
 
     return toCached(row);
   } catch (err) {
@@ -112,7 +112,7 @@ export async function upsertPolicies(policies: CachedPolicy[]): Promise<void> {
           isExpired: p.isExpired,
           createdAt: now,
           updatedAt: now,
-          syncedAt: now,
+          lastSyncedAt: now,
         })),
       )
       .onConflictDoUpdate({
@@ -123,7 +123,7 @@ export async function upsertPolicies(policies: CachedPolicy[]): Promise<void> {
           isExpired: sql`excluded.is_expired`,
           retryDeadline: sql`excluded.retry_deadline`,
           updatedAt: sql`excluded.updated_at`,
-          syncedAt: sql`excluded.synced_at`,
+          lastSyncedAt: sql`excluded.last_synced_at`,
         },
       });
   } catch (err) {
@@ -139,7 +139,7 @@ export async function invalidatePolicy(id: string): Promise<void> {
   try {
     await db
       .update(policiesTable)
-      .set({ syncedAt: new Date(0) })
+      .set({ lastSyncedAt: new Date(0) })
       .where(eq(policiesTable.id, id));
   } catch (err) {
     logger.warn({ err }, "[cache] invalidatePolicy error");

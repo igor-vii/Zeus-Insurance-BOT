@@ -12,7 +12,13 @@ import type { SecretariatComposition } from "../lib/secretariat-composition.js";
 import { logger } from "../lib/logger.js";
 
 const paymentPolicySchema = z.object({
-  maxPrice: z.string().min(1),
+  // F-08 fix (external audit 2026-10-25): maxPrice is MONEY — it must be a
+  // well-formed non-negative decimal string. The previous `z.string().min(1)`
+  // accepted "abc" / "1.2.3", which later made the policy comparison a NaN
+  // no-op (`amount > NaN === false`) and let the payment through.
+  maxPrice: z
+    .string()
+    .regex(/^\d+(\.\d{1,18})?$/, "maxPrice must be a non-negative decimal number string, e.g. \"10\" or \"1.25\""),
   allowedNetworks: z.array(z.string()),
   allowedAssets: z.array(z.string()),
   allowedSellers: z.array(z.string()).optional(),
@@ -20,7 +26,10 @@ const paymentPolicySchema = z.object({
 });
 
 const createRequestSchema = z.object({
-  authorizer: z.string().min(1),
+  // Stage A (discovery) MUST NOT require the authorizer: the payer address is
+  // only bound when the client externally signs the EIP-3009 payload in
+  // Stage B. ExecuteRequest.authorizer is optional — mirror that here.
+  authorizer: z.string().min(1).optional(),
   target: z.string().url(),
   method: z.string().min(1),
   payload: z.unknown().optional(),
@@ -223,6 +232,13 @@ export function createRequestsRouter(
     try {
       result = await secretariat.createRequest(executeRequest);
     } catch (error) {
+      // F-07 fix: a clientId-derived logical id colliding with a DIFFERENT
+      // paid contract is a client bug — answer 409 with the actionable
+      // message instead of a generic 500.
+      if (error instanceof Error && error.message.startsWith("REQUEST_COLLISION")) {
+        sendError(response, 409, "REQUEST_COLLISION", error.message);
+        return;
+      }
       logger.error({ err: error }, "Secretariat request creation failed");
       sendError(
         response,
@@ -234,10 +250,16 @@ export function createRequestsRouter(
     }
 
     if (result.status === "AWAITING_PAYMENT_SIGNATURE") {
+      // R6 (mainnet usability): the paying client can only build the EIP-3009
+      // signature from the PERSISTED intent binding — nonce + validity window.
+      // Both are generated in Stage A and were previously dropped from the
+      // HTTP response, making Stage B unsignable for an external client.
       response.status(201).json({
         requestId: result.requestId,
+        operationId: result.operationId,
         status: result.status,
         paymentRequired: result.paymentRequired,
+        paymentIntent: result.paymentIntent,
       });
       return;
     }

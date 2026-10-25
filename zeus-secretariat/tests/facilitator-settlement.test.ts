@@ -13,8 +13,12 @@ import {
 } from "../src/adapters/x402-facilitator-client";
 import { ReconciliationEngine } from "../src/core/reconciliation-engine";
 import { MockMultiRpcChecker } from "../src/core/multi-rpc-checker";
+import { keccak256, toBytes } from "viem";
 
 // Legacy MockOnChainChecker adapter
+// R0 repair: ReconciliationEngine now requires the §6/§14 MultiRpcChecker
+// interface (MultiRpcResult observations + agreement). The old ad-hoc checker
+// is preserved below ONLY as a data holder; tests use MockMultiRpcChecker.
 class MockOnChainChecker {
   private txResults: Map<string, any> = new Map();
   private nonceResults: Map<string, any> = new Map();
@@ -22,6 +26,40 @@ class MockOnChainChecker {
   setNonceResult(nonce: string, result: any) { this.nonceResults.set(nonce.toLowerCase(), result); }
   async checkTransaction(txHash: string) { return this.txResults.get(txHash.toLowerCase()) ?? null; }
   async checkNonceUsage(_payer: string, nonce: string) { return this.nonceResults.get(nonce.toLowerCase()) ?? null; }
+}
+
+// ---------------------------------------------------------------------------
+// R0 repair helpers — canonical EIP-3009 receipt fixtures for the engine's
+// §7 Transfer matching + §8 AuthorizationUsed log scan.
+// ---------------------------------------------------------------------------
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const AUTHORIZATION_USED_TOPIC = keccak256(toBytes("AuthorizationUsed(address,bytes32)"));
+
+function topicFromAddress(address: string): string {
+  return "0x" + address.replace(/^0x/i, "").toLowerCase().padStart(64, "0");
+}
+
+function settledReceiptFixture(intent: DurablePaymentIntent, blockNumber: number) {
+  return {
+    confirmed: true,
+    status: "success" as const,
+    blockNumber,
+    confirmations: 12, // DEFAULT_FINALITY_POLICY.requiredConfirmations
+    logs: [
+      {
+        address: intent.asset,
+        topics: [AUTHORIZATION_USED_TOPIC, topicFromAddress(intent.authorizer), topicFromAddress(intent.nonce)],
+        data: "0x",
+        logIndex: 0,
+      },
+      {
+        address: intent.asset,
+        topics: [TRANSFER_TOPIC, topicFromAddress(intent.authorizer), topicFromAddress(intent.payTo)],
+        data: "0x" + BigInt(intent.value).toString(16),
+        logIndex: 1,
+      },
+    ],
+  };
 }
 import type {
   DurablePaymentIntent,
@@ -92,7 +130,11 @@ class InMemoryDurableStore implements DurableEvidenceStore {
   ): Promise<void> {
     const intent = this.intents.get(intentId);
     if (!intent) throw new Error("INTENT_NOT_FOUND");
-    intent.status = status;
+    // R0 repair: DurablePaymentIntent's canonical field is `settlementState`
+    // (mirrors PostgresEvidenceStore). The fake previously wrote `intent.status`,
+    // so every state transition silently vanished and downstream reads saw the
+    // stale AUTHORIZED state.
+    intent.settlementState = status;
     if (extra?.txHash) intent.txHash = extra.txHash;
     if (extra?.signature) intent.signature = extra.signature;
     if (extra?.facilitatorResponse) intent.facilitatorResponse = extra.facilitatorResponse;
@@ -263,7 +305,10 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
     });
 
     const intent = makeIntent();
-    await store.createPaymentIntent(intent);
+    // R0 repair: in production the nonce row exists BEFORE submit (Stage A
+    // reserves it atomically with the intent). Reserve it the same way so the
+    // SUBMITTED transition is exercised against a real lifecycle.
+    await store.createIntentWithNonce(intent, intent.authorizer);
 
     const result = await facilitator.submit(intent, mockPayload);
 
@@ -301,9 +346,11 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
       expect(result.error).toContain("NETWORK_ERROR");
     }
 
-    // Verify DB updated to UNKNOWN
+    // R0 repair: per the frozen reconciliation spec (RECONCILIATION_PROTOCOL_SPEC_V0.1.md
+    // §timeout table + types.ts §2 "UNKNOWN is internal-only"), a network timeout
+    // persists RECONCILING — never FAILED and never the internal-only UNKNOWN label.
     const updated = await store.getPaymentIntentByOperationId(intent.operationId);
-    expect(updated!.settlementState).toBe("UNKNOWN");
+    expect(updated!.settlementState).toBe("RECONCILING");
   });
 
   // ---- Test AE: Reconciliation Success ----
@@ -313,22 +360,35 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
       forceTimeout: true,
     });
 
-    const intent = makeIntent({ nonce: "0xdeadbeef1234" });
-    await store.createPaymentIntent(intent);
+    // R0 repair: §7 Transfer matching compares 40-hex addresses, so the intent
+    // uses real-shaped addresses and the mock receipt carries canonical
+    // AuthorizationUsed + Transfer logs.
+    const intent = makeIntent({
+      nonce: "0xdeadbeef1234",
+      authorizer: "0x1111111111111111111111111111111111111111",
+      payTo: "0x2222222222222222222222222222222222222222",
+      asset: "0x3333333333333333333333333333333333333333",
+    });
+    await store.createIntentWithNonce(intent, intent.authorizer);
 
-    // Step 1: Submit → UNKNOWN (timeout)
+    // Step 1: Submit → UNKNOWN (timeout), DB persists RECONCILING (spec §timeout)
     const submitResult = await facilitator.submit(intent, mockPayload);
     expect(submitResult.status).toBe("UNKNOWN");
 
     // Step 2: Simulate that the tx actually went through on-chain
-    const chainChecker = new MockOnChainChecker();
-    chainChecker.setNonceResult("0xdeadbeef1234", {
-      used: true,
-      txHash: "0xfound_via_nonce_0x1234",
+    const chainChecker = new MockMultiRpcChecker();
+    chainChecker.setAuthResult("0xdeadbeef1234", true);
+    chainChecker.setAuthorizationUsedEvent("0xdeadbeef1234", {
+      transactionHash: "0xfound_via_nonce_0x1234",
       blockNumber: 12345678,
+      logIndex: 0,
     });
+    chainChecker.setTxResult(
+      "0xfound_via_nonce_0x1234",
+      settledReceiptFixture(intent, 12345678) as any,
+    );
 
-    // Step 3: Reconcile
+    // Step 3: Reconcile — spec §10: true → recover tx via logs → success+Transfer → SETTLED
     const engine = new ReconciliationEngine(store, chainChecker);
     const reconResult = await engine.reconcile(intent.paymentIntentId ?? intent.operationId);
 
@@ -374,18 +434,18 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
   // ---- Test AG: Reconciliation by txHash ----
 
   test("AG: reconciliation confirms settled tx by txHash", async () => {
+    // R0 repair: real-shaped addresses so §7-8 log matching applies.
     const intent = makeIntent({
       settlementState: "RECONCILING",
       txHash: "0xknown_tx_hash",
+      authorizer: "0x1111111111111111111111111111111111111111",
+      payTo: "0x2222222222222222222222222222222222222222",
+      asset: "0x3333333333333333333333333333333333333333",
     });
     await store.createPaymentIntent(intent);
 
-    const chainChecker = new MockOnChainChecker();
-    chainChecker.setTxResult("0xknown_tx_hash", {
-      confirmed: true,
-      blockNumber: 99999,
-      status: "success",
-    });
+    const chainChecker = new MockMultiRpcChecker();
+    chainChecker.setTxResult("0xknown_tx_hash", settledReceiptFixture(intent, 99999) as any);
 
     const engine = new ReconciliationEngine(store, chainChecker);
     const result = await engine.reconcile(intent.paymentIntentId ?? intent.operationId);
@@ -405,28 +465,36 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
     });
     await store.createPaymentIntent(intent);
 
-    const chainChecker = new MockOnChainChecker();
+    const chainChecker = new MockMultiRpcChecker();
     chainChecker.setTxResult("0xreverted_tx", {
       confirmed: false,
       status: "reverted",
-    });
+    } as any);
 
     const engine = new ReconciliationEngine(store, chainChecker);
     const result = await engine.reconcile(intent.paymentIntentId ?? intent.operationId);
 
     expect(result.status).toBe("NOT_SETTLED");
     if (result.status === "NOT_SETTLED") {
-      expect((result as any).reason ?? (result as any).evidence ? 'see evidence' : 'unknown').toContain("reverted");
+      // R0 repair: the original assertion wrapped the value in a ternary
+      // ((reason ?? evidence) ? 'see evidence' : 'unknown') which could never
+      // contain the substring. Assert the reason directly (spec §9).
+      expect((result as any).reason).toContain("reverted");
     }
 
-    // Verify DB updated to FAILED
+    // R0 repair: per types.ts §2 "FAILED is NOT a valid settlement state" and
+    // spec §9, a reverted transaction is terminal NOT_SETTLED.
     const updated = await store.getPaymentIntentByOperationId(intent.operationId);
-    expect(updated!.settlementState).toBe("FAILED");
+    expect(updated!.settlementState).toBe("NOT_SETTLED");
   });
 
   // ---- Test AI: Facilitator rejection ----
 
-  test("AI: facilitator HTTP error returns REJECTED", async () => {
+  // F-112/H-6: status classification now mirrors the REAL client — a 5xx is
+  // transient/infrastructural ambiguity (UNKNOWN → RECONCILING), while a 4xx
+  // is the facilitator's definitive refusal (REJECTED). The old test asserted
+  // REJECTED for 500 — that was the mock contradicting the real adapter.
+  test("AI: facilitator HTTP 500 returns UNKNOWN (transient), durable RECONCILING", async () => {
     const facilitator = new MockX402FacilitatorClient(store, {
       forceStatus: 500,
     });
@@ -436,14 +504,55 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
 
     const result = await facilitator.submit(intent, mockPayload);
 
-    expect(result.status).toBe("REJECTED");
-    if (result.status === "REJECTED") {
-      expect((result as any).reason ?? (result as any).evidence ? 'see evidence' : 'unknown').toContain("FACILITATOR_ERROR");
-      expect((result as any).reason ?? (result as any).evidence ? 'see evidence' : 'unknown').toContain("500");
+    expect(result.status).toBe("UNKNOWN");
+    if (result.status === "UNKNOWN") {
+      expect((result as any).error).toContain("FACILITATOR_AMBIGUOUS");
+      expect((result as any).error).toContain("500");
     }
 
-    // Verify DB updated to FAILED
+    // R0 repair: per spec §timeout table "HTTP 500 → RECONCILING (blockchain
+    // has priority)" — the DB must NOT be FAILED.
     const updated = await store.getPaymentIntentByOperationId(intent.operationId);
-    expect(updated!.settlementState).toBe("FAILED");
+    expect(updated!.settlementState).toBe("RECONCILING");
+  });
+
+  // F-112/H-6: definitive 4xx refusal — the caller sees REJECTED, the durable
+  // state still routes through the reconciler (§5: blockchain has priority).
+  test("AI-2: facilitator HTTP 400 returns REJECTED (definitive), durable RECONCILING", async () => {
+    const facilitator = new MockX402FacilitatorClient(store, {
+      forceStatus: 400,
+    });
+
+    const intent = makeIntent();
+    await store.createPaymentIntent(intent);
+
+    const result = await facilitator.submit(intent, mockPayload);
+
+    expect(result.status).toBe("REJECTED");
+    if (result.status === "REJECTED") {
+      expect((result as any).reason).toContain("FACILITATOR_ERROR");
+      expect((result as any).reason).toContain("400");
+    }
+
+    const updated = await store.getPaymentIntentByOperationId(intent.operationId);
+    expect(updated!.settlementState).toBe("RECONCILING");
+  });
+
+  // F-112/H-6: 409 authorization_used is REPLAYISH — the authorization may
+  // have settled on-chain earlier, so the caller must see UNKNOWN (the
+  // reconciler's truth-scan decides), never a flat REJECTED.
+  test("AI-3: facilitator HTTP 409 returns UNKNOWN (replay ambiguity)", async () => {
+    const facilitator = new MockX402FacilitatorClient(store, {
+      forceStatus: 409,
+    });
+
+    const intent = makeIntent();
+    await store.createPaymentIntent(intent);
+
+    const result = await facilitator.submit(intent, mockPayload);
+
+    expect(result.status).toBe("UNKNOWN");
+    const updated = await store.getPaymentIntentByOperationId(intent.operationId);
+    expect(updated!.settlementState).toBe("RECONCILING");
   });
 });

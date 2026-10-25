@@ -42,6 +42,20 @@ export class ExecutionWorker {
   private readonly batchSize: number;
   private running = false;
   private processing = false;
+  /**
+   * F-15 fix (external audit 2026-10-25): consecutive failures of the
+   * SETTLED-intent obligation scanner. The scanner is the safety net that
+   * finds settled payments without an execution obligation — a PERSISTENT
+   * failure here means settled payments silently stop being executed. It
+   * must be observable, not swallowed.
+   */
+  private consecutiveScannerFailures = 0;
+  /** Alert threshold: after this many consecutive scanner failures, log CRIT. */
+  private static readonly SCANNER_FAILURE_ALERT_THRESHOLD = 3;
+
+  get scannerFailureCount(): number {
+    return this.consecutiveScannerFailures;
+  }
 
   constructor(
     engine: PostSettlementEngine,
@@ -79,6 +93,37 @@ export class ExecutionWorker {
    * for shutdown-drain scenarios. Returns the number of jobs processed.
    */
   async runOnce(): Promise<number> {
+    // R0 repair: BEFORE draining pending jobs, make sure every SETTLED payment
+    // intent has an EXECUTION obligation. Without this scan, a payment settled
+    // by the background ReconciliationWorker (or after a crash between
+    // settlement and handoff) would stay SETTLED forever — the seller would
+    // never be called and the client would never receive the resource.
+    // Best-effort + idempotent: stores without the scanner are skipped;
+    // duplicate obligations are blocked by the DB unique index.
+    try {
+      await this.engine.ensureExecutionObligations?.();
+      // F-15: success resets the failure streak — the streak measures
+      // PERSISTENT scanner breakage, not one-off blips.
+      this.consecutiveScannerFailures = 0;
+    } catch (err) {
+      // F-15: scanning is best-effort and job processing must proceed, but a
+      // persistent scanner failure must be VISIBLE — settled payments would
+      // silently stop being executed. Log loudly, count the streak, escalate
+      // past the threshold.
+      this.consecutiveScannerFailures++;
+      if (this.consecutiveScannerFailures >= ExecutionWorker.SCANNER_FAILURE_ALERT_THRESHOLD) {
+        console.error(
+          `[ExecutionWorker] CRIT: ensureExecutionObligations failed ${this.consecutiveScannerFailures}x in a row — ` +
+          `settled payments may be missing execution obligations. Last error:`,
+          err,
+        );
+      } else {
+        console.error(
+          `[ExecutionWorker] ensureExecutionObligations failed (consecutive=${this.consecutiveScannerFailures}):`,
+          err,
+        );
+      }
+    }
     const jobs = await this.store.getPendingJobs();
     let processed = 0;
     for (const job of jobs.slice(0, this.batchSize)) {

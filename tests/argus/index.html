@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Argus — AI Agent Testing as a Service">
+<title>Argus Control Room</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><div class="brand-mark">A</div><div><strong>ARGUS</strong><span>CONTROL ROOM</span></div></div>
+  <div class="demo-tag">DEMO / PROTOTYPE</div>
+  <nav>
+    <button class="nav-item active" data-page="overview"><span>◈</span>Overview</button>
+    <button class="nav-item" data-page="tests"><span>▣</span>Tests</button>
+    <button class="nav-item" data-page="scenarios"><span>◇</span>Scenarios</button>
+    <button class="nav-item" data-page="evidence"><span>≡</span>Evidence</button>
+    <button class="nav-item" data-page="reports"><span>□</span>Reports</button>
+  </nav>
+  <button class="nav-item settings" data-page="settings"><span>⚙</span>Settings</button>
+</aside>
+<main class="main">
+<header class="topbar">
+  <div class="mobile-brand">ARGUS</div>
+  <div class="topbar-right"><span class="env">LOCAL DEMO</span><button id="themeToggle" class="icon-btn" aria-label="Toggle theme">☼</button><div class="avatar">A</div></div>
+</header>
+
+<section id="overview" class="page active">
+  <div class="page-head">
+    <div><div class="eyebrow">AGENT TESTING / CONTROL ROOM</div><h1>Test whether your agent behaves correctly when the world goes wrong.</h1><p>Run controlled scenarios against an external target. Capture observable evidence. Resolve the verdict.</p></div>
+    <button id="runTest" class="primary">Run a test <span>→</span></button>
+  </div>
+
+  <div class="pipeline panel">
+    <div class="pipeline-head"><div><span class="label">TEST MODEL</span><h2>From action to evidence-backed verdict</h2></div><span class="status-dot">READY</span></div>
+    <div class="steps">
+      <div class="step"><b>01</b><strong>Agent</strong><small>participant behavior</small></div><i>→</i>
+      <div class="step"><b>02</b><strong>Scenario</strong><small>controlled fault</small></div><i>→</i>
+      <div class="step"><b>03</b><strong>Target</strong><small>external system</small></div><i>→</i>
+      <div class="step"><b>04</b><strong>Evidence</strong><small>observable events</small></div><i>→</i>
+      <div class="step"><b>05</b><strong>Verdict</strong><small>assertion result</small></div>
+    </div>
+  </div>
+
+  <div class="grid two">
+    <div class="panel live">
+      <div class="panel-title"><div><span class="label">LIVE TEST</span><h2>Secretariat / payment lifecycle</h2></div><span class="badge running">STAGED</span></div>
+      <div class="test-meta"><span>agent: <b>argus-buyer-01</b></span><span>target: <b>Secretariat</b></span><span>scenario: <b>S7 Lost Delivery</b></span></div>
+      <div class="timeline">
+        <div class="event done"><span class="event-time">00:00.184</span><span class="event-line"></span><div><b>REQUEST_SENT</b><small>External request accepted</small></div></div>
+        <div class="event done"><span class="event-time">00:00.421</span><span class="event-line"></span><div><b>PAYMENT_SETTLED</b><small>Observable settlement evidence</small></div></div>
+        <div class="event pending"><span class="event-time">00:01.208</span><span class="event-line"></span><div><b>DELIVERY_UNKNOWN</b><small>Seller response not observed</small></div></div>
+      </div>
+      <div class="fault-row"><span class="label">FAULTS</span><button class="chip selected">Delivery Loss</button><button class="chip">Duplicate</button><button class="chip">Timeout</button></div>
+    </div>
+    <div class="panel verdict">
+      <div class="panel-title"><div><span class="label">LATEST VERDICT</span><h2>Evidence state</h2></div><span class="badge unresolved">UNRESOLVED</span></div>
+      <div class="verdict-main"><div class="verdict-code">UNRESOLVED</div><p>Payment is observable, but delivery outcome is not yet proven. No failure is inferred from missing response alone.</p></div>
+      <div class="assertions"><div><span>✓</span><div><b>Payment settlement observed</b><small>evidence.payment.settlement</small></div></div><div><span>—</span><div><b>Seller delivery outcome</b><small>evidence.delivery.receipt</small></div></div></div>
+      <button class="secondary full" data-page="evidence">Inspect evidence →</button>
+    </div>
+  </div>
+
+  <div class="section-head"><div><span class="label">RECENT TESTS</span><h2>Execution history</h2></div><button class="text-btn" data-page="tests">View all →</button></div>
+  <div class="panel table-wrap"><table><thead><tr><th>TEST ID</th><th>SCENARIO</th><th>TARGET</th><th>STATUS</th><th>VERDICT</th><th>STARTED</th></tr></thead><tbody>
+    <tr data-detail="T-024"><td class="mono">T-024</td><td>Lost Delivery</td><td>Secretariat</td><td><span class="badge staged">STAGED</span></td><td><span class="verdict-text amber">UNRESOLVED</span></td><td>2m ago</td></tr>
+    <tr data-detail="T-023"><td class="mono">T-023</td><td>Crash After Settlement</td><td>Secretariat</td><td><span class="badge complete">COMPLETE</span></td><td><span class="verdict-text green">PROVEN_SUCCESS</span></td><td>18m ago</td></tr>
+    <tr data-detail="T-022"><td class="mono">T-022</td><td>Duplicate Request</td><td>Secretariat</td><td><span class="badge complete">COMPLETE</span></td><td><span class="verdict-text red">PROVEN_FAILURE</span></td><td>31m ago</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="tests" class="page"><div class="page-head compact"><div><div class="eyebrow">TESTS</div><h1>Execution history</h1><p>Every run is a durable test record with observable evidence.</p></div><button id="runTest2" class="primary">Run a test →</button></div><div class="panel table-wrap"><table><thead><tr><th>TEST ID</th><th>AGENT</th><th>SCENARIO</th><th>TARGET</th><th>STATUS</th><th>VERDICT</th></tr></thead><tbody>
+<tr><td class="mono">T-024</td><td>argus-buyer-01</td><td>Lost Delivery</td><td>Secretariat</td><td>STAGED</td><td class="amber">UNRESOLVED</td></tr><tr><td class="mono">T-023</td><td>argus-buyer-01</td><td>Crash After Settlement</td><td>Secretariat</td><td>COMPLETE</td><td class="green">PROVEN_SUCCESS</td></tr><tr><td class="mono">T-022</td><td>argus-buyer-01</td><td>Duplicate Request</td><td>Secretariat</td><td>COMPLETE</td><td class="red">PROVEN_FAILURE</td></tr><tr><td class="mono">T-021</td><td>argus-buyer-01</td><td>Payment Retry</td><td>Secretariat</td><td>COMPLETE</td><td class="green">PROVEN_SUCCESS</td></tr>
+</tbody></table></div></section>
+
+<section id="scenarios" class="page"><div class="page-head compact"><div><div class="eyebrow">SCENARIOS</div><h1>Controlled failure modes</h1><p>Small, composable scenarios for testing behavior under pressure.</p></div></div><div class="scenario-grid"><div class="scenario-card"><div class="scenario-num">S01</div><h2>Honest</h2><p>Baseline participant behavior</p><button class="secondary" data-scenario="Honest">Use scenario →</button></div><div class="scenario-card"><div class="scenario-num">S02</div><h2>Impatient</h2><p>Early retry pressure</p><button class="secondary" data-scenario="Impatient">Use scenario →</button></div><div class="scenario-card"><div class="scenario-num">S03</div><h2>Duplicate</h2><p>Repeated request</p><button class="secondary" data-scenario="Duplicate">Use scenario →</button></div><div class="scenario-card"><div class="scenario-num">S04</div><h2>Adversarial</h2><p>Hostile participant behavior</p><button class="secondary" data-scenario="Adversarial">Use scenario →</button></div><div class="scenario-card"><div class="scenario-num">S05</div><h2>Slow</h2><p>Delayed seller</p><button class="secondary" data-scenario="Slow">Use scenario →</button></div><div class="scenario-card"><div class="scenario-num">S06</div><h2>Broken</h2><p>Broken target</p><button class="secondary" data-scenario="Broken">Use scenario →</button></div><div class="scenario-card"><div class="scenario-num">S07</div><h2>Delivery Loss</h2><p>Response delivery disappears</p><button class="secondary" data-scenario="Delivery Loss">Use scenario →</button></div><div class="scenario-card"><div class="scenario-num">S08</div><h2>Crash</h2><p>Target crashes after settlement</p><button class="secondary" data-scenario="Crash">Use scenario →</button></div></div></section>
+
+<section id="evidence" class="page"><div class="page-head compact"><div><div class="eyebrow">EVIDENCE</div><h1>Observable event stream</h1><p>Evidence is collected from the target boundary — not from hidden internals.</p></div></div><div class="panel evidence-panel"><div class="filterbar"><select><option>Test: T-024</option><option>T-023</option></select><select><option>All sources</option><option>HTTP</option><option>Payment</option><option>Receipt</option></select><button class="secondary">Export view</button></div><div class="evidence-row"><span class="mono">00:00.184</span><span class="source">EXTERNAL</span><b>REQUEST_SENT</b><span class="payload">payload preview …</span><button class="icon-btn">›</button></div><div class="evidence-row"><span class="mono">00:01.321</span><span class="source">EXTERNAL</span><b>PAYMENT_SETTLED</b><span class="payload">payload preview …</span><button class="icon-btn">›</button></div><div class="evidence-row"><span class="mono">00:02.458</span><span class="source">EXTERNAL</span><b>SELLER_RESPONSE</b><span class="payload">payload preview …</span><button class="icon-btn">›</button></div><div class="evidence-row"><span class="mono">00:03.595</span><span class="source">EXTERNAL</span><b>DELIVERY_UNKNOWN</b><span class="payload">payload preview …</span><button class="icon-btn">›</button></div><div class="evidence-row"><span class="mono">00:04.732</span><span class="source">EXTERNAL</span><b>ASSERTION_EVALUATED</b><span class="payload">payload preview …</span><button class="icon-btn">›</button></div></div></section>
+
+<section id="reports" class="page"><div class="page-head compact"><div><div class="eyebrow">REPORTS</div><h1>Evidence-backed reports</h1><p>A compact record of what was tested, observed, and proven.</p></div><button class="secondary">Generate report</button></div><div class="report panel"><div class="report-top"><div><span class="label">TEST REPORT</span><h2>T-024 / Secretariat / Lost Delivery</h2></div><span class="badge unresolved">UNRESOLVED</span></div><div class="report-grid"><div><span>AGENT</span><b>argus-buyer-01</b></div><div><span>TARGET</span><b>Secretariat</b></div><div><span>ASSERTIONS</span><b>4 evaluated</b></div><div><span>EVIDENCE</span><b>12 events</b></div></div><div class="report-note"><b>Resolution</b><p>Delivery outcome remains unproven. The report preserves the distinction between missing observation and proven failure.</p></div></div></section>
+
+<section id="settings" class="page"><div class="page-head compact"><div><div class="eyebrow">SETTINGS</div><h1>Control room preferences</h1><p>Presentation settings are local to this prototype.</p></div></div><div class="settings-list panel"><label>Default target <select><option>Secretariat</option><option>Custom HTTP target</option></select></label><label>Evidence verbosity <select><option>Detailed</option><option>Standard</option><option>Minimal</option></select></label><label>Theme <button id="themeSetting" class="secondary">Toggle light / dark</button></label></div></section>
+</main>
+</div>
+<div id="modal" class="modal hidden"><div class="modal-backdrop"></div><div class="dialog"><button id="closeModal" class="close">×</button><span class="eyebrow">NEW TEST</span><h2>Configure a controlled run</h2><label>Agent<select><option>argus-buyer-01</option><option>external-agent</option></select></label><label>Scenario<select id="scenarioSelect"><option>Lost Delivery</option><option>Duplicate</option><option>Crash</option><option>Payment Retry</option><option>Seller Timeout</option></select></label><label>Target<select><option>Secretariat</option><option>External HTTP Target</option></select></label><div class="fault-options"><button class="chip selected">Delivery Loss</button><button class="chip">Duplicate</button><button class="chip">Slow</button><button class="chip">Crash</button></div><button id="execute" class="primary full">Execute demo test →</button><small class="modal-note">Demo only. No real payment, authentication, or backend call is made.</small></div></div>
+<script src="/app.js"></script>
+</body></html>

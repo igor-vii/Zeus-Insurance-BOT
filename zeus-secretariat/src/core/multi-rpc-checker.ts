@@ -11,6 +11,8 @@ import type {
   RpcProviderConfig,
   ReconciliationObservation,
   FinalityPolicy,
+  AuthorizationUsedScanObservation,
+  AuthorizationUsedScanOutcome,
 } from "./types.js";
 import { DEFAULT_FINALITY_POLICY } from "./types.js";
 import { keccak256, toBytes } from "viem";
@@ -62,9 +64,26 @@ export interface MultiRpcResult<T> {
     result: T | null;
     error?: string;
     observedAt: number;
+    /**
+     * F-002: Real block context witnessed by this provider at observation
+     * time. Present ONLY for successful observations; §11-D freshness
+     * gating refuses a terminal NOT_SETTLED without it.
+     */
+    blockData?: {
+      blockNumber: number;
+      chainHead: number;
+      stalenessBlocks: number;
+    };
   }>;
   agreement: "UNANIMOUS" | "DISAGREEMENT" | "INSUFFICIENT" | "ALL_FAILED";
   unanimousValue?: T;
+}
+
+export interface AuthorizationUsedScanResult {
+  observations: AuthorizationUsedScanObservation[];
+  outcome: AuthorizationUsedScanOutcome;
+  /** present only when outcome === "EVENT_FOUND" */
+  event?: AuthorizationUsedEventResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,13 +193,48 @@ export class SingleRpcProvider {
   }
 
   /**
+   * F-002: STRICT scan — throws on RPC failure instead of swallowing it.
+   * A swallowed error is indistinguishable from an empty log range and would
+   * let callers record a false "scan complete, nothing found".
+   */
+  async findAuthorizationUsedEventStrict(
+    tokenContract: string,
+    authorizer: string,
+    nonce: string,
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<{ transactionHash: string; blockNumber: number; logIndex: number } | null> {
+    // P0-4: Real AuthorizationUsed event signature
+    // keccak256("AuthorizationUsed(address,bytes32)")
+    const topic0 = keccak256(toBytes("AuthorizationUsed(address,bytes32)"));
+    const paddedAuthorizer = "0x" + authorizer.toLowerCase().replace("0x", "").padStart(64, "0");
+    const paddedNonce = "0x" + nonce.replace("0x", "").padStart(64, "0");
+
+    const logs = await this.rpcCall<Array<{ transactionHash: string; blockNumber: string; logIndex: string }>>("eth_getLogs", [{
+      address: tokenContract,
+      topics: [topic0, paddedAuthorizer, paddedNonce],
+      fromBlock: "0x" + fromBlock.toString(16),
+      toBlock: "0x" + toBlock.toString(16),
+    }]);
+
+    if (!logs || logs.length === 0) return null;
+    const log = logs[0];
+    return {
+      transactionHash: log.transactionHash,
+      blockNumber: parseInt(log.blockNumber, 16),
+      logIndex: parseInt(log.logIndex, 16),
+    };
+  }
+
+  /**
    * §6: Scan for AuthorizationUsed(authorizer, nonce) event.
    */
   /**
    * §6: Scan for AuthorizationUsed(address,bytes32) event.
    * P0-4: Real event signature — keccak256("AuthorizationUsed(address,bytes32)")
-   * = 0x3f2df0fedd38a4e4e1b3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3
-   * Actual value computed below using proper encoding.
+   * = 0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5
+   * (F-112 hygiene: the previously quoted placeholder was not a real keccak;
+   * the value above now matches the topic computed below from the ABI.)
    */
   async findAuthorizationUsedEvent(
     tokenContract: string,
@@ -192,8 +246,8 @@ export class SingleRpcProvider {
     try {
       // P0-4: Real AuthorizationUsed event signature
       // keccak256("AuthorizationUsed(address,bytes32)")
-      // Computed: 0x3f2df0fedd38a4e4e1b3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3
-      // For EIP-3009 USDC: the actual topic is derived from the ABI
+      // = 0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5
+      // Computed from the ABI below — never trust hand-copied constants.
       const topic0 = keccak256(toBytes("AuthorizationUsed(address,bytes32)"));
       const paddedAuthorizer = "0x" + authorizer.toLowerCase().replace("0x", "").padStart(64, "0");
       const paddedNonce = "0x" + nonce.replace("0x", "").padStart(64, "0");
@@ -355,6 +409,16 @@ export class MultiRpcChecker {
             underlyingProvider: config.underlyingProvider,
             result: authResult.state,
             error: authResult.error,
+            // F-002: carry the real block context so §11-D can gate on it and
+            // the NOT_SETTLED evidence records actual provider observations
+            // instead of zeroed placeholders.
+            ...(authResult.state === null ? {} : {
+              blockData: {
+                blockNumber: authResult.blockNumber,
+                chainHead: authResult.chainHead,
+                stalenessBlocks: authResult.stalenessBlocks,
+              },
+            }),
             observedAt: Date.now(),
           };
         } catch (err) {
@@ -369,6 +433,75 @@ export class MultiRpcChecker {
       }),
     );
     return this.aggregateResults(results);
+  }
+
+  /**
+   * F-002 (external audit Blocker): HONEST multi-provider AuthorizationUsed
+   * scan. Distinguishes the three cases the legacy aggregate-based API could
+   * not: (a) every provider executed the scan and found nothing,
+   * (b) at least one provider failed to scan, (c) providers disagree.
+   * Only (a) — SCAN_COMPLETE_EMPTY — may ever back a terminal NOT_SETTLED.
+   */
+  async scanAuthorizationUsed(
+    tokenContract: string,
+    authorizer: string,
+    nonce: string,
+    fromBlock = 0,
+  ): Promise<AuthorizationUsedScanResult> {
+    const observations: AuthorizationUsedScanObservation[] = await Promise.all(
+      this.providers.map(async (provider, i) => {
+        const config = this.configs[i];
+        try {
+          // Freshness witness: the head MUST be observed from the same
+          // provider immediately before its scan; an empty result is only
+          // meaningful against the head it actually covered.
+          const chainHead = await provider.getBlockNumber();
+          const event = await provider.findAuthorizationUsedEventStrict(
+            tokenContract,
+            authorizer,
+            nonce,
+            fromBlock,
+            chainHead,
+          );
+          return {
+            providerId: config.providerId,
+            underlyingProvider: config.underlyingProvider,
+            scanned: true,
+            event,
+            fromBlock,
+            toBlock: chainHead,
+            chainHead,
+            observedAt: Date.now(),
+          };
+        } catch (err) {
+          return {
+            providerId: config.providerId,
+            underlyingProvider: config.underlyingProvider,
+            scanned: false,
+            event: null,
+            fromBlock,
+            toBlock: 0,
+            chainHead: 0,
+            error: err instanceof Error ? err.message : "Unknown error",
+            observedAt: Date.now(),
+          };
+        }
+      }),
+    );
+
+    const allScanned = observations.every(o => o.scanned);
+    const found = observations.filter(o => o.scanned && o.event !== null);
+
+    if (!allScanned) {
+      return { observations, outcome: "INCOMPLETE" };
+    }
+    if (found.length === observations.length) {
+      return { observations, outcome: "EVENT_FOUND", event: found[0].event! };
+    }
+    if (found.length === 0) {
+      return { observations, outcome: "SCAN_COMPLETE_EMPTY" };
+    }
+    return { observations, outcome: "DISAGREEMENT" };
   }
 
   /**
@@ -401,10 +534,33 @@ export class MultiRpcChecker {
       return { allowed: false, reason: "§11-B: authorizationState is not false" };
     }
 
-    // §11-D: Check chain freshness
+    // §11-D: Check chain freshness — REAL check (F-002). Every successful
+    // observation must carry block context witnessed by its own provider and
+    // be inside that provider's staleness budget. A missing or negative
+    // blockData means we cannot prove WHEN the authorization was read, so a
+    // terminal NOT_SETTLED (which re-enables new payments) must not issue.
     for (const obs of authResult.observations) {
-      if (obs.result === null) continue;
-      // Staleness check would go here with actual block data
+      if (obs.result === null) continue; // failed providers already rejected by unanimity
+      const bd = obs.blockData;
+      if (!bd || bd.blockNumber < 0 || bd.chainHead < 0 || bd.stalenessBlocks < 0) {
+        return {
+          allowed: false,
+          reason: `§11-D: provider ${obs.providerId} produced no fresh block data — cannot declare NOT_SETTLED`,
+        };
+      }
+      const budget = this.configs.find(c => c.providerId === obs.providerId)?.maxStalenessBlocks;
+      if (budget === undefined) {
+        return {
+          allowed: false,
+          reason: `§11-D: unknown provider ${obs.providerId} — no staleness budget configured`,
+        };
+      }
+      if (bd.stalenessBlocks > budget) {
+        return {
+          allowed: false,
+          reason: `§11-D: provider ${obs.providerId} stale — ${bd.stalenessBlocks} blocks behind head (budget ${budget})`,
+        };
+      }
     }
 
     return { allowed: true, reason: "All §11 conditions met" };
@@ -479,6 +635,11 @@ export class MockMultiRpcChecker {
         providerId: c.providerId,
         underlyingProvider: c.underlyingProvider,
         result,
+        // F-002: mock parity — observations carry the same real block context
+        // the production checker produces, so §11-D gating is exercised.
+        ...(result === null ? {} : {
+          blockData: { blockNumber: 100, chainHead: 100, stalenessBlocks: 0 },
+        }),
         observedAt: Date.now(),
       };
     });
@@ -489,6 +650,51 @@ export class MockMultiRpcChecker {
     const allAgree = successful.every(o => o.result === first);
     if (allAgree) return { observations, agreement: "UNANIMOUS", unanimousValue: first! };
     return { observations, agreement: "DISAGREEMENT" };
+  }
+
+  /**
+   * F-002: Mock parity for the honest AuthorizationUsed scan.
+   * Default: every provider scanned [0, 1000] and found nothing
+   * (SCAN_COMPLETE_EMPTY). Tests override via setScanOutcome().
+   */
+  private scanOutcomes: Map<string, { outcome: "SCAN_COMPLETE_EMPTY" | "EVENT_FOUND" | "DISAGREEMENT" | "INCOMPLETE"; event: AuthorizationUsedEventResult | null }> = new Map();
+  scanAuthorizationUsedCallCount = 0;
+
+  setScanOutcome(
+    nonce: string,
+    outcome: "SCAN_COMPLETE_EMPTY" | "EVENT_FOUND" | "DISAGREEMENT" | "INCOMPLETE",
+    event?: AuthorizationUsedEventResult,
+  ): void {
+    this.scanOutcomes.set(nonce.toLowerCase(), { outcome, event: event ?? null });
+  }
+
+  async scanAuthorizationUsed(
+    _tokenContract: string,
+    _authorizer: string,
+    nonce: string,
+  ): Promise<AuthorizationUsedScanResult> {
+    this.scanAuthorizationUsedCallCount += 1;
+    const programmed = this.scanOutcomes.get(nonce.toLowerCase());
+    const outcome = programmed?.outcome ?? "SCAN_COMPLETE_EMPTY";
+    const foundEvent: AuthorizationUsedEventResult | null = outcome === "EVENT_FOUND"
+      ? (programmed?.event ?? { transactionHash: "0xscanfound", blockNumber: 90, logIndex: 0 })
+      : null;
+    const observations = this.providerConfigs.map(c => ({
+      providerId: c.providerId,
+      underlyingProvider: c.underlyingProvider,
+      // INCOMPLETE simulates a provider whose scan never executed.
+      scanned: outcome !== "INCOMPLETE",
+      event: outcome === "EVENT_FOUND" ? foundEvent : null,
+      fromBlock: 0,
+      toBlock: 1000,
+      chainHead: 1000,
+      observedAt: Date.now(),
+    }));
+    return {
+      observations,
+      outcome,
+      ...(foundEvent ? { event: foundEvent } : {}),
+    };
   }
 
   async findAuthorizationUsedEvent(

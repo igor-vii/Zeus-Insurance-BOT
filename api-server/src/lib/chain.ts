@@ -41,9 +41,30 @@ export const xLayer: Chain = {
 };
 
 /**
+ * Base Sepolia (Chain ID 84532) - Testnet
+ */
+export const baseSepolia: Chain = {
+  id: 84532,
+  name: "Base Sepolia",
+  nativeCurrency: {
+    decimals: 18,
+    name: "Ether",
+    symbol: "ETH",
+  },
+  rpcUrls: {
+    default: { http: ["https://sepolia.base.org"] },
+    public: { http: ["https://sepolia.base.org"] },
+  },
+  blockExplorers: {
+    default: { name: "Basescan", url: "https://sepolia.basescan.org" },
+  },
+};
+
+/**
  * Multichain public clients for Zeus Insurance BOT
  * - BOT Chain (677): Mainnet
- * - X Layer (196): Secondary chain
+ * - X Layer (196): Primary mainnet (canonical insurance/reserve/escrow generation)
+ * - Base Sepolia (84532): Testnet
  */
 export const publicClients = {
   botChain: createPublicClient({
@@ -52,6 +73,10 @@ export const publicClients = {
   }),
   xLayer: createPublicClient({
     chain: xLayer,
+    transport: http(),
+  }),
+  baseSepolia: createPublicClient({
+    chain: baseSepolia,
     transport: http(),
   }),
 };
@@ -65,6 +90,8 @@ export function getPublicClient(chainId: number) {
       return publicClients.botChain;
     case 196:
       return publicClients.xLayer;
+    case 84532:
+      return publicClients.baseSepolia;
     default:
       throw new Error(`Unsupported chain ID: ${chainId}`);
   }

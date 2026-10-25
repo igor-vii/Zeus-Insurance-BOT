@@ -42,7 +42,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   // R2.0-1: Valid configuration parses successfully
   test("R2.0-1: valid config parses", async () => {
     setValidEnv();
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     const config = loadSecretariatProductionConfig();
     expect(config.rpcProviders.length).toBe(2);
     expect(config.facilitatorBaseUrl).toBe("https://x402.example.com");
@@ -55,7 +55,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   test("R2.0-2: missing RPC config fails", async () => {
     setValidEnv();
     delete process.env["ZEUS_RPC_PROVIDERS"];
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     expect(() => loadSecretariatProductionConfig()).toThrow(/ZEUS_RPC_PROVIDERS.*missing/);
   });
 
@@ -63,7 +63,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   test("R2.0-3: invalid RPC config fails", async () => {
     setValidEnv();
     process.env["ZEUS_RPC_PROVIDERS"] = "not-json";
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     expect(() => loadSecretariatProductionConfig()).toThrow(/not valid JSON/);
   });
 
@@ -71,7 +71,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   test("R2.0-4: missing facilitator config fails", async () => {
     setValidEnv();
     delete process.env["ZEUS_FACILITATOR_URL"];
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     expect(() => loadSecretariatProductionConfig()).toThrow(/ZEUS_FACILITATOR_URL.*missing/);
   });
 
@@ -79,7 +79,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   test("R2.0-5: uses existing ZEUS_SELLER_URL", async () => {
     setValidEnv();
     process.env["ZEUS_SELLER_URL"] = "https://custom-seller.example.com";
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     const config = loadSecretariatProductionConfig();
     expect(config.sellerUrl).toBe("https://custom-seller.example.com");
   });
@@ -87,7 +87,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   // R2.0-6: Worker config uses existing canonical defaults
   test("R2.0-6: worker config defaults match canonical values", async () => {
     setValidEnv();
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     const config = loadSecretariatProductionConfig();
     // Defaults match ReconciliationWorker DEFAULT_CONFIG from reconciliation-worker.ts
     expect(config.reconciliation.pollIntervalMs).toBe(5000);
@@ -99,7 +99,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   // R2.0-7: No production-critical parameter receives fake/hardcoded fallback
   test("R2.0-7: required params have no fake fallback", async () => {
     // All three required params must throw when missing
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
 
     // Missing RPC
     clearSecretariatEnv();
@@ -123,7 +123,7 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   // R2.0-8: Non-custodial mode is the production default
   test("R2.0-8: signer config defaults to non-custodial mode", async () => {
     setValidEnv();
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     const config = loadSecretariatProductionConfig();
     expect(config.signer.mode).toBe("non_custodial");
     expect(config.signer.privateKeyEnvVar).toBe("ZEUS_SIGNER_PRIVATE_KEY");
@@ -132,14 +132,31 @@ describe("BLOCK 8 R2.0: Secretariat Production Configuration", () => {
   test("R2.0-9: custodial signer requires an explicit test mode", async () => {
     setValidEnv();
     process.env["ZEUS_SIGNER_MODE"] = "custodial_test";
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     expect(loadSecretariatProductionConfig().signer.mode).toBe("custodial_test");
+  });
+
+  // F-113/C-4 (external audit 2026-10-26): custodial_test is TEST-ONLY — it
+  // must be hard-refused in production builds, not merely discouraged.
+  test("R2.0-9b: custodial_test is forbidden when NODE_ENV=production", async () => {
+    setValidEnv();
+    const prevNodeEnv = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "production";
+    process.env["ZEUS_SIGNER_MODE"] = "custodial_test";
+    try {
+      const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
+      expect(() => loadSecretariatProductionConfig()).toThrow(/TEST-ONLY/);
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = prevNodeEnv;
+      process.env["ZEUS_SIGNER_MODE"] = "custodial_test";
+    }
   });
 
   // R2.0-10: Config module does not create runtime services
   test("R2.0-10: config loading creates no DB/RPC/runtime services", async () => {
     setValidEnv();
-    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config");
+    const { loadSecretariatProductionConfig } = await import("../../src/lib/secretariat-config.js");
     const config = loadSecretariatProductionConfig();
     // Config is a plain object with only primitive/array values
     expect(typeof config).toBe("object");

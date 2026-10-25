@@ -11,12 +11,23 @@ export const SUPPORTED_NETWORKS = {
 export type SupportedNetwork = keyof typeof SUPPORTED_NETWORKS;
 
 // ─── Address resolver ────────────────────────────────────────────────────────
+// A2/A5 repair: the resolver used to build `..._X_LAYER`, while .env.example
+// documents `..._XLAYER` — deployments following the documented env file could
+// never resolve. Accept both spellings (dash-expanded first — the only spelling
+// the old resolver ever read — then the compact .env.example form).
 function getAddr(network: SupportedNetwork, type: "insurance" | "reserve"): `0x${string}` {
-  const suffix = network === "base-sepolia" ? "" : `_${network.toUpperCase().replace("-", "_")}`;
-  const key = type === "insurance" ? `ZEUS_INSURANCE_ADDRESS${suffix}` : `ZEUS_RESERVE_ADDRESS${suffix}`;
-  const val = process.env[key];
-  if (!val) throw new Error(`Missing env: ${key}`);
-  return val as `0x${string}`;
+  const prefix = type === "insurance" ? "ZEUS_INSURANCE_ADDRESS" : "ZEUS_RESERVE_ADDRESS";
+  const keys = network === "base-sepolia"
+    ? [prefix]
+    : [
+        `${prefix}_${network.toUpperCase().replace("-", "_")}`,
+        `${prefix}_${network.toUpperCase().replace(/-/g, "")}`,
+      ];
+  for (const key of keys) {
+    const val = process.env[key];
+    if (val) return val as `0x${string}`;
+  }
+  throw new Error(`Missing env: set one of [${keys.join(", ")}]`);
 }
 
 export const getInsuranceAddress = (n: SupportedNetwork = "x-layer") => getAddr(n, "insurance");
@@ -91,8 +102,19 @@ export function encodeClaimPayout(policyId: bigint) {
   });
 }
 
-export const ZEUS_INSURANCE_ADDRESS = "0x8D10C2c6C92b613C1938fe532f0e391044e76188";
-export const ZEUS_RESERVE_ADDRESS = "0xadED902c2C6dD7D1B5b72A6a0A3358a9b9d4A79c";
+// A4 repair: contract addresses are deployment configuration, not source code.
+// Resolve from env for the ACTIVE network at module init — a deployment with
+// missing address config must fail fast at boot, not route payments to a
+// hardcoded address baked into a previous build.
+export const ACTIVE_NETWORK: SupportedNetwork =
+  (process.env["ZEUS_INSURANCE_NETWORK"] ?? process.env["ZEUS_NETWORK"] ?? "x-layer") as SupportedNetwork;
 
-export const publicClient = getClient(677);
+export const ZEUS_INSURANCE_ADDRESS = getAddr(ACTIVE_NETWORK, "insurance");
+export const ZEUS_RESERVE_ADDRESS = getAddr(ACTIVE_NETWORK, "reserve");
+
+// R2 repair: the default client was pinned to BOT Chain (677) while the
+// resolved addresses follow ACTIVE_NETWORK — e.g. /reserve multicalls read the
+// X Layer reserve address through the BOT Chain client. Route reads through
+// the client of the SAME chain the addresses belong to.
+export const publicClient = getClient(SUPPORTED_NETWORKS[ACTIVE_NETWORK].chainId);
 

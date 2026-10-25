@@ -1,5 +1,5 @@
 import { getRedis } from "./redis.js";
-import type { AgentStatus } from "./agent-status.js";
+import type { AgentStatus } from "../services/pricing.js";
 
 // In-memory fallback when Redis is not available
 const memStatus = new Map<string, AgentStatus>();

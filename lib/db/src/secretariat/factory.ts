@@ -39,7 +39,12 @@ export interface SharedStores {
  * @param db - Existing Drizzle database instance from @workspace/db
  * @returns SharedStores with evidenceStore and executionStore
  */
-export function createSharedStores(db: NodePgDatabase): SharedStores {
+/**
+ * R4: accepts any NodePgDatabase generic (consumers pass a schema-bound
+ * instance like NodePgDatabase<typeof schema>; stores only use the raw
+ * query builder, so the schema parameter is irrelevant here).
+ */
+export function createSharedStores(db: NodePgDatabase<any>): SharedStores {
   if (!db) {
     throw new Error(
       "createSharedStores requires a db instance. " +

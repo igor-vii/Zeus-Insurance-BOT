@@ -429,6 +429,11 @@ export type SettlementState = "PENDING_SIGNATURE" | "AUTHORIZED" | "SUBMITTING" 
  * This is enforced at DB level via allowNewPayment() guard.
  */
 export declare function allowNewPayment(state: SettlementState): boolean;
+/** §19/§21: Terminal economic states. Once reached, a state transition out is
+ *  forbidden for ANY worker (fencing/monotonicity). */
+export declare const TERMINAL_SETTLEMENT_STATES: readonly SettlementState[];
+/** §19/§21: true if `state` is terminal (irreversible). */
+export declare function isTerminalSettlementState(state: SettlementState): boolean;
 /** All states that BLOCK new payment creation. */
 export declare const PAYMENT_BLOCKED_STATES: readonly SettlementState[];
 /**
@@ -445,6 +450,9 @@ export interface DurablePaymentIntent {
     readonly requestId?: string;
     readonly clientId?: string;
     readonly authorizer: string;
+    /** Canonical alias of `authorizer` (state-machine: authorizer = signed.payer).
+     *  Surfaced by durable stores on round-trip so consumers can read it back. */
+    readonly payer?: string;
     readonly payTo: string;
     readonly value: string;
     readonly asset: string;
@@ -510,6 +518,13 @@ export interface SettledEvidenceBundle {
 }
 /**
  * §11 + §23: NOT_SETTLED evidence bundle — strict positive proof.
+ *
+ * F-002 (external audit Blocker): `scanComplete: true` and
+ * `authorizationUsedScanResult: "SCAN_COMPLETE_EMPTY"` may ONLY be written
+ * after an actual AuthorizationUsed log scan executed on every independent
+ * provider BEFORE the terminal CAS. The optional `authorizationUsedScan`
+ * field carries the per-provider scan observations that back the claim, so
+ * the bundle is self-evidencing instead of self-asserting.
  */
 export interface NotSettledEvidenceBundle {
     readonly authorizer: string;
@@ -520,6 +535,37 @@ export interface NotSettledEvidenceBundle {
     readonly rpcObservations: readonly RpcObservationForNotSettled[];
     readonly scanComplete: boolean;
     readonly authorizationUsedScanResult: "NOT_FOUND" | "SCAN_COMPLETE_EMPTY";
+    readonly authorizationUsedScan?: AuthorizationUsedScanSummary;
+}
+/**
+ * F-002: Honest per-provider AuthorizationUsed scan observation.
+ * `scanned: true` means the provider ACTUALLY executed the log query over
+ * [fromBlock, toBlock] — never inferred, never defaulted, never assumed.
+ */
+export interface AuthorizationUsedScanObservation {
+    readonly providerId: string;
+    readonly underlyingProvider: string;
+    /** true only when this provider executed the full-range log scan */
+    readonly scanned: boolean;
+    /** event found by this provider; null when the scan ran and found nothing */
+    readonly event: {
+        transactionHash: string;
+        blockNumber: number;
+        logIndex: number;
+    } | null;
+    readonly fromBlock: number;
+    readonly toBlock: number;
+    /** provider chain head at scan time — freshness witness for the empty result */
+    readonly chainHead: number;
+    readonly error?: string;
+    readonly observedAt: number;
+}
+/** F-002: Outcome of the multi-provider AuthorizationUsed scan. */
+export type AuthorizationUsedScanOutcome = "SCAN_COMPLETE_EMPTY" | "EVENT_FOUND" | "DISAGREEMENT" | "INCOMPLETE";
+/** F-002: Scan summary persisted inside NotSettledEvidenceBundle. */
+export interface AuthorizationUsedScanSummary {
+    readonly outcome: AuthorizationUsedScanOutcome;
+    readonly observations: readonly AuthorizationUsedScanObservation[];
 }
 /**
  * §14-15: Individual RPC observation for NOT_SETTLED proof.
@@ -582,8 +628,35 @@ export interface DurableEvidenceStore {
     createPaymentIntent(intent: DurablePaymentIntent): Promise<void>;
     getPaymentIntentByOperationId(operationId: string): Promise<DurablePaymentIntent | null>;
     getPaymentIntentByRequestId?(requestId: string): Promise<DurablePaymentIntent | null>;
+    /** R0 repair: optional scanner for PostSettlementEngine.ensureExecutionObligations().
+     *  Returns SETTLED intents that have no durable EXECUTION obligation. */
+    getSettledIntentsWithoutObligation?(limit?: number): Promise<DurablePaymentIntent[]>;
     updatePaymentIntentAuthorization?: (paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">) => Promise<void>;
     updatePaymentIntentStatus(intentId: string, status: SettlementState, extra?: Partial<Pick<DurablePaymentIntent, "txHash" | "facilitatorHttpStatus" | "facilitatorResponseBody" | "errorReason">>): Promise<void>;
+    /**
+     * F-108/F-109 (external audit 2026-10-26, Major + Minor): CAS-guarded
+     * ATOMIC payment-intent authorization. Replaces the racy
+     * updatePaymentIntentAuthorization() + updatePaymentIntentStatus() pair
+     * whose two blind writes allowed (a) a concurrent Stage B caller to
+     * silently OVERWRITE the signed payload (last-writer-wins after a
+     * TOCTOU on PENDING_SIGNATURE) and (b) a blind status write to REGRESS an
+     * intent a concurrent submission had already advanced (SUBMITTING →
+     * AUTHORIZED), re-opening the submission window. One conditional statement
+     * binds payload + AUTHORIZED atomically; the blind pair is legacy-only.
+     *
+     * Contract (mirrored by every implementation):
+     *   true   — this call performed the PENDING_SIGNATURE → AUTHORIZED
+     *            transition and durably bound the payload;
+     *   false  — CAS lost BUT the intent already carries the IDENTICAL
+     *            payload hash (idempotent concurrent replay; never an error —
+     *            the concurrent winner owns the pipeline);
+     *   throws INTENT_NOT_FOUND                      — no such intent;
+     *   throws PAYMENT_INTENT_AUTHORIZATION_CONFLICT — a DIFFERENT payload is
+     *            durably bound (or the intent is terminal with a different
+     *            payload). Callers MUST fail closed: the payload is never
+     *            overwritten.
+     */
+    authorizePaymentIntent?(paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">, expectedState?: SettlementState): Promise<boolean>;
     reserveNonce(nonce: string, operationId: string, payer: string): Promise<void>;
     getNonce(nonce: string): Promise<NonceRecord | null>;
     markNonceSigned(nonce: string): Promise<void>;

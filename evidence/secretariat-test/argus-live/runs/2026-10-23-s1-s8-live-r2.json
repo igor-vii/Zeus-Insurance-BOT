@@ -1,0 +1,281 @@
+{
+  "schema": "zeus-run-evidence/v1",
+  "run_id": "2026-10-23-s1-s8-live-r2",
+  "kind": "s1-s8-live",
+  "title": "Живая матрица S1-S8 против реального Secretariat — прогон №2 (после фиксов S3/S8)",
+  "run_date": "2026-10-23",
+  "evidence_commit": {
+    "hash": "57e24930fc5a9255af9eb655a7b4ca1a3096f45e",
+    "committed_at": "2026-10-23T19:30:41Z"
+  },
+  "target": "Secretariat /v1 :8080 + embedded PostgreSQL + argus-live-mock :9977",
+  "scenarios": [
+    {
+      "exit": "0",
+      "verdict": "PASS",
+      "reason": "",
+      "id": "S1"
+    },
+    {
+      "exit": "0",
+      "verdict": "PASS",
+      "reason": "",
+      "id": "S2"
+    },
+    {
+      "exit": "0",
+      "verdict": "PASS",
+      "reason": "",
+      "id": "S3"
+    },
+    {
+      "exit": "0",
+      "verdict": "NONE",
+      "reason": "",
+      "id": "S4"
+    },
+    {
+      "exit": "0",
+      "verdict": "PASS",
+      "reason": "",
+      "id": "S5"
+    },
+    {
+      "exit": "0",
+      "verdict": "PASS",
+      "reason": "",
+      "id": "S6"
+    },
+    {
+      "exit": "0",
+      "verdict": "PASS",
+      "reason": "",
+      "id": "S7"
+    },
+    {
+      "exit": "0",
+      "verdict": "PASS",
+      "reason": "",
+      "id": "S8"
+    }
+  ],
+  "pg": {
+    "S1": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW",
+        "EXECUTION_SUCCESS"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    },
+    "S2": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW",
+        "EXECUTION_SUCCESS"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    },
+    "S3": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW",
+        "EXECUTION_SUCCESS"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    },
+    "S4": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    },
+    "S5": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW",
+        "EXECUTION_SUCCESS"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    },
+    "S6": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW",
+        "EXECUTION_SUCCESS"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    },
+    "S7": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW",
+        "EXECUTION_SUCCESS"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    },
+    "S8": {
+      "intents": 1,
+      "states": [
+        "SETTLED"
+      ],
+      "observations": [
+        "STATE_TRANSITION",
+        "DISCOVERY_STARTED",
+        "PAYMENT_REQUIREMENT_RECEIVED",
+        "SELLER_CAPABILITIES_DISCOVERED",
+        "POLICY_VALIDATION_STARTED",
+        "POLICY_VALIDATION_PASSED",
+        "OPERATION_CREATED",
+        "PAYMENT_VERIFIED",
+        "PAYMENT_AUTHORIZED",
+        "PAYMENT_SUBMITTED",
+        "RECONCILIATION_STARTED",
+        "SETTLEMENT_CONFIRMED",
+        "SETTLEMENT_ALREADY_PERSISTED",
+        "EXECUTION_INITIATED",
+        "EXECUTION_RESULT_RAW",
+        "EXECUTION_SUCCESS"
+      ],
+      "attempts": [],
+      "recoveryJobs": "none"
+    }
+  },
+  "verdict_summary": "полная матрица зелёная: S1-S3/S5-S8 PASS, S4 NONE (канонический бесконечный hang не terminates by design — вердикт несёт PG-трейл)",
+  "notes": [
+    "Фиксы: standalone rate-limit стал читать env; закрыты дыры обвязки S3/S8 в лабе.",
+    "pg-trail/S1-S8.md в репо — детальные PostgreSQL-трейлы именно этого прогона (run 1792783349)."
+  ],
+  "sources": [
+    "git 57e24930f:evidence/secretariat-test/argus-live/matrix.txt",
+    "git 57e24930f:...pg-observations.json",
+    "evidence/secretariat-test/argus-live/pg-trail/"
+  ]
+}

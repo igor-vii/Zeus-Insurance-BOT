@@ -166,6 +166,73 @@ describeIfDb("Phase 2.2.1: Durable Storage (PostgreSQL)", () => {
     expect(recovered!.value).toBe("500000");
   });
 
+  // ---- Test AB-F101: atomicity of createIntentWithNonce ----
+
+  test("AB-F101: failed intent insert inside createIntentWithNonce leaves NO orphan nonce (F-101)", async () => {
+    const operationId = `op-f101-${Date.now()}`;
+    const nowMs = Date.now();
+    const now = Math.floor(nowMs / 1000);
+
+    const intent1: DurablePaymentIntent = {
+      paymentIntentId: `intent-f101-first-${nowMs}`,
+      operationId,
+      settlementState: "AUTHORIZED",
+      authorizer: "0xPayerF101",
+      payTo: "0xPayeeF101",
+      value: "700000",
+      asset: "0xUSDC",
+      network: "base-sepolia",
+      nonce: `0x${nowMs.toString(16)}f101a`,
+      validAfter: now - 3600,
+      validBefore: now + 3600,
+      paymentPayload: "base64payload-f101-1",
+      paymentPayloadHash: "0xhash-f101-1",
+      createdAt: nowMs,
+      updatedAt: nowMs,
+    };
+    await store.createPaymentIntent(intent1);
+
+    // Same operationId, fresh nonce → intent insert violates
+    // pi_operation_id_unique; the transaction must roll back BOTH writes.
+    const conflictingNonce = `0x${nowMs.toString(16)}f101b`;
+    const intent2: DurablePaymentIntent = {
+      ...intent1,
+      paymentIntentId: `intent-f101-second-${nowMs}`,
+      nonce: conflictingNonce,
+      paymentPayload: "base64payload-f101-2",
+      paymentPayloadHash: "0xhash-f101-2",
+    };
+
+    await expect(store.createIntentWithNonce(intent2, "0xPayerF101")).rejects.toThrow();
+
+    // F-101 regression: the nonce reserved by the FAILED transaction must NOT
+    // survive as an orphan row. (Pre-fix behavior: it stayed RESERVED forever.)
+    const orphaned = await store.getNonce(conflictingNonce);
+    expect(orphaned).toBeNull();
+
+    // The conflicting nonce must now be freely reservable by another operation.
+    await expect(
+      store.reserveNonce(conflictingNonce, `op-other-${nowMs}`, "0xOtherPayer"),
+    ).resolves.toBeUndefined();
+
+    // Symmetric case: pre-reserved nonce must abort the whole call — no intent
+    // row may be created for it.
+    const preNonce = `0x${nowMs.toString(16)}f101c`;
+    await store.reserveNonce(preNonce, `op-holder-${nowMs}`, "0xHolderPayer");
+    const intent3: DurablePaymentIntent = {
+      ...intent1,
+      paymentIntentId: `intent-f101-third-${nowMs}`,
+      operationId: `op-f101-fresh-${nowMs}`,
+      nonce: preNonce,
+      paymentPayload: "base64payload-f101-3",
+      paymentPayloadHash: "0xhash-f101-3",
+    };
+    await expect(store.createIntentWithNonce(intent3, "0xHolderPayer")).rejects.toThrow(
+      "NONCE_ALREADY_RESERVED",
+    );
+    expect(await store.getPaymentIntentByOperationId(`op-f101-fresh-${nowMs}`)).toBeNull();
+  });
+
   // ---- Test AC: Nonce lifecycle transitions ----
 
   test("AC: nonce status transitions RESERVED → SIGNED → SUBMITTED → SETTLED", async () => {

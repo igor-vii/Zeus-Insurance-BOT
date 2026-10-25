@@ -86,27 +86,24 @@ export function planExecutionTransitions(
   }
 }
 
-// Existing FSM edges (mirrors VALID_TRANSITIONS in state-machine.ts).
-const ALLOWED_EDGES: Record<string, OperationStatus[]> = {
-  SETTLED: ["EXECUTION_PENDING", "EXECUTION_UNKNOWN"],
-  EXECUTION_PENDING: ["EXECUTION_CONFIRMED", "EXECUTION_UNKNOWN", "FAILED"],
-  EXECUTION_CONFIRMED: ["DELIVERED", "FAILED"],
-  DELIVERED: ["SUCCESS"],
-  // NOTE (audit finding #4): the real FSM has NO EXECUTION_UNKNOWN→UNRESOLVABLE
-  // edge (state-machine.ts:115 — EXECUTION_UNKNOWN → RECOVERY_PENDING | FAILED;
-  // UNRESOLVABLE is reachable only from RECOVERY_PENDING). We do NOT add new
-  // edges to the authoritative FSM. The feedback path stops at EXECUTION_UNKNOWN
-  // for UNRESOLVABLE results and records that honestly via
-  // EXECUTION_FEEDBACK_SKIPPED evidence. UNRESOLVABLE remains authoritative in
-  // durable job/attempt state (recovery_jobs / execution_attempts) and in
-  // currentState when reconstructed after restart (see postgres-store
-  // deriveCurrentState fallback).
-  EXECUTION_UNKNOWN: ["RECOVERY_PENDING", "FAILED"],
-};
-
-function canTransition(from: OperationStatus, to: OperationStatus): boolean {
-  return ALLOWED_EDGES[from]?.includes(to) ?? false;
-}
+// F-110 (external audit 2026-10-26): the hand-mirrored ALLOWED_EDGES table is
+// GONE. This module previously duplicated the execution-relevant subset of the
+// Operation FSM ("mirrors VALID_TRANSITIONS in state-machine.ts") and could
+// silently drift from the authoritative table. It now imports the single
+// source of truth (operation-fsm.ts — the same table state-machine.ts uses).
+// The feedback planner (planExecutionTransitions) only ever proposes
+// execution-relevant edges, so checking them against the FULL authoritative
+// FSM is semantically identical to the old subset — minus the drift risk.
+// Kept notes from the mirror:
+//  (audit finding #4) the real FSM has NO EXECUTION_UNKNOWN→UNRESOLVABLE edge
+//  (EXECUTION_UNKNOWN → RECOVERY_PENDING | FAILED; UNRESOLVABLE is reachable
+//  only from RECOVERY_PENDING). The feedback path stops at EXECUTION_UNKNOWN
+//  for UNRESOLVABLE results and records that honestly via
+//  EXECUTION_FEEDBACK_SKIPPED evidence. UNRESOLVABLE remains authoritative in
+//  durable job/attempt state (recovery_jobs / execution_attempts) and in
+//  currentState when reconstructed after restart (see postgres-store
+//  deriveCurrentState fallback).
+import { isValidTransition as canTransition } from "./operation-fsm.js";
 
 // ---------------------------------------------------------------------------
 // ExecutionFeedbackService
@@ -222,6 +219,12 @@ export class ExecutionFeedbackService {
       timestamp: Date.now(),
       event,
       payload,
+      // F-111 (external audit 2026-10-26): assign the same Repair-C3
+      // per-operation sequence the state machine uses. Without it this
+      // producer's records fell back to the payload-hash identity in
+      // PostgresEvidenceStore and sorted behind ALL sequenced records,
+      // weakening both dedup identity and chronological ordering.
+      sequence: operation.evidence.length,
     };
     operation.evidence.push(record);
   }

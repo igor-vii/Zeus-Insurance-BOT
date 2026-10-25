@@ -1,4 +1,4 @@
-import type { RoutesConfig } from "x402/types";
+import type { Resource, RoutesConfig } from "x402/types";
 import type { Address } from "viem";
 
 /**
@@ -13,6 +13,19 @@ export const ZEUS_TREASURY = (process.env["ZEUS_TREASURY"] ?? "") as Address;
 export const USDC_XLAYER = "0x74b7f16337b8972027f6196a17a631ac6de26d22";
 
 /**
+ * x402 facilitator used by BOTH the x402-express payment middleware (below)
+ * and the Secretariat settlement adapter.
+ *
+ * The default public facilitator (x402.org) does NOT support X Layer, so on
+ * mainnet this MUST point at a Zeus-operated facilitator. Accepts either env
+ * name; empty string = fall back to the library default (fine for base-sepolia
+ * testing, NOT for eip155:196 production traffic).
+ */
+export const X402_FACILITATOR_URL: Resource | "" =
+  (process.env["X402_FACILITATOR_URL"] ?? process.env["ZEUS_FACILITATOR_URL"] ?? "").trim() as
+    Resource | "";
+
+/**
  * USDC contract on Base Sepolia (legacy, kept for reference)
  */
 export const USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
@@ -20,9 +33,13 @@ export const USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 /**
  * Routes protected by x402.
  *
- * NOTE: API fee is DISABLED for now (price set to $0).
- * When ready to enable, change price to "$0.001" and ensure
- * ZEUS_TREASURY env var is set on Railway.
+ * API fee is ENABLED at the documented starter price ($0.001).
+ * Requires ZEUS_TREASURY to be set; when it is missing the middleware
+ * stays disabled entirely (see app.ts).
+ *
+ * IMPORTANT (R3/A7): the price MUST be >= $0.0001 — x402's moneySchema
+ * rejects "$0", and a rejected price makes the middleware throw on EVERY
+ * request to a protected route (HTTP 500). Do not set price back to "$0".
  *
  * - /api/insurance/prepare-buy  → prepare policy calldata for AI agents.
  *   The insurance premium itself is collected on-chain when the agent
@@ -32,14 +49,14 @@ export const USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
  */
 export const x402Routes: RoutesConfig = {
   "/api/insurance/prepare-buy": {
-    price: "$0",
+    price: "$0.001",
     network: "eip155:196",
     config: {
       description: "Zeus Insurance — prepare policy calldata for AI agents",
     },
   },
   "/api/escrow/create": {
-    price: "$0",
+    price: "$0.001",
     network: "eip155:196",
     config: {
       description: "Zeus Escrow — create an escrow agreement on X Layer",

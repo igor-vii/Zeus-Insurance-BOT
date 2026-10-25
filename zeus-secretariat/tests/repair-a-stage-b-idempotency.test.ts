@@ -113,6 +113,19 @@ class RepairAStore implements DurableEvidenceStore {
   async getNonTerminalIntents(): Promise<DurablePaymentIntent[]> {
     return [];
   }
+
+  /** P0-1 durable CAS, mirrored from PostgresEvidenceStore for the fake adapter. */
+  async compareAndSetState(
+    intentId: string,
+    expectedState: DurablePaymentIntent["settlementState"],
+    newState: DurablePaymentIntent["settlementState"],
+  ): Promise<boolean> {
+    const intent = this.intents.get(intentId);
+    if (!intent || intent.settlementState !== expectedState) return false;
+    if (["SETTLED", "NOT_SETTLED", "UNRESOLVED_MANUAL"].includes(intent.settlementState)) return false;
+    this.intents.set(intentId, { ...intent, settlementState: newState, updatedAt: Date.now() });
+    return true;
+  }
   async reserveNonce(): Promise<void> {}
   async getNonce(): Promise<unknown> { return null; }
   async appendReconciliationObservation(): Promise<void> {}
@@ -124,8 +137,23 @@ class RepairAStore implements DurableEvidenceStore {
 class RepairASettlementAdapter implements SettlementAdapter {
   submitCalls: Array<{ intent: DurablePaymentIntent; payload: PaymentPayload }> = [];
 
+  constructor(private readonly store?: RepairAStore) {}
+
   async submit(intent: DurablePaymentIntent, payload: PaymentPayload) {
     this.submitCalls.push({ intent, payload });
+    // Mirror the REAL X402FacilitatorClient durable contract (P0-1):
+    // AUTHORIZED→SUBMITTING CAS before network I/O, then
+    // SUBMITTING→SETTLEMENT_PENDING on success. Without this, the durable
+    // intent stays AUTHORIZED after a "successful" submission and an
+    // identical-payload retry wrongly hits the F-05 resume path instead of
+    // the idempotent buildResult path — which is what turned this suite red
+    // when block-1 introduced resumeAuthorizedSubmission (F-05).
+    if (this.store) {
+      const claimed = await this.store.compareAndSetState(intent.paymentIntentId, "AUTHORIZED", "SUBMITTING");
+      if (claimed) {
+        await this.store.compareAndSetState(intent.paymentIntentId, "SUBMITTING", "SETTLEMENT_PENDING");
+      }
+    }
     return { status: "SUBMITTED" as const, txHash: "0xtxhash", rawResponse: {} };
   }
 }
@@ -207,7 +235,7 @@ describe("Repair A: idempotent Stage B retry", () => {
 
   beforeEach(() => {
     store = new RepairAStore();
-    settlementAdapter = new RepairASettlementAdapter();
+    settlementAdapter = new RepairASettlementAdapter(store);
     legacyAdapter = new RepairALegacyAdapter();
     secretariat = new Secretariat({
       evidenceStore: store,

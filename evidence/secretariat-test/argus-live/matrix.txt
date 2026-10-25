@@ -1,0 +1,8 @@
+S1|exit=0|verdict=PASS|reason=
+S2|exit=0|verdict=PASS|reason=
+S3|exit=0|verdict=PASS|reason=
+S4|exit=0|verdict=NONE|reason=
+S5|exit=0|verdict=PASS|reason=
+S6|exit=0|verdict=PASS|reason=
+S7|exit=0|verdict=PASS|reason=
+S8|exit=0|verdict=PASS|reason=

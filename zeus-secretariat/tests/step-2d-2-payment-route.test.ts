@@ -123,6 +123,25 @@ function makeStore() {
     async markNonceSigned(value) {
       if (value !== nonce) throw new Error("unexpected nonce");
     },
+    // P0-1 durable CAS contract, mirrored from PostgresEvidenceStore: the REAL
+    // X402FacilitatorClient.submit() advances AUTHORIZED→SUBMITTING→next before
+    // after network I/O. The fake settlement adapter below drives these so the
+    // harness represents production; without them the durable intent stayed
+    // AUTHORIZED after a "successful" submission and an identical-payload retry
+    // wrongly hit the F-05 resume path (resubmitting) instead of the idempotent
+    // buildResult path — which is what kept this suite red since block-1.
+    async transitionToSubmitting(id: string) {
+      if (id !== paymentIntentId) throw new Error("unexpected payment intent");
+      if (intent.settlementState !== "AUTHORIZED") return false;
+      intent = { ...intent, settlementState: "SUBMITTING" as const };
+      return true;
+    },
+    async recordSubmissionResult(id: string, newState: DurablePaymentIntent["settlementState"]) {
+      if (id !== paymentIntentId) throw new Error("unexpected payment intent");
+      if (intent.settlementState !== "SUBMITTING") return false;
+      intent = { ...intent, settlementState: newState };
+      return true;
+    },
     async saveOperation(value) {
       operation = value;
     },
@@ -162,6 +181,9 @@ async function signedPayload(): Promise<PaymentPayload> {
       asset,
       payTo,
       maxTimeoutSeconds: validBefore - validAfter,
+      // F-113/C-3: v2 EVM payloads carry the EIP-712 domain binding — the
+      // verifier now requires accepted.extra.name/.version on canonical v2.
+      extra: { name: domain.name, version: domain.version },
     },
     payload: {
       signature,
@@ -192,6 +214,12 @@ describe("Step 2D-2: public signed payment route", () => {
     const settlementAdapter: SettlementAdapter = {
       async submit(_intent, submittedPayload) {
         submitCalls.push(submittedPayload);
+        // Mirror the real client's durable state machine (P0-1) — see the
+        // store's transitionToSubmitting/recordSubmissionResult note.
+        const claimed = await store.transitionToSubmitting(paymentIntentId);
+        if (claimed) {
+          await store.recordSubmissionResult(paymentIntentId, "SETTLEMENT_PENDING");
+        }
         return {
           status: "SUBMITTED",
           txHash: "0xsubmitted",
@@ -264,7 +292,11 @@ describe("Step 2D-2: public signed payment route", () => {
     expect(continuation).toHaveBeenCalledTimes(1);
     expect(submitCalls).toHaveLength(1);
     expect(submitCalls[0].payload.signature).toBe(payload.payload.signature);
-    expect(store.readIntent?.().settlementState).toBe("AUTHORIZED");
+    // Durable intent ADVANCED past AUTHORIZED by the submission (P0-1
+    // AUTHORIZED→SUBMITTING→SETTLEMENT_PENDING), exactly as the real
+    // facilitator client does — this is what makes an identical-payload retry
+    // take the idempotent buildResult path instead of the F-05 resume.
+    expect(store.readIntent?.().settlementState).toBe("SETTLEMENT_PENDING");
   });
 
   test("invalid signature is rejected before submission and durable authorization", async () => {

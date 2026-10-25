@@ -1,0 +1,131 @@
+name: e2e-gate
+
+on:
+  pull_request:
+  push:
+    # F-114 (external audit 2026-10-26): the push filter was corrupted in the
+    # very first commit of this workflow — the flow-sequence opener got
+    # mangled, so GitHub Actions rejected the push trigger schema outright.
+    # Block-style list is transport-safe.
+    branches:
+      - main
+      - audit/repair-mainnet-prep
+
+concurrency:
+  group: e2e-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # F-114 (external audit 2026-10-26): the gate ran ZERO jest suites — the
+  # zeus-secretariat regression suites (incl. F-101/F-108/F-111/F-112) never
+  # executed in CI. This job runs them against a PostgreSQL 17 service
+  # (suites needing live PG use DATABASE_URL; embedded-PG suites download
+  # their binaries on the runner).
+  unit-tests:
+    name: Secretariat unit tests (jest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: zeus
+          POSTGRES_DB: zeus
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zeus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://zeus@127.0.0.1:5432/zeus
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm 9.15.9 (audited version)
+        run: npm install -g pnpm@9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace deps (db)
+        run: pnpm --filter "@workspace/db" run build
+
+      # The live-PG jest suites do not self-provision their schema: the
+      # canonical migration set (0000 + 0005..0010) must reach the service
+      # database first, exactly as in the e2e job below.
+      - name: Apply canonical migrations
+        run: bash scripts/apply-migrations.sh
+
+      # F-114 follow-up (CI post-push fix): `pnpm test --ci` is invalid —
+      # pnpm consumes `--ci` as its own CLI option ("Unknown option: 'ci'")
+      # and jest never ran. `--` forwards the flag to the package script;
+      # CI-mode is additionally auto-detected from the CI=true environment.
+      - name: Run zeus-secretariat jest suite
+        run: pnpm --filter "zeus-secretariat" test -- --ci
+
+      - name: Run api-server jest suite (R4 BLOCK 8)
+        run: cd api-server && NODE_OPTIONS=--experimental-vm-modules npx jest --ci
+
+  e2e:
+    name: Adversarial E2E (Client–Secretariat–Argus)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: zeus
+          POSTGRES_DB: zeus
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zeus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://zeus@127.0.0.1:5432/zeus
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the pnpm the audit (R0-R6) was verified with: pnpm 10.x
+      # rejects this lockfile with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH
+      # (overrides/patch config recorded by pnpm 9). Bump together with a
+      # lockfile regeneration, never as part of another change.
+      # Installed via npm (not pnpm/action-setup@v4): the action hard-errors
+      # on the mismatch between the version here and packageManager
+      # (pnpm@10.26.1) in package.json — which belongs to the repo's own
+      # update-lockfile.yml workflow and must not be touched from here.
+      - name: Install pnpm 9.15.9 (audited version)
+        run: npm install -g pnpm@9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build libraries and Secretariat bundle
+        run: |
+          pnpm -r --filter "@workspace/db" --filter "zeus-secretariat" run build
+          pnpm --filter api-server build:secretariat
+
+      - name: Apply canonical migrations
+        run: bash scripts/apply-migrations.sh
+
+      # Boots the standalone Secretariat with the documented launch recipe,
+      # waits for /health, runs all 20 scenario entries (S8, S9, B-BS-01..18 —
+      # 16/18 are two-legged: refuse+recover / over+boundary = 22 verdicts)
+      # against Argus and asserts every verdict is recorded in PostgreSQL.
+      - name: Adversarial E2E + PostgreSQL observation assertions
+        run: bash scripts/run-e2e.sh

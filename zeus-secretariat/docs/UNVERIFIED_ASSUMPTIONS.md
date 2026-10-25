@@ -103,3 +103,14 @@
 - E5: Transfer in same tx proves value movement (ERC-20 + EIP-3009)
 - G2: Reorg unconfirming SETTLED is INCIDENT (Spec §24)
 - G3: No auto SETTLED→NOT_SETTLED reversal (Spec §24)
+
+---
+
+## EIP-3009 Domain & Facilitator Wire (F-112/F-113, external audit 2026-10-26)
+
+| # | Assumption | Classification | Evidence / Required verification |
+|---|-----------|----------------|----------------------------------|
+| D1 | USDC on X Layer (0x74b7F16337B8972027F6196A17a631aC6dE26d22) exposes EIP-712 domain name "USD Coin" and version "2" (Circle-canonical FiatToken) | IMPLEMENTATION ASSUMPTION | Consistent across the x402 patch config (usdcName), the mock challenge extra and the r6 driver payload; MUST be verified on-chain at mainnet deploy via `name()` / `version()` eth_call to the token proxy — resolvePaymentDomain now hard-fails on production chains until ZEUS_EIP3009_DOMAIN_NAME / ZEUS_EIP3009_DOMAIN_VERSION are set explicitly |
+| D2 | The Zeus-operated facilitator implements the canonical x402 v2 remote-facilitator contract: POST /settle {x402Version, paymentPayload, paymentRequirements} → {success, transaction, errorReason?} | IMPLEMENTATION ASSUMPTION | Matches docs.cdp.coinbase.com v2 facilitator API and docs.radiustech.xyz facilitator reference; the Zeus facilitator must be built/verified against this contract before mainnet (mocks now enforce the same shape) |
+| D3 | Facilitator HTTP 4xx (except 408/409/429) means the payload is definitively refused and nothing was broadcast | IMPLEMENTATION ASSUMPTION | Spec §6 "blockchain has priority"; D-3 of this table; the client now returns REJECTED for these — verify against the real rail in Experiment 3 |
+| D4 | Facilitator 200 + success:false means nothing was broadcast (settlement failed pre-flight) | IMPLEMENTATION ASSUMPTION | errorReason taxonomy (e.g. insufficient_funds) is pre-broadcast; a post-broadcast failure would surface as 5xx/timeout → RECONCILING — must be exercised against the real rail |

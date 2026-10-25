@@ -79,7 +79,7 @@ curl -X POST https://zeus-insurance-bot-api-production.up.railway.app/api/prepar
 Send the returned data to to via your wallet or eth_sendRawTransaction.
 Deployment Status
 Component	Status	URL / Note
-Frontend	✅ Live	https://zeus-insurance-frontend.onrender.com
+Frontend	✅ Live	https://zeus-insurance-bot-frontend.vercel.app
 API	✅ Live	https://zeus-insurance-bot-api-production.up.railway.app
 Watcher	✅ Live	Internal service (Railway). Signs observations every 2 min.
 All contracts are verified on-chain.
