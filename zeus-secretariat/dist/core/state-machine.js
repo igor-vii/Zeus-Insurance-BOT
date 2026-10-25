@@ -7,6 +7,12 @@
 import { CryptoNonceGenerator } from './nonce-generator.js';
 import { egressFetch } from './egress-guard.js';
 import { keccak256, toBytes } from 'viem';
+// F-110 (external audit 2026-10-26): single source of truth for the Operation
+// FSM — the table lives in operation-fsm.ts and is shared with
+// execution-feedback-service.ts (the hand-mirrored ALLOWED_EDGES copy is gone).
+import { VALID_TRANSITIONS, isValidTransition } from './operation-fsm.js';
+// Backwards-compatible re-export for existing imports from this module.
+export { VALID_TRANSITIONS, isValidTransition };
 import { X402Parser } from './x402-parser.js';
 import { SellerCapabilityResolver } from './capability-resolver.js';
 // ============================================================================
@@ -55,34 +61,6 @@ function requireNonEmpty(value, field) {
 function toEpochSeconds(deadlineMs, currentMs) {
     const deadline = deadlineMs ?? currentMs + 300_000;
     return deadline > 10_000_000_000 ? Math.floor(deadline / 1000) : Math.floor(deadline);
-}
-// ============================================================================
-// STATE MACHINE TRANSITIONS
-// ============================================================================
-const VALID_TRANSITIONS = {
-    CREATED: ['DISCOVERING', 'FAILED'],
-    DISCOVERING: ['PAYMENT_REQUIRED', 'SUCCESS', 'FAILED'],
-    PAYMENT_REQUIRED: ['AWAITING_SIGNATURE', 'AUTHORIZED', 'POLICY_REJECTED', 'FAILED'],
-    AWAITING_SIGNATURE: ['AUTHORIZED', 'FAILED'],
-    AUTHORIZED: ['PAYMENT_SUBMITTED', 'FAILED'],
-    PAYMENT_SUBMITTED: ['SETTLEMENT_PENDING', 'SETTLEMENT_UNKNOWN', 'SETTLED', 'SETTLEMENT_FAILED'],
-    SETTLEMENT_PENDING: ['SETTLED', 'SETTLEMENT_UNKNOWN', 'SETTLEMENT_FAILED'],
-    SETTLEMENT_UNKNOWN: ['SETTLED', 'SETTLEMENT_FAILED'],
-    SETTLED: ['EXECUTION_PENDING', 'EXECUTION_UNKNOWN'],
-    EXECUTION_PENDING: ['EXECUTION_CONFIRMED', 'EXECUTION_UNKNOWN', 'FAILED'],
-    EXECUTION_CONFIRMED: ['DELIVERED', 'FAILED'],
-    DELIVERED: ['SUCCESS'],
-    SUCCESS: [], // Terminal state
-    FAILED: [], // Terminal state
-    POLICY_REJECTED: [], // Terminal state
-    SETTLEMENT_FAILED: ['FAILED'],
-    EXECUTION_UNKNOWN: ['RECOVERY_PENDING', 'FAILED'],
-    RECOVERY_PENDING: ['RECOVERED', 'SUCCESS', 'UNRESOLVABLE', 'FAILED'],
-    RECOVERED: [], // Terminal state
-    UNRESOLVABLE: [], // Terminal state
-};
-function isValidTransition(from, to) {
-    return VALID_TRANSITIONS[from]?.includes(to) ?? false;
 }
 export class Secretariat {
     config;
@@ -223,21 +201,17 @@ export class Secretariat {
             // the first successful submission necessarily advances the operation.
             if (dpi.paymentPayloadHash === paymentPayloadHash) {
                 // F-05 fix (external audit 2026-10-25): AUTHORIZED with the SAME
-                // payload means a previous attempt crashed or failed. Distinguish:
-                //   (a) authorization persisted but the submission was never
-                //       DISPATCHED (no PAYMENT_SUBMITTED evidence) → resume the
-                //       submission (on-chain AuthorizationUsed nonce remains the
-                //       double-settle guard);
-                //   (b) submission already dispatched (evidence present, outcome
-                //       possibly unknown) → the idempotent response stands; the
-                //       reconciliation worker owns resolution (§14, no blind resubmit).
+                // payload means a previous attempt crashed or failed AFTER persisting
+                // the authorization but BEFORE (or without durably completing) the
+                // facilitator submission. Returning buildResult() here left the
+                // payment stuck in AUTHORIZED forever while the retry LOOKED
+                // idempotent. Resume the submission instead; the EIP-3009 nonce
+                // (AuthorizationUsed on-chain) remains the double-settle guard.
                 if (dpi.settlementState === 'AUTHORIZED') {
-                    const alreadyDispatched = operation.evidence.some((e) => e.phase === 'PAYMENT' && e.event === 'PAYMENT_SUBMITTED');
-                    if (!alreadyDispatched) {
-                        return await this.resumeAuthorizedSubmission(operation, dpi);
-                    }
+                    return await this.resumeAuthorizedSubmission(operation, dpi);
                 }
-                // SUBMITTING/SUBMITTED/RECONCILING/SETTLED and dispatched-AUTHORIZED:
+                // Truly advanced states (SUBMITTING/SUBMITTED/RECONCILING/SETTLED/…)
+                // are owned by the in-flight submission or the reconciliation worker:
                 // keep the idempotent response — never blind-resubmit (§14).
                 return this.buildResult(operation);
             }
@@ -252,16 +226,45 @@ export class Secretariat {
             throw new Error('PAYMENT_REQUIREMENT_NOT_FOUND');
         this.validateExternalPaymentPayload(externallySignedPaymentPayload, dpi, requirement);
         const serializedPayload = JSON.stringify(externallySignedPaymentPayload);
+        const paymentPayloadHash = keccak256(toBytes(serializedPayload));
         const durableStore = this.config.evidenceStore;
-        if (typeof durableStore.updatePaymentIntentAuthorization !== 'function' ||
-            typeof durableStore.updatePaymentIntentStatus !== 'function') {
-            throw new Error('Non-custodial flow requires payment intent authorization persistence');
+        // F-108/F-109 fix (external audit 2026-10-26): bind the signed payload AND
+        // the AUTHORIZED state in ONE CAS-guarded statement. The previous pair of
+        // blind writes (updatePaymentIntentAuthorization + updatePaymentIntentStatus)
+        // let two concurrent Stage B callers — both having passed the
+        // PENDING_SIGNATURE check above (TOCTOU) — overwrite each other's payload
+        // (last-writer-wins) and regress an intent a concurrent submission had
+        // already advanced back to AUTHORIZED. The CAS makes the payload
+        // immutable once bound: a conflicting payload fails closed.
+        if (typeof durableStore.authorizePaymentIntent === 'function') {
+            const won = await durableStore.authorizePaymentIntent(dpi.paymentIntentId, {
+                paymentPayload: serializedPayload,
+                paymentPayloadHash,
+            }, 'PENDING_SIGNATURE');
+            if (!won) {
+                // CAS lost, identical payload already durably bound: a concurrent
+                // duplicate owns the pipeline (it may be mid-submission). NEVER
+                // resubmit here (§14) — if the winner died before submitting, the
+                // F-05 resume path above handles it on the NEXT retry, once its
+                // AUTHORIZED state is actually stale. Report the freshest state.
+                const freshOp = await this.config.evidenceStore.getOperation(operation.operationId);
+                return this.buildResult(freshOp ?? operation);
+            }
         }
-        await durableStore.updatePaymentIntentAuthorization(dpi.paymentIntentId, {
-            paymentPayload: serializedPayload,
-            paymentPayloadHash: keccak256(toBytes(serializedPayload)),
-        });
-        await durableStore.updatePaymentIntentStatus(dpi.paymentIntentId, 'AUTHORIZED');
+        else {
+            // Legacy stores without the CAS primitive: retain the old pair.
+            // (Test fakes and third-party stores; both writes remain non-atomic
+            // there — documented, not silently fixed.)
+            if (typeof durableStore.updatePaymentIntentAuthorization !== 'function' ||
+                typeof durableStore.updatePaymentIntentStatus !== 'function') {
+                throw new Error('Non-custodial flow requires payment intent authorization persistence');
+            }
+            await durableStore.updatePaymentIntentAuthorization(dpi.paymentIntentId, {
+                paymentPayload: serializedPayload,
+                paymentPayloadHash,
+            });
+            await durableStore.updatePaymentIntentStatus(dpi.paymentIntentId, 'AUTHORIZED');
+        }
         if (typeof durableStore.markNonceSigned === 'function') {
             await durableStore.markNonceSigned(dpi.nonce);
         }
@@ -329,19 +332,7 @@ export class Secretariat {
         operation.paymentState = 'AUTHORIZED';
         operation.currentState = 'AUTHORIZED';
         await this.persistOperation(operation);
-        // The dispatch outcome is UNKNOWN (the original attempt died mid-flight):
-        // if the re-dispatch is rejected by the rail (e.g. AuthorizationUsed —
-        // the settlement DID land), still reconcile before failing. This is the
-        // audit's 'reconcile unknown outcomes first' requirement.
-        try {
-            await this.submitPayment(operation);
-        }
-        catch (submitError) {
-            this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_RESUME_REJECTED', {
-                error: submitError instanceof Error ? submitError.message : String(submitError),
-                note: 'Re-dispatch rejected — reconciling whether the original dispatch settled',
-            });
-        }
+        await this.submitPayment(operation);
         await this.observeSettlement(operation);
         const resumedState = String(operation.currentState);
         if (resumedState === 'SETTLED' || resumedState === 'EXECUTION_PENDING') {
@@ -653,7 +644,14 @@ export class Secretariat {
                     validBefore,
                     paymentPayload: pendingPayload,
                     paymentPayloadHash: keccak256(toBytes(pendingPayload)),
-                    settlementState: "AUTHORIZED",
+                    // F-109 fix (external audit 2026-10-26): the intent is created BEFORE
+                    // the signature exists, so its honest state is PENDING_SIGNATURE.
+                    // Claiming AUTHORIZED here opened a window where an intent was
+                    // durably "authorized" while still carrying the unsigned SIGNING
+                    // placeholder payload. authorizePaymentIntent() below performs the
+                    // single atomic PENDING_SIGNATURE → AUTHORIZED transition together
+                    // with the real payload.
+                    settlementState: "PENDING_SIGNATURE",
                     createdAt: now(),
                     updatedAt: now(),
                 };
@@ -744,7 +742,44 @@ export class Secretariat {
             // `const updateAuthorization = store.updatePaymentIntentAuthorization;`
             // extraction dropped `this`, crashing every store whose implementation
             // touches instance state (e.g. InMemoryEvidenceStore).
-            if (preCreatedIntent && typeof durableStore.updatePaymentIntentAuthorization === "function") {
+            if (preCreatedIntent && typeof durableStore.authorizePaymentIntent === "function") {
+                // F-108/F-109 fix (external audit 2026-10-26): swap the SIGNING
+                // placeholder for the signed payload and flip PENDING_SIGNATURE →
+                // AUTHORIZED in ONE CAS-guarded statement. The previous blind
+                // updatePaymentIntentAuthorization() write let two concurrent signing
+                // attempts overwrite each other's payload (last-writer-wins).
+                let won;
+                try {
+                    won = await durableStore.authorizePaymentIntent(preCreatedIntent.paymentIntentId, {
+                        paymentPayload: serializedPayload,
+                        paymentPayloadHash: keccak256(toBytes(serializedPayload)),
+                    }, "PENDING_SIGNATURE");
+                }
+                catch (err) {
+                    // Auto flow only: a lost race re-signed the SAME intent binding
+                    // (unique operation_id → same nonce), so the concurrent duplicate's
+                    // signature is equally valid for this EIP-3009 authorization. The
+                    // durable payload is authoritative — proceed against it without
+                    // overwriting anything. Any OTHER error propagates.
+                    if (err instanceof Error &&
+                        err.message.startsWith("PAYMENT_INTENT_AUTHORIZATION_CONFLICT")) {
+                        won = false;
+                    }
+                    else {
+                        throw err;
+                    }
+                }
+                if (!won) {
+                    // Lost the CAS. Record the handoff honestly; submitPayment() below
+                    // re-reads the DURABLE intent and submits the durable payload.
+                    this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_AUTHORIZATION_CAS_LOSS', {
+                        paymentIntentId: preCreatedIntent.paymentIntentId,
+                        reason: 'concurrent signing attempt bound its payload first — durable payload kept',
+                    });
+                }
+            }
+            else if (preCreatedIntent && typeof durableStore.updatePaymentIntentAuthorization === "function") {
+                // Legacy stores without the CAS primitive: retain the blind pair.
                 await durableStore.updatePaymentIntentAuthorization.call(durableStore, preCreatedIntent.paymentIntentId, {
                     paymentPayload: serializedPayload,
                     paymentPayloadHash: keccak256(toBytes(serializedPayload)),

@@ -70,6 +70,36 @@ export class InMemoryEvidenceStore {
             updatedAt: Date.now(),
         };
     }
+    // F-108/F-109 (external audit 2026-10-26): CAS-guarded atomic authorization —
+    // same contract as PostgresEvidenceStore.authorizePaymentIntent(). JS is
+    // single-threaded, but the check-then-act shape is kept honest anyway: the
+    // state test and the payload binding are decided against the CURRENT record,
+    // never the caller's stale snapshot.
+    async authorizePaymentIntent(paymentIntentId, fields, expectedState = "PENDING_SIGNATURE") {
+        const rec = this.intents.get(paymentIntentId);
+        if (!rec)
+            throw new Error("INTENT_NOT_FOUND: " + paymentIntentId);
+        const conflict = () => new Error(`PAYMENT_INTENT_AUTHORIZATION_CONFLICT: intent is ${rec.intent.settlementState} with a different payload`);
+        // Terminal monotonicity mirrors compareAndSetState/PostgresEvidenceStore.
+        if (["SETTLED", "NOT_SETTLED", "UNRESOLVED_MANUAL"].includes(rec.intent.settlementState)) {
+            if (rec.intent.paymentPayloadHash === fields.paymentPayloadHash)
+                return false;
+            throw conflict();
+        }
+        if (rec.intent.settlementState === expectedState) {
+            rec.intent = {
+                ...rec.intent,
+                paymentPayload: fields.paymentPayload,
+                paymentPayloadHash: fields.paymentPayloadHash,
+                settlementState: "AUTHORIZED",
+                updatedAt: Date.now(),
+            };
+            return true;
+        }
+        if (rec.intent.paymentPayloadHash === fields.paymentPayloadHash)
+            return false;
+        throw conflict();
+    }
     async compareAndSetState(paymentIntentId, expectedState, newState) {
         const rec = this.intents.get(paymentIntentId);
         if (!rec)

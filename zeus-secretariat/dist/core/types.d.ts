@@ -633,6 +633,30 @@ export interface DurableEvidenceStore {
     getSettledIntentsWithoutObligation?(limit?: number): Promise<DurablePaymentIntent[]>;
     updatePaymentIntentAuthorization?: (paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">) => Promise<void>;
     updatePaymentIntentStatus(intentId: string, status: SettlementState, extra?: Partial<Pick<DurablePaymentIntent, "txHash" | "facilitatorHttpStatus" | "facilitatorResponseBody" | "errorReason">>): Promise<void>;
+    /**
+     * F-108/F-109 (external audit 2026-10-26, Major + Minor): CAS-guarded
+     * ATOMIC payment-intent authorization. Replaces the racy
+     * updatePaymentIntentAuthorization() + updatePaymentIntentStatus() pair
+     * whose two blind writes allowed (a) a concurrent Stage B caller to
+     * silently OVERWRITE the signed payload (last-writer-wins after a
+     * TOCTOU on PENDING_SIGNATURE) and (b) a blind status write to REGRESS an
+     * intent a concurrent submission had already advanced (SUBMITTING →
+     * AUTHORIZED), re-opening the submission window. One conditional statement
+     * binds payload + AUTHORIZED atomically; the blind pair is legacy-only.
+     *
+     * Contract (mirrored by every implementation):
+     *   true   — this call performed the PENDING_SIGNATURE → AUTHORIZED
+     *            transition and durably bound the payload;
+     *   false  — CAS lost BUT the intent already carries the IDENTICAL
+     *            payload hash (idempotent concurrent replay; never an error —
+     *            the concurrent winner owns the pipeline);
+     *   throws INTENT_NOT_FOUND                      — no such intent;
+     *   throws PAYMENT_INTENT_AUTHORIZATION_CONFLICT — a DIFFERENT payload is
+     *            durably bound (or the intent is terminal with a different
+     *            payload). Callers MUST fail closed: the payload is never
+     *            overwritten.
+     */
+    authorizePaymentIntent?(paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">, expectedState?: SettlementState): Promise<boolean>;
     reserveNonce(nonce: string, operationId: string, payer: string): Promise<void>;
     getNonce(nonce: string): Promise<NonceRecord | null>;
     markNonceSigned(nonce: string): Promise<void>;

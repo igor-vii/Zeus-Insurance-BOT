@@ -18,6 +18,7 @@ export declare class InMemoryEvidenceStore implements EvidenceStore {
     getPaymentIntentById(paymentIntentId: string): Promise<DurablePaymentIntent | null>;
     updatePaymentIntentAuthorization(paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">): Promise<void>;
     updatePaymentIntentStatus(paymentIntentId: string, status: SettlementState, extra?: Partial<Pick<DurablePaymentIntent, "txHash" | "facilitatorHttpStatus" | "facilitatorResponseBody" | "errorReason">>): Promise<void>;
+    authorizePaymentIntent(paymentIntentId: string, fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">, expectedState?: SettlementState): Promise<boolean>;
     compareAndSetState(paymentIntentId: string, expectedState: SettlementState, newState: SettlementState): Promise<boolean>;
     reserveNonce(nonce: string, operationId: string, payer: string): Promise<void>;
     getNonce(nonce: string): Promise<NonceRecord | null>;

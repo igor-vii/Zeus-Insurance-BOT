@@ -8,6 +8,8 @@ import { Operation, EvidenceRecord, ExecuteRequest, ExecutionResult, EvidenceSto
 import type { SettlementAdapter, PaymentPayload } from '../adapters/x402-facilitator-client.js';
 import type { ReconciliationEngine } from './reconciliation-engine.js';
 import type { AtomicSettlementHandoff } from './post-settlement-engine.js';
+import { VALID_TRANSITIONS, isValidTransition } from './operation-fsm.js';
+export { VALID_TRANSITIONS, isValidTransition };
 import { CapabilitySource } from './capability-resolver.js';
 /**
  * P0-7: ARCHITECTURAL BOUNDARY — SINGLE AUTHORITATIVE EXECUTION PATH

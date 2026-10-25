@@ -424,21 +424,38 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       );
 
     const byKey = new Map<string, EvidenceRecord>();
-    const put = (r: EvidenceRecord) => {
-      const key = `${typeof r.sequence === "number" ? "s" + r.sequence : "t" + r.timestamp}|${r.phase}|${r.event}`;
+    // F-111 (external audit 2026-10-26): dedup hardening.
+    //  1. Rich (JSONB) records are keyed by the FULL evidenceIdentity — the
+    //     exact same identity append() writes with. The previous key
+    //     (`s<seq>|phase|event` / `t<ts>|phase|event`) DROPPED a distinct
+    //     legitimate record sharing event+millisecond with a different
+    //     payload (unsequenced producers) and could never collapse a stub
+    //     with its sequenced JSONB twin.
+    //  2. Observation-row stubs (payload-less reconstructions) are suppressed
+    //     when a rich record with the same phase|event|timestamp exists —
+    //     that is their JSONB twin; previously a sequenced twin left BOTH
+    //     entries in the merged output (duplicate evidence per record).
+    const legacyKey = (r: EvidenceRecord) => `${r.phase}|${r.event}|${r.timestamp}`;
+    const richLegacyKeys = new Set<string>();
+    const put = (r: EvidenceRecord, key: string) => {
       if (!byKey.has(key)) byKey.set(key, r);
     };
-    for (const r of jsonbRecords) put(r);
+    for (const r of jsonbRecords) {
+      put(r, PostgresEvidenceStore.evidenceIdentity(r));
+      richLegacyKeys.add(legacyKey(r));
+    }
     for (const row of obsRows) {
       // Reconstruct minimal record from the durable observation row; JSONB
       // records (richer payloads) take precedence via put() ordering above.
-      put({
+      const stub = {
         operationId,
         phase: "DISCOVERY",
         timestamp: row.observedAt.getTime(),
         event: row.result,
         payload: null,
-      } as unknown as EvidenceRecord);
+      } as unknown as EvidenceRecord;
+      if (richLegacyKeys.has(legacyKey(stub))) continue; // JSONB twin exists
+      put(stub, `stub|${legacyKey(stub)}`);
     }
 
     const merged = [...byKey.values()];
@@ -536,6 +553,51 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
       setObj.extraFields = sql`COALESCE(${paymentIntentsTable.extraFields}, '{}'::jsonb) || ${JSON.stringify(extras)}::jsonb`;
     }
     await this.db.update(paymentIntentsTable).set(setObj).where(eq(paymentIntentsTable.paymentIntentId, id));
+  }
+
+  // F-108/F-109 (external audit 2026-10-26): CAS-guarded atomic authorization.
+  // ONE conditional UPDATE binds the signed payload AND the AUTHORIZED state;
+  // a concurrent writer can neither overwrite the payload (WHERE re-checked
+  // against the committed row after the row lock) nor regress the state. The
+  // lost-race classification mirrors the DurableEvidenceStore contract.
+  async authorizePaymentIntent(
+    paymentIntentId: string,
+    fields: Pick<DurablePaymentIntent, "paymentPayload" | "paymentPayloadHash">,
+    expectedState: SettlementState = "PENDING_SIGNATURE",
+  ): Promise<boolean> {
+    const updated = await this.db
+      .update(paymentIntentsTable)
+      .set({
+        paymentPayload: fields.paymentPayload,
+        paymentPayloadHash: fields.paymentPayloadHash,
+        settlementState: "AUTHORIZED",
+        version: sql`${paymentIntentsTable.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(paymentIntentsTable.paymentIntentId, paymentIntentId),
+          eq(paymentIntentsTable.settlementState, expectedState),
+        ),
+      )
+      .returning({ id: paymentIntentsTable.paymentIntentId });
+    if (updated.length > 0) return true;
+
+    // CAS lost — classify honestly. The concurrent writer's row lock has been
+    // released by now, so this read sees the committed state (READ COMMITTED).
+    const rows = await this.db
+      .select({
+        settlementState: paymentIntentsTable.settlementState,
+        paymentPayloadHash: paymentIntentsTable.paymentPayloadHash,
+      })
+      .from(paymentIntentsTable)
+      .where(eq(paymentIntentsTable.paymentIntentId, paymentIntentId))
+      .limit(1);
+    if (rows.length === 0) throw new Error("INTENT_NOT_FOUND: " + paymentIntentId);
+    if (rows[0].paymentPayloadHash === fields.paymentPayloadHash) return false;
+    throw new Error(
+      `PAYMENT_INTENT_AUTHORIZATION_CONFLICT: intent is ${rows[0].settlementState} with a different payload`,
+    );
   }
 
   // P0-6: Batch reconciliation - finds non-terminal intents directly by settlement_state
