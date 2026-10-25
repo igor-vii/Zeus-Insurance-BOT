@@ -55,7 +55,12 @@ must never be confused; they authorize DIFFERENT wallets):
   key here.
 - ZEUS_EIP3009_DOMAIN_NAME / ZEUS_EIP3009_DOMAIN_VERSION - REQUIRED on
   production chains (eip155:196 / 8453 / 677): the EIP-712 domain the token
-  contract enforces (verify on-chain via name()/version() before deploy).
+  contract enforces. For eip155:196 (X Layer) VERIFIED on-chain 2026-10-26:
+  USDC 0x74b7F16337B8972027F6196A17a631aC6dE26d22 returns name()="USD Coin",
+  version()="2" and its on-chain DOMAIN_SEPARATOR() matches the domain
+  computed from these values — set ZEUS_EIP3009_DOMAIN_NAME="USD Coin",
+  ZEUS_EIP3009_DOMAIN_VERSION="2" (see zeus-secretariat/docs/
+  UNVERIFIED_ASSUMPTIONS.md row D1; 8453/677 still verify at deploy).
 - ZEUS_RPC_PROVIDERS, ZEUS_FACILITATOR_URL, ZEUS_SELLER_URL - required by
   the standalone Secretariat boot (secretariat-index.mjs).
 
