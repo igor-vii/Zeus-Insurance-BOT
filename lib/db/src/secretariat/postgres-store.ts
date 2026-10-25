@@ -59,6 +59,23 @@ function findPgErrorCode(err: unknown): string | undefined {
 }
 
 /**
+ * F-101 fix: walk an error chain and return the first PostgreSQL constraint
+ * name found (PG errors carry `constraint` on 23505 violations). Used to
+ * distinguish a nonce-registry PK clash (NONCE_ALREADY_RESERVED) from a
+ * payment-intent uniqueness clash (DUPLICATE_OPERATION_ID) when both inserts
+ * share ONE transaction.
+ */
+function findPgConstraintName(err: unknown): string | undefined {
+  let cursor: unknown = err;
+  for (let depth = 0; depth < 6 && cursor && typeof cursor === "object"; depth++) {
+    const constraint = (cursor as { constraint?: unknown }).constraint;
+    if (typeof constraint === "string") return constraint;
+    cursor = (cursor as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+/**
  * R0 repair: deep key-order-insensitive JSON canonicalization used by the
  * saveOperation() fast-path dedup set. Postgres jsonb does NOT preserve object
  * key order, so a naive JSON.stringify comparison of an in-memory record and
@@ -588,20 +605,55 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
   async markNonceSigned(n: string): Promise<void> { await this.db.update(nonceRegistryTable).set({ status: "SIGNED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
   async markNonceSubmitted(n: string): Promise<void> { await this.db.update(nonceRegistryTable).set({ status: "SUBMITTED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
   async markNonceSettled(n: string): Promise<void> { await this.db.update(nonceRegistryTable).set({ status: "SETTLED", updatedAt: new Date() }).where(eq(nonceRegistryTable.nonce, n)); }
-  // P1: reserveNonce + createPaymentIntent should be atomic.
-  // In production, wrap in a transaction: BEGIN; reserveNonce; createPaymentIntent; COMMIT;
-  // If createPaymentIntent fails (duplicate operation_id), ROLLBACK releases the nonce.
-  // Current implementation relies on: (1) nonce PK prevents double-reserve,
-  // (2) operation_id UNIQUE prevents duplicate intent, (3) orphan nonces are harmless
-  // (they just block that nonce value permanently, which is acceptable since nonces are unique per operation).
+  // F-101 (external audit 2026-10-25, Major): reserveNonce + createPaymentIntent
+  // previously ran as TWO independent statements. A failure between them
+  // (duplicate operation_id, PG outage, crash) left an orphan nonce_registry row
+  // — a permanent registry/intent divergence — and could wedge the operation in
+  // AUTHORIZED with no intent behind it. Both writes now execute inside ONE
+  // transaction: either both rows commit, or neither does.
   async createIntentWithNonce(intent: DurablePaymentIntent, payer: string): Promise<void> {
-    if (intent.nonce) await this.reserveNonce(intent.nonce, intent.operationId, payer);
     try {
-      await this.createPaymentIntent(intent);
-    } catch (err) {
-      // If intent creation fails, the nonce reservation remains as an orphan.
-      // This is safe: the nonce value is permanently blocked, preventing any future
-      // intent from using it. No economic harm — just a wasted nonce value.
+      await this.db.transaction(async (tx) => {
+        if (intent.nonce) {
+          await tx.insert(nonceRegistryTable).values({
+            nonce: intent.nonce,
+            operationId: intent.operationId,
+            status: "RESERVED",
+            payer,
+          });
+        }
+        await tx.insert(paymentIntentsTable).values({
+          paymentIntentId: intent.paymentIntentId, operationId: intent.operationId,
+          requestId: intent.requestId ?? null, clientId: intent.clientId ?? null,
+          authorizer: intent.authorizer, payTo: intent.payTo, value: intent.value,
+          asset: intent.asset, network: intent.network, nonce: intent.nonce,
+          validAfter: intent.validAfter, validBefore: intent.validBefore,
+          paymentPayload: intent.paymentPayload, paymentPayloadHash: intent.paymentPayloadHash,
+          settlementState: intent.settlementState, txHash: intent.txHash ?? null,
+          submitAttemptAt: intent.submitAttemptAt ? new Date(intent.submitAttemptAt) : null,
+          probeCount: intent.probeCount ?? 0, version: 0,
+        });
+      });
+    } catch (err: unknown) {
+      if (findPgErrorCode(err) === "23505") {
+        // In a single transaction the FIRST failing statement aborts everything,
+        // so the surviving error tells us which unique constraint fired:
+        //   nonce_registry_pkey  → nonce clash      → NONCE_ALREADY_RESERVED
+        //   pi_operation_id_unique / pi_client_request_unique /
+        //   payment_intents_pkey → intent clash     → DUPLICATE_OPERATION_ID
+        const constraint = findPgConstraintName(err);
+        if (constraint === "nonce_registry_pkey") {
+          throw new Error("NONCE_ALREADY_RESERVED: " + intent.nonce);
+        }
+        if (constraint) {
+          throw new Error("DUPLICATE_OPERATION_ID: " + intent.operationId);
+        }
+        // Fallback when the driver hides the constraint name: probe the registry.
+        if (intent.nonce && (await this.getNonce(intent.nonce))) {
+          throw new Error("NONCE_ALREADY_RESERVED: " + intent.nonce);
+        }
+        throw new Error("DUPLICATE_OPERATION_ID: " + intent.operationId);
+      }
       throw err;
     }
   }
