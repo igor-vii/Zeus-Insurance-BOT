@@ -13,6 +13,16 @@
 #
 # Requires psql on PATH. Idempotent-ish: safe on a fresh database, which is
 # its intended use (CI service container, local bootstrap).
+#
+# F-16 (external audit 2026-10-25): CANONICAL MIGRATION MECHANISM.
+# This script — not drizzle-kit — is the canonical way migrations reach a
+# database in this repository. lib/db/drizzle/meta/_journal.json intentionally
+# records only 0000_init: the journal describes drizzle-kit's own snapshot
+# lineage, while migrations 0005-0010 are hand-audited SQL applied in the
+# exact order below. Do NOT run `drizzle-kit push`/`migrate` against a
+# database managed by this script, and do not add new migrations through one
+# mechanism without updating the other — verify BOTH a fresh bootstrap AND an
+# upgrade of an existing database before changing anything here.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${DATABASE_URL:?DATABASE_URL must be set}"
@@ -28,6 +38,10 @@ FILES=(
 )
 
 for f in "${FILES[@]}"; do
+  if [ ! -f "$f" ]; then
+    echo "[migrate] FATAL: migration file missing: $f" >&2
+    exit 1
+  fi
   echo "[migrate] $f"
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$f"
 done
