@@ -37,11 +37,20 @@ export const FACILITATOR_NETWORKS: Readonly<Record<string, FacilitatorNetwork>> 
     gasSymbol: "OKB",
   }),
   // Staging network: same wire contract, free testnet USDC.
+  // Domain verified against the LIVE contract (local anvil fork of
+  // sepolia.base.org, 2026-10-27): DOMAIN_SEPARATOR() ==
+  // 0x71f17a3b2ff373b803d70a5a07c046c1a2bc8e89c09ef722fcb047abe94c9818 ==
+  // keccak256(abi.encode(EIP712Domain-typehash, keccak("USDC"), keccak("2"),
+  // 84532, 0x036CbD…CF7e)). NOTE: Circle's Base Sepolia USDC was initialized
+  // with name "USDC" (NOT "USD Coin" — that is the X Layer / Base-mainnet
+  // value); the official x402 SDK chain config agrees (usdcName: "USDC"
+  // for 84532). Signing/verifying with "USD Coin" here would never recover
+  // the payer and transferWithAuthorization would revert on-chain.
   "eip155:84532": Object.freeze({
     id: "eip155:84532",
     chainId: 84532,
     usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Address,
-    domain: Object.freeze({ name: "USD Coin", version: "2" }),
+    domain: Object.freeze({ name: "USDC", version: "2" }),
     testnet: true,
     gasSymbol: "ETH",
   }),

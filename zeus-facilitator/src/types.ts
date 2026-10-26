@@ -11,7 +11,7 @@
  * makes the facilitator's wire contract explicit and reviewable.
  */
 
-export type X402Version = 2;
+export type X402Version = 1 | 2;
 
 /** Canonical v2 payment payload (the decoded PAYMENT-SIGNATURE object). */
 export interface CanonicalPaymentPayload {
@@ -65,7 +65,7 @@ export interface CanonicalPaymentRequirements {
   readonly extra?: Record<string, unknown>;
 }
 
-/** POST /verify and POST /settle request envelope (canonical v2). */
+/** POST /verify and /settle request envelope (canonical v2, or v1 normalized into it). */
 export interface FacilitatorRequest {
   readonly x402Version: number;
   readonly paymentPayload: CanonicalPaymentPayload;

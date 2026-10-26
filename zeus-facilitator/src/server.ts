@@ -2,7 +2,9 @@
  * Zeus facilitator — HTTP server (node:http, zero framework deps).
  *
  * Routes (canonical x402 v2 remote-facilitator contract, identical to the
- * F-112 mock enforcement and the Secretariat client):
+ * F-112 mock enforcement and the Secretariat client; official x402 v1
+ * envelopes (x402@1.x / x402-express@1.x — what api-server pins) are
+ * normalized into the canonical shape before verification):
  *   POST /verify  {x402Version, paymentPayload, paymentRequirements}
  *               → 200 {isValid:true, payer} | {isValid:false, invalidReason}
  *   POST /settle  same body

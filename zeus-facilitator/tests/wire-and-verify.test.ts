@@ -3,6 +3,8 @@
  * Hermetic: signatures are produced locally with viem; chain reads are fakes.
  */
 import { toFunctionSelector } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import type { Hex } from "viem";
 import {
   verifyOffChain,
   verifyRequest,
@@ -11,11 +13,14 @@ import {
 } from "../src/verify.js";
 import { RpcUnavailableError } from "../src/rpc.js";
 import { FACILITATOR_NETWORKS } from "../src/config.js";
+import type { CanonicalPaymentPayload, CanonicalPaymentRequirements, FacilitatorRequest } from "../src/types.js";
 import {
   buildSignedRequest,
   fakeRpc,
   NETWORK,
+  SELLER,
   TEST_OTHER_KEY,
+  TEST_PAYER_KEY,
 } from "./helpers.js";
 
 describe("verifyOffChain (structural + domain + EIP-712 recovery)", () => {
@@ -29,8 +34,8 @@ describe("verifyOffChain (structural + domain + EIP-712 recovery)", () => {
     }
   });
 
-  it("rejects x402Version != 2", async () => {
-    const { request } = await buildSignedRequest({ x402Version: 1 });
+  it("rejects x402Version other than 1/2", async () => {
+    const { request } = await buildSignedRequest({ x402Version: 3 });
     const outcome = await verifyOffChain(request, NETWORK, Date.now());
     expect(outcome).toMatchObject({ ok: false, reason: "x402_version_mismatch" });
   });
@@ -114,6 +119,101 @@ describe("verifyOffChain (structural + domain + EIP-712 recovery)", () => {
     expect(FACILITATOR_NETWORKS["eip155:196"].usdc.toLowerCase()).toBe(
       "0x74b7f16337b8972027f6196a17a631ac6de26d22",
     );
+  });
+
+  it("pins per-network USDC EIP-712 domains exactly as verified on-chain", () => {
+    // eip155:196 (X Layer, D1): live DOMAIN_SEPARATOR matches "USD Coin"/"2".
+    expect(FACILITATOR_NETWORKS["eip155:196"].domain).toEqual({ name: "USD Coin", version: "2" });
+    // eip155:84532 (Base Sepolia): live DOMAIN_SEPARATOR() of
+    // 0x036CbD…CF7e == keccak("USDC")/"2"/84532/contract — Circle initialized
+    // this instance with name "USDC", NOT "USD Coin" (which is the X Layer /
+    // Base-mainnet value); official x402 SDK chain config agrees. A previous
+    // version pinned "USD Coin" here, which would break every verification.
+    expect(FACILITATOR_NETWORKS["eip155:84532"].domain).toEqual({ name: "USDC", version: "2" });
+  });
+});
+
+describe("official x402 v1 envelope (the wire x402-express@1.x actually speaks)", () => {
+  const net = FACILITATOR_NETWORKS["eip155:84532"];
+  const V1_TYPES = {
+    TransferWithAuthorization: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "validAfter", type: "uint256" },
+      { name: "validBefore", type: "uint256" },
+      { name: "nonce", type: "bytes32" },
+    ],
+  } as const;
+
+  /** Mirrors exactly what x402-express@1.2.0 + x402@1.2.0 emit on the wire. */
+  async function buildV1Request(opts: { network?: string; payloadVersion?: number } = {}) {
+    const payer = privateKeyToAccount(TEST_PAYER_KEY).address;
+    const message = {
+      from: payer,
+      to: SELLER,
+      value: 1000n,
+      validAfter: 0n,
+      validBefore: BigInt(Math.floor(Date.now() / 1000) + 3600),
+      nonce: ("0x" + "22".repeat(32)) as Hex,
+    };
+    const signature = await privateKeyToAccount(TEST_PAYER_KEY).signTypedData({
+      domain: { name: net.domain.name, version: net.domain.version, chainId: net.chainId, verifyingContract: net.usdc },
+      types: V1_TYPES,
+      primaryType: "TransferWithAuthorization",
+      message,
+    });
+    const request = {
+      x402Version: 1,
+      paymentPayload: {
+        x402Version: opts.payloadVersion ?? 1,
+        scheme: "exact",
+        network: opts.network ?? "base-sepolia",
+        payload: {
+          signature,
+          authorization: {
+            from: message.from,
+            to: message.to,
+            value: message.value.toString(),
+            validAfter: message.validAfter.toString(),
+            validBefore: message.validBefore.toString(),
+            nonce: message.nonce,
+          },
+        },
+      } as unknown as CanonicalPaymentPayload,
+      paymentRequirements: {
+        scheme: "exact",
+        network: opts.network ?? "base-sepolia",
+        maxAmountRequired: "1000",
+        resource: "http://127.0.0.1:4021/data",
+        description: "Zeus testnet probe resource",
+        mimeType: "",
+        payTo: SELLER,
+        maxTimeoutSeconds: 60,
+        asset: net.usdc,
+        extra: { name: net.domain.name, version: net.domain.version },
+      } as unknown as CanonicalPaymentRequirements,
+    };
+    return { request: request as FacilitatorRequest, payer };
+  }
+
+  it("accepts the official v1 envelope and aliases base-sepolia -> eip155:84532", async () => {
+    const { request, payer } = await buildV1Request();
+    const outcome = await verifyOffChain(request, net, Date.now());
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.payer.toLowerCase()).toBe(payer.toLowerCase());
+  });
+
+  it("rejects a v1 envelope whose payload version disagrees", async () => {
+    const { request } = await buildV1Request({ payloadVersion: 2 });
+    const outcome = await verifyOffChain(request, net, Date.now());
+    expect(outcome).toMatchObject({ ok: false, reason: "x402_version_mismatch" });
+  });
+
+  it("rejects a v1 envelope naming an unknown network", async () => {
+    const { request } = await buildV1Request({ network: "polygon" });
+    const outcome = await verifyOffChain(request, net, Date.now());
+    expect(outcome).toMatchObject({ ok: false, reason: "x402_version_mismatch" });
   });
 });
 

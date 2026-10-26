@@ -83,6 +83,93 @@ function isBytes32(value: unknown): value is Hex {
 }
 
 /**
+ * Official x402 v1 network names (x402@1.x / x402-express@1.x — the versions
+ * pinned by api-server) mapped onto the registry's CAIP-2 ids. X Layer is not
+ * in the v1 SDK's network map, but accepting its alias costs nothing and
+ * keeps the door open for v1-named traffic.
+ */
+const V1_NETWORK_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  "base-sepolia": "eip155:84532",
+  "x-layer": "eip155:196",
+});
+
+function aliasV1Network(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  if (V1_NETWORK_ALIASES[value]) return V1_NETWORK_ALIASES[value];
+  // CAIP-2 names are already canonical.
+  if (/^eip155:\d+$/.test(value)) return value;
+  return undefined;
+}
+
+/**
+ * Normalize an official x402 v1 request into the canonical envelope.
+ *
+ * v1 (the wire actually spoken by x402-express@1.x, which api-server pins)
+ * differs from the canonical v2 shape:
+ *   - paymentPayload has scheme/network at the TOP level and no `accepted`;
+ *   - paymentRequirements carry maxAmountRequired (not amount);
+ *   - networks are named "base-sepolia", not CAIP-2;
+ *   - payload.payload is already {signature, authorization} — identical.
+ *
+ * Discovered by the live local testnet (2026-10-27): the facilitator used to
+ * hard-require x402Version=2 + CAIP-2 naming, which rejected every request
+ * from the official v1 seller middleware. Returns null when the request is
+ * not v1-shaped (caller fails with a precise reason).
+ */
+export function normalizeV1Request(request: FacilitatorRequest): FacilitatorRequest | null {
+  const payload = request.paymentPayload as unknown as Record<string, unknown>;
+  const requirements = request.paymentRequirements as unknown as Record<string, unknown>;
+  if (request.x402Version !== 1 || payload["x402Version"] !== 1) return null;
+  if (payload["scheme"] !== "exact" || requirements["scheme"] !== "exact") return null;
+  const inner = payload["payload"];
+  if (typeof inner !== "object" || inner === null) return null;
+  if (typeof (inner as Record<string, unknown>)["signature"] !== "string") return null;
+  const auth = (inner as Record<string, unknown>)["authorization"];
+  if (typeof auth !== "object" || auth === null) return null;
+
+  const networkId = aliasV1Network(requirements["network"]) ?? aliasV1Network(payload["network"]);
+  const amountRaw = requirements["maxAmountRequired"] ?? requirements["amount"];
+  const amount = typeof amountRaw === "string" ? amountRaw : undefined;
+  const asset = requirements["asset"];
+  const payTo = requirements["payTo"];
+  if (!networkId || !amount || !isAddress(asset) || !isAddress(payTo)) return null;
+
+  const extraRaw = requirements["extra"];
+  const extra =
+    typeof extraRaw === "object" && extraRaw !== null
+      ? (extraRaw as CanonicalPaymentPayload["accepted"]["extra"])
+      : undefined;
+  const maxTimeoutRaw = requirements["maxTimeoutSeconds"];
+  const maxTimeout = typeof maxTimeoutRaw === "number" ? maxTimeoutRaw : 60;
+
+  return {
+    x402Version: 1,
+    paymentPayload: {
+      x402Version: 1,
+      accepted: {
+        scheme: "exact",
+        network: networkId,
+        amount,
+        asset,
+        payTo,
+        maxTimeoutSeconds: maxTimeout,
+        extra,
+      },
+      payload: inner as CanonicalPaymentPayload["payload"],
+    },
+    paymentRequirements: {
+      scheme: "exact",
+      network: networkId,
+      asset,
+      amount,
+      payTo,
+      maxTimeoutSeconds: maxTimeout,
+      extra: extra as Record<string, unknown> | undefined,
+    },
+  };
+}
+
+/**
  * Structural + domain + signature verification (no chain access).
  * Kept separate from the on-chain checks so tests can exercise the
  * cryptographic part hermetically.
@@ -104,32 +191,48 @@ export async function verifyOffChain(
   const payload = request.paymentPayload;
   const requirements = request.paymentRequirements;
 
-  if (request.x402Version !== 2 || payload.x402Version !== 2) {
-    return fail("x402_version_mismatch", "facilitator serves x402Version=2 only");
+  const version = request.x402Version;
+  if (version !== 1 && version !== 2) {
+    return fail("x402_version_mismatch", "facilitator serves x402Version 1 and 2 only");
   }
-  if (requirements.scheme !== "exact" || payload.accepted.scheme !== "exact") {
+
+  let canonicalPayload = payload;
+  let canonicalRequirements = requirements;
+  if (version === 1) {
+    const normalized = normalizeV1Request(request);
+    if (!normalized) {
+      return fail("x402_version_mismatch", "v1 envelope is malformed or names an unsupported network");
+    }
+    canonicalPayload = normalized.paymentPayload;
+    canonicalRequirements = normalized.paymentRequirements;
+  } else if (payload.x402Version !== 2) {
+    return fail("x402_version_mismatch", "paymentPayload.x402Version != request.x402Version (=2)");
+  }
+
+  if (canonicalRequirements.scheme !== "exact" || canonicalPayload.accepted.scheme !== "exact") {
     return fail("unsupported_scheme", "only the exact scheme is supported (EIP-3009)");
   }
-  if (requirements.network !== network.id || payload.accepted.network !== network.id) {
+  if (canonicalRequirements.network !== network.id || canonicalPayload.accepted.network !== network.id) {
     return fail(
       "network_mismatch",
-      `requirements.network=${requirements.network} payload.accepted.network=${payload.accepted.network} facilitator serves ${network.id}`,
+      `requirements.network=${canonicalRequirements.network} payload.accepted.network=${canonicalPayload.accepted.network} facilitator serves ${network.id}`,
     );
   }
 
   // Asset: requirements must point at the registry token.
-  if (!isAddress(requirements.asset) || requirements.asset.toLowerCase() !== network.usdc.toLowerCase()) {
-    return fail("asset_mismatch", `asset ${requirements.asset} != network USDC ${network.usdc}`);
+  if (!isAddress(canonicalRequirements.asset) || canonicalRequirements.asset.toLowerCase() !== network.usdc.toLowerCase()) {
+    return fail("asset_mismatch", `asset ${canonicalRequirements.asset} != network USDC ${network.usdc}`);
   }
-  if (!isAddress(payload.accepted.asset) || payload.accepted.asset.toLowerCase() !== network.usdc.toLowerCase()) {
-    return fail("asset_mismatch", `payload asset ${payload.accepted.asset} != network USDC ${network.usdc}`);
+  if (!isAddress(canonicalPayload.accepted.asset) || canonicalPayload.accepted.asset.toLowerCase() !== network.usdc.toLowerCase()) {
+    return fail("asset_mismatch", `payload asset ${canonicalPayload.accepted.asset} != network USDC ${network.usdc}`);
   }
 
-  // F-113: v2 EVM domain binding is REQUIRED and must equal the pinned domain.
-  const reqExtraName = requirements.extra?.["name"];
-  const reqExtraVersion = requirements.extra?.["version"];
+  // F-113: domain binding is REQUIRED and must equal the pinned domain
+  // (official x402-express@1.x emits extra={name,version} — same binding).
+  const reqExtraName = canonicalRequirements.extra?.["name"];
+  const reqExtraVersion = canonicalRequirements.extra?.["version"];
   if (typeof reqExtraName !== "string" || reqExtraName === "" || typeof reqExtraVersion !== "string" || reqExtraVersion === "") {
-    return fail("domain_binding_missing", "paymentRequirements.extra.name/.version are required for v2 EVM");
+    return fail("domain_binding_missing", "paymentRequirements.extra.name/.version are required for EVM");
   }
   if (reqExtraName !== network.domain.name || reqExtraVersion !== network.domain.version) {
     return fail(
@@ -137,8 +240,8 @@ export async function verifyOffChain(
       `extra domain (${reqExtraName}/${reqExtraVersion}) != pinned (${network.domain.name}/${network.domain.version})`,
     );
   }
-  const payloadExtraName = payload.accepted.extra?.name;
-  const payloadExtraVersion = payload.accepted.extra?.version;
+  const payloadExtraName = canonicalPayload.accepted.extra?.name;
+  const payloadExtraVersion = canonicalPayload.accepted.extra?.version;
   if (
     (payloadExtraName !== undefined && payloadExtraName !== network.domain.name) ||
     (payloadExtraVersion !== undefined && payloadExtraVersion !== network.domain.version)
@@ -147,16 +250,16 @@ export async function verifyOffChain(
   }
 
   // Economic fields: amount == value, payTo == to, both parties consistent.
-  const amount = asNonNegativeInt(requirements.amount);
+  const amount = asNonNegativeInt(canonicalRequirements.amount);
   if (amount === null || amount <= 0n) {
-    return fail("amount_mismatch", `amount ${String(requirements.amount)} must be a positive integer string`);
+    return fail("amount_mismatch", `amount ${String(canonicalRequirements.amount)} must be a positive integer string`);
   }
-  if (!isAddress(requirements.payTo)) return fail("pay_to_mismatch", "requirements.payTo must be an address");
-  if (requirements.payTo.toLowerCase() !== payload.accepted.payTo?.toLowerCase()) {
+  if (!isAddress(canonicalRequirements.payTo)) return fail("pay_to_mismatch", "requirements.payTo must be an address");
+  if (canonicalRequirements.payTo.toLowerCase() !== canonicalPayload.accepted.payTo?.toLowerCase()) {
     return fail("pay_to_mismatch", "requirements.payTo != payload.accepted.payTo");
   }
 
-  const auth = payload.payload?.authorization;
+  const auth = canonicalPayload.payload?.authorization;
   if (
     !auth ||
     !isAddress(auth.from) ||
@@ -175,7 +278,7 @@ export async function verifyOffChain(
     return fail("malformed_request", "authorization value/validAfter/validBefore must be integer strings");
   }
   if (value !== amount) return fail("amount_mismatch", "authorization.value != requirements.amount");
-  if (auth.to.toLowerCase() !== requirements.payTo.toLowerCase()) {
+  if (auth.to.toLowerCase() !== canonicalRequirements.payTo.toLowerCase()) {
     return fail("authorization_mismatch", "authorization.to != payTo");
   }
 
@@ -185,7 +288,7 @@ export async function verifyOffChain(
   if (validAfter > nowSec) return fail("authorization_window", "authorization not yet valid (validAfter > now)");
 
   // Signature: recover the EIP-712 signer and compare with authorization.from.
-  const signature = payload.payload?.signature;
+  const signature = canonicalPayload.payload?.signature;
   if (typeof signature !== "string" || !/^0x[0-9a-fA-F]{130}$/.test(signature)) {
     return fail("invalid_signature", "signature must be a 65-byte 0x-hex string");
   }
