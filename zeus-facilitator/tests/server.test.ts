@@ -117,10 +117,36 @@ describe("ZeusFacilitator HTTP contract", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
       });
-      const body = (await res.json()) as { success: boolean; errorReason?: string };
+      const body = (await res.json()) as { success: boolean; errorReason?: string; transaction?: string };
       expect(res.status).toBe(200);
       expect(body.success).toBe(false);
       expect(body.errorReason).toContain("domain_mismatch");
+      // R8-A4: canonical v2 (@x402/core HTTPFacilitatorClient) schema-parses
+      // every 2xx settle body — `transaction` is REQUIRED even when nothing
+      // was broadcast. Empty string = pre-flight refusal.
+      expect(body.transaction).toBe("");
+    } finally {
+      server.close();
+    }
+  });
+
+  it("GET /supported advertises the canonical v2 exact kind for the served network", async () => {
+    const { url, server } = await boot();
+    try {
+      const res = await fetch(`${url}/supported`);
+      const body = (await res.json()) as {
+        kinds: Array<{ x402Version: number; scheme: string; network: string; extra?: unknown }>;
+        extensions: string[];
+        signers: Record<string, string[]>;
+      };
+      expect(res.status).toBe(200);
+      expect(body.kinds).toHaveLength(1);
+      expect(body.kinds[0]).toMatchObject({
+        x402Version: 2,
+        scheme: "exact",
+        network: "eip155:196",
+      });
+      expect(body.extensions).toEqual([]);
     } finally {
       server.close();
     }

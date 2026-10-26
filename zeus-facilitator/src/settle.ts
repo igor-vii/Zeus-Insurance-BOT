@@ -96,7 +96,10 @@ export interface SettleOutcome {
   readonly httpStatus: number;
   readonly body:
     | { readonly success: true; readonly transaction: Hash; readonly transactionHash: Hash; readonly network: string; readonly payer: Address }
-    | { readonly success: false; readonly errorReason: string; readonly network: string; readonly transaction?: Hash };
+    // R8-A4: failure bodies carry the canonical `transaction` REQUIRED by
+    // the v2 wire schema — "" when nothing was broadcast, a hash when the
+    // broadcast happened but did not land (reverted / receipt unseen).
+    | { readonly success: false; readonly errorReason: string; readonly network: string; readonly transaction: string };
 }
 
 export class SettleExecutor {
@@ -125,7 +128,9 @@ export class SettleExecutor {
         claim.existing.state === "inflight"
           ? "duplicate_settle_inflight"
           : `duplicate_settle_already_broadcast${claim.existing.txHash ? `:${claim.existing.txHash}` : ""}`;
-      return { httpStatus: 409, body: { success: false, errorReason: reason, network: this.network.id } };
+      // R8-A4: when the original broadcast hash is known, surface it in the
+      // canonical field — the caller can reconcile against THAT transaction.
+      return { httpStatus: 409, body: { success: false, errorReason: reason, network: this.network.id, transaction: claim.existing.txHash ?? "" } };
     }
 
     let txHash: Hash | undefined;
@@ -160,12 +165,15 @@ export class SettleExecutor {
       if (err instanceof Error && err.name === "RpcUnavailableError") {
         return {
           httpStatus: 503,
-          body: { success: false, errorReason: `broadcast_unavailable:${detail}`, network: this.network.id },
+          // R8-A4: nothing was broadcast — empty canonical transaction field.
+          body: { success: false, errorReason: `broadcast_unavailable:${detail}`, network: this.network.id, transaction: "" },
         };
       }
       return {
         httpStatus: 200,
-        body: { success: false, errorReason: `broadcast_rejected:${detail}`, network: this.network.id },
+        // R8-A4: canonical v2 schema-parses 2xx strictly (transaction: z.string())
+        // — broadcast rejected = nothing on chain = empty hash.
+        body: { success: false, errorReason: `broadcast_rejected:${detail}`, network: this.network.id, transaction: "" },
       };
     }
 

@@ -7,10 +7,11 @@
  *               → 200 {isValid:true, payer} | {isValid:false, invalidReason}
  *   POST /settle  same body
  *               → 200 {success:true, transaction, transactionHash, network, payer}
- *               | 200 {success:false, errorReason}                        (definitive)
+ *               | 200 {success:false, errorReason, transaction:""}        (definitive)
  *               | 409 {success:false, errorReason:duplicate_*}            (nonce guard)
  *               | 503 {success:false, errorReason:broadcast_unavailable}  (ambiguous)
  *               | 504 {success:false, errorReason:receipt_timeout}        (ambiguous)
+ *   GET  /supported → {kinds:[{x402Version:2, scheme:"exact", network}], extensions:[]}
  *   GET  /health → {ok:true, network, testnet}
  *
  * When ZEUS_FACILITATOR_API_KEY is set, /verify and /settle require
@@ -124,6 +125,9 @@ export class ZeusFacilitator {
           success: false,
           errorReason: `${outcome.reason}: ${outcome.detail}`,
           network: this.deps.config.network.id,
+          // R8-A4: canonical v2 requires `transaction` on every 2xx settle
+          // body — nothing was broadcast here, hence the empty hash.
+          transaction: "",
         };
         return this.sendJson(res, 200, body);
       }
@@ -155,6 +159,25 @@ export class ZeusFacilitator {
             network: this.deps.config.network.id,
             testnet: this.deps.config.network.testnet,
             payer: this.deps.account.address,
+          });
+        }
+        if (req.method === "GET" && url === "/supported") {
+          // R8-A4: canonical v2 discovery endpoint. The @x402/* resource
+          // server (api-server seller middleware) refuses to build payment
+          // requirements until it has fetched supported kinds from the
+          // facilitator (x402ResourceServer.initialize → GET /supported).
+          // Public on purpose: it advertises capabilities, nothing secret.
+          return this.sendJson(res, 200, {
+            kinds: [
+              {
+                x402Version: 2,
+                scheme: "exact",
+                network: this.deps.config.network.id,
+                extra: {},
+              },
+            ],
+            extensions: [],
+            signers: {},
           });
         }
         if (req.method === "POST" && url === "/verify") return await this.handleVerify(req, res);

@@ -95,8 +95,14 @@ export interface SettleFailure {
   readonly success: false;
   readonly errorReason: string;
   readonly network: string;
-  /** Set when the transaction was broadcast but did not land successfully. */
-  readonly transaction?: string;
+  /**
+   * Canonical v2 settle responses carry `transaction` on EVERY 2xx body
+   * (the @x402/core HTTPFacilitatorClient schema-parses 2xx strictly:
+   * `transaction: z.string()` is required, see R8-A4). Empty string =
+   * nothing was broadcast (pre-flight refusal); a hash = broadcast happened
+   * but did not land (reverted / receipt unseen).
+   */
+  readonly transaction: string;
 }
 
 /** EIP-3009 TransferWithAuthorization authorization tuple. */
