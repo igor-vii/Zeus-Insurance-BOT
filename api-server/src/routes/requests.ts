@@ -274,6 +274,28 @@ export function createRequestsRouter(
       return;
     }
 
+    // R7-C-API-1 (external audit 2026-10-26): an EXISTING/COMPLETED create
+    // previously answered a blanket 409 REQUEST_ALREADY_COMPLETED — for a
+    // completed FREE resource that meant the paid-for data was UNREACHABLE
+    // through the API (lost on restart, since getOperation did not restore
+    // outcome). The idempotent replay now returns the operation's public
+    // status WITH the outcome when the operation has actually finished.
+    const existingOperationId = asRecord(result.result)?.operationId;
+    if (typeof existingOperationId === "string" && existingOperationId.length > 0) {
+      try {
+        const existingOperation = await secretariat.getOperation(existingOperationId);
+        if (existingOperation) {
+          const publicStatus = publicStatusForOperation(existingOperation);
+          if (publicStatus === "COMPLETED" || publicStatus === "FAILED" || publicStatus === "UNRESOLVABLE") {
+            response.status(200).json(toPublicRequestStatus(existingOperation));
+            return;
+          }
+        }
+      } catch (error) {
+        logger.warn({ err: error, operationId: existingOperationId }, "Idempotent replay lookup failed — falling back to 409");
+      }
+    }
+
     sendError(
       response,
       409,
@@ -283,6 +305,16 @@ export function createRequestsRouter(
   });
 
   router.get("/requests/:requestId", async (request, response) => {
+    // R7-B5c (external audit 2026-10-26, High): the status route leaked
+    // payment status, tx-hash and evidence counts to anyone who guessed the
+    // requestId. Request ids created by a client are now bound to that
+    // client: operations carrying a clientId answer only to the matching
+    // X-Client-Id header (404 otherwise — existence is not disclosed).
+    // Operations created WITHOUT a clientId stay readable (anonymous flow).
+    const headerClientId = typeof request.get("X-Client-Id") === "string"
+      ? String(request.get("X-Client-Id")).trim() || undefined
+      : undefined;
+
     let operation: Operation | null;
     try {
       operation = await secretariat.getOperationByRequestId(
@@ -300,6 +332,16 @@ export function createRequestsRouter(
     }
 
     if (!operation) {
+      sendError(
+        response,
+        404,
+        "REQUEST_NOT_FOUND",
+        "The request was not found",
+      );
+      return;
+    }
+
+    if (operation.clientId && operation.clientId !== headerClientId) {
       sendError(
         response,
         404,

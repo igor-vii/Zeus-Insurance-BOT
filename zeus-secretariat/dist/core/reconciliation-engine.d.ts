@@ -48,6 +48,13 @@ export declare class ReconciliationEngine {
     reconcile(paymentIntentId: string): Promise<ReconciliationOutcome>;
     /**
      * §7 + §8 + §9 + §24: Reconcile by txHash.
+     *
+     * R7-B6d (external audit 2026-10-26): when the transaction is NOT on the
+     * chain (found:false — dropped/replaced/never broadcast), the intent used
+     * to be stranded in RECONCILING forever with no fallback. Now: before
+     * validBefore → keep probing (the tx may still land); after validBefore →
+     * the authorization is dead on-chain, fall back to the §10/§11
+     * authorizationState strategy which can reach a terminal verdict.
      */
     private reconcileByTxHash;
     /**

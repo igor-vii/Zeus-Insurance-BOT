@@ -40,7 +40,7 @@ export type SellerExecutionResult = {
     durationMs: number;
 } | {
     kind: "DELIVERY_UNKNOWN";
-    reason: "TIMEOUT" | "CONNECTION_RESET" | "RESPONSE_STREAM_FAILED" | "CLIENT_ABORTED" | "DNS_RESOLUTION_FAILED";
+    reason: "TIMEOUT" | "CONNECTION_RESET" | "RESPONSE_STREAM_FAILED" | "CLIENT_ABORTED" | "DNS_RESOLUTION_FAILED" | "EGRESS_BLOCKED";
     error: string;
     durationMs: number;
 };

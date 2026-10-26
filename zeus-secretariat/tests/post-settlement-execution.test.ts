@@ -297,7 +297,7 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
 
   // ---- Test AP: HTTP 5xx stored separately from timeout ----
 
-  test("AP: HTTP 5xx is HTTP_FAILURE, not DELIVERY_UNKNOWN", async () => {
+  test("AP: HTTP 5xx is HTTP_FAILURE at the adapter, outcome-UNKNOWN at the attempt (R7-B2)", async () => {
     const opId = "op-ap-5xx";
     const { paymentStore, executionStore, seller, engine } = makeEngine({ forceStatusCode: 500 });
 
@@ -307,14 +307,19 @@ describe("Phase 2.4: Post-Settlement Execution & Recovery", () => {
     const result = await engine.processJob(jobId);
 
     expect(result.success).toBe(false);
-    expect(result.finalStatus).toBe("HTTP_FAILURE");
+    // R7-B2: a 500 does NOT prove the paid call failed — with an idempotent
+    // capability the engine schedules a fenced retry; the outcome is
+    // DELIVERY_UNKNOWN until the retry answers.
+    expect(result.finalStatus).toBe("DELIVERY_UNKNOWN");
 
-    // Verify the attempt recorded HTTP_FAILURE, not DELIVERY_UNKNOWN
+    // The attempt records the UNKNOWN outcome with the real HTTP evidence.
     const attempts = await executionStore.getAttemptsByOperation(opId);
-    expect(attempts[0].status).toBe("HTTP_FAILURE");
+    expect(attempts[0].status).toBe("DELIVERY_UNKNOWN");
     expect(attempts[0].responseStatusCode).toBe(500);
+    expect(attempts[0].errorReason).toContain("500");
 
-    // Evidence contains raw result BEFORE interpretation (INV-13)
+    // Evidence contains raw result BEFORE interpretation (INV-13) — the
+    // ADAPTER classification is still honestly HTTP_FAILURE.
     const evidence = await paymentStore.getEvidence(opId);
     const rawEvidence = evidence.find(e => e.event === "EXECUTION_RESULT_RAW");
     expect(rawEvidence).toBeDefined();

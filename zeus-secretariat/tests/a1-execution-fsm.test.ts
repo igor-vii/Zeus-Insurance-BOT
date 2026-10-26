@@ -284,6 +284,10 @@ const SUCCESS_RESULT: SellerExecutionResult = {
 const HTTP_500_RESULT: SellerExecutionResult = {
   kind: "HTTP_FAILURE", statusCode: 500, body: {}, headers: {}, durationMs: 5,
 };
+// R7-B2: a DEFINITIVE seller refusal (4xx) — execution happened and failed.
+const HTTP_403_RESULT: SellerExecutionResult = {
+  kind: "HTTP_FAILURE", statusCode: 403, body: {}, headers: {}, durationMs: 5,
+};
 const TIMEOUT_RESULT: SellerExecutionResult = {
   kind: "DELIVERY_UNKNOWN", reason: "TIMEOUT", error: "timeout", durationMs: 30_000,
 };
@@ -541,9 +545,11 @@ describe("A1 hardening #2 — SUCCESS feedback & duplicate handling", () => {
     expect(op3!.evidence).toHaveLength(evidenceLen);
   });
 
-  it("HTTP_FAILURE feedback: SETTLED → EXECUTION_PENDING → FAILED", async () => {
+  it("HTTP_FAILURE feedback: SETTLED → EXECUTION_PENDING → FAILED (definitive 4xx, R7-B2)", async () => {
+    // R7-B2: a DEFINITIVE seller answer (403) is the honest terminal failure;
+    // a 500 would now be an outcome-unknown retry (see the transient test).
     const { db, opId, execStore, engine } = await seedSettledPipeline({
-      capability: "EXECUTION_IDEMPOTENT", adapter: fixedAdapter(HTTP_500_RESULT),
+      capability: "EXECUTION_IDEMPOTENT", adapter: fixedAdapter(HTTP_403_RESULT),
     });
     const store = makeStore(db);
     const worker = new ExecutionWorker(engine, execStore as never, {
@@ -554,6 +560,26 @@ describe("A1 hardening #2 — SUCCESS feedback & duplicate handling", () => {
     const op = await store.getOperation(opId);
     expect(op!.currentState).toBe("FAILED");
     expect(op!.executionState).toBe("FAILED");
+  });
+
+  it("transient seller HTTP 500 with IDEMPOTENT capability: retry scheduled, outcome EXECUTION_UNKNOWN (R7-B2)", async () => {
+    const { db, opId, execStore, engine } = await seedSettledPipeline({
+      capability: "EXECUTION_IDEMPOTENT", adapter: fixedAdapter(HTTP_500_RESULT),
+    });
+    const store = makeStore(db);
+    const worker = new ExecutionWorker(engine, execStore as never, {
+      feedbackService: new ExecutionFeedbackService(store),
+    });
+
+    await worker.runOnce();
+    const op = await store.getOperation(opId);
+    // Money spent + transient failure + safe retry path = outcome UNKNOWN,
+    // NOT a terminal FAILED (the old mapping lied). executionState is PENDING
+    // because the fenced RETRY attempt is durably in flight.
+    expect(op!.currentState).toBe("EXECUTION_UNKNOWN");
+    expect(op!.executionState).toBe("PENDING");
+    const retryAttempts = await execStore.getAttemptsByOperation(opId);
+    expect(retryAttempts.length).toBe(2); // original + fenced retry
   });
 });
 

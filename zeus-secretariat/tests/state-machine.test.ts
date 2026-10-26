@@ -433,8 +433,10 @@ describe('Zeus Secretariat V0 - State Machine Tests', () => {
 
     const result = await localSecretariat.execute(request);
 
-    // Should end in FAILED or UNRESOLVABLE state due to settlement unknown
-    expect(['FAILED', 'UNRESOLVABLE']).toContain(result.status);
+    // R7-A7: settlement-unknown is a NON-TERMINAL state — the honest result
+    // status is PENDING (the old mapping lied 'FAILED' for every in-progress
+    // state). The payment may still settle via the reconciliation worker.
+    expect(result.status).toBe('PENDING');
     expect(result.paymentStatus).toBe('UNKNOWN');
     
     // CRITICAL: Verify only ONE payment submission occurred
@@ -660,9 +662,9 @@ describe('Zeus Secretariat V0 - State Machine Tests', () => {
     // Durable obligation exists
     expect(result.evidence.some(e => e.event === 'DURABLE_EXECUTION_OBLIGATION_CREATED')).toBe(true);
     // COMPATIBILITY CONCERN (pinned, not endorsed): mapToFinalStatus has no
-    // case for SETTLED and its default branch yields 'FAILED' even though the
-    // other fields above describe a successful settled/pending-execution state.
-    expect(result.status).toBe('FAILED');
+    // R7-A7: SETTLED (execution not yet delivered) is NON-TERMINAL — the
+    // honest result status is PENDING, not the old default 'FAILED'.
+    expect(result.status).toBe('PENDING');
   });
 
   // ==========================================================================

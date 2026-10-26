@@ -12,7 +12,7 @@
  * timeout ≠ seller failure
  * connection lost ≠ execution did not happen
  */
-import { egressFetch } from "../core/egress-guard.js";
+import { egressFetch, EgressBlockedError } from "../core/egress-guard.js";
 // ---------------------------------------------------------------------------
 // Real HTTP Seller Adapter
 // ---------------------------------------------------------------------------
@@ -41,28 +41,36 @@ export class HttpSellerExecutionAdapter {
                 body: request.body ? JSON.stringify(request.body) : undefined,
                 signal: controller.signal,
             });
-            clearTimeout(timeoutId);
-            // S7 live-matrix repair (2026-10-23, Argus Agent Test Lab vs real
-            // Secretariat): the previous `await response.json().catch(() => undefined)`
-            // swallowed a broken body stream, so a 2xx response whose body was LOST
-            // mid-flight (truncated chunked stream, socket destroyed after the
-            // status line) was classified as SUCCESS — the delivery trail claimed
-            // the resource was delivered when the client never received it. A lost
-            // body is not a delivered body: fall back to text(); if the stream
-            // itself is broken, classify DELIVERY_UNKNOWN/RESPONSE_STREAM_FAILED
-            // (same vocabulary the catch-path uses) instead of SUCCESS.
-            let responseBody;
+            // S7 live-matrix repair (2026-10-23) + R7-B1 (external audit
+            // 2026-10-26): the body is read EXACTLY ONCE, as text, with the abort
+            // signal still armed — the previous json()-then-text() sequence
+            // consumed the stream and made EVERY non-JSON 2xx (text/plain,
+            // empty-bodied 204 siblings, XML, …) throw "Body is unusable" on the
+            // second read, misclassifying honest deliveries as
+            // DELIVERY_UNKNOWN/RESPONSE_STREAM_FAILED. A lost mid-flight stream
+            // still surfaces (text() itself throws) — the S7 guarantee stands.
+            // The timeout is also NOT cleared until the body is fully consumed:
+            // a hung body must not hang the worker past the deadline.
+            let rawBody = null;
             let streamBroken = false;
             try {
-                responseBody = await response.json();
+                rawBody = await response.text();
             }
             catch {
-                try {
-                    const raw = await response.text();
-                    responseBody = raw.length > 0 ? { raw: raw.slice(0, 2000) } : undefined;
-                }
-                catch {
-                    streamBroken = true;
+                streamBroken = true;
+            }
+            clearTimeout(timeoutId);
+            let responseBody;
+            if (!streamBroken && rawBody !== null) {
+                const trimmed = rawBody.trim();
+                if (trimmed.length > 0) {
+                    try {
+                        responseBody = JSON.parse(trimmed);
+                    }
+                    catch {
+                        // Complete but non-JSON body — honest evidence, not a broken stream.
+                        responseBody = { raw: trimmed.slice(0, 2000) };
+                    }
                 }
             }
             const durationMs = Date.now() - startTime;
@@ -101,17 +109,37 @@ export class HttpSellerExecutionAdapter {
             clearTimeout(timeoutId);
             const durationMs = Date.now() - startTime;
             const errorMsg = err instanceof Error ? err.message : "Unknown error";
+            // R7-B1: the undici "fetch failed" TypeError wraps the real cause
+            // (ECONNRESET, ENOTFOUND, ECONNREFUSED, certificate errors, …) in
+            // error.cause — the previous text-only classification could not see
+            // any of them and dumped nearly everything into RESPONSE_STREAM_FAILED.
+            // R7-B1: an EgressBlockedError means the request NEVER LEFT — that is
+            // not a delivery unknown caused by the network, it is a policy refusal;
+            // it gets its own honest reason.
+            if (err instanceof EgressBlockedError) {
+                return {
+                    kind: "DELIVERY_UNKNOWN",
+                    reason: "EGRESS_BLOCKED",
+                    error: errorMsg,
+                    durationMs,
+                };
+            }
+            const causeCode = err?.cause?.code ?? "";
+            const haystack = `${errorMsg} ${causeCode}`.toLowerCase();
             // Classify the error — this is DELIVERY_UNKNOWN, not HTTP_FAILURE
             let reason;
-            if (errorMsg.includes("abort") || errorMsg.includes("timeout")) {
-                reason = "TIMEOUT";
-            }
-            else if (errorMsg.includes("ECONNRESET") ||
-                errorMsg.includes("connection reset")) {
+            if (causeCode === "ECONNRESET" || haystack.includes(" econnreset") || haystack.includes("econnreset") || haystack.includes("connection reset")) {
                 reason = "CONNECTION_RESET";
             }
-            else if (errorMsg.includes("ENOTFOUND") || errorMsg.includes("DNS")) {
+            else if (causeCode === "ENOTFOUND" || haystack.includes("enotfound") || causeCode === "EAI_AGAIN" || haystack.includes("dns")) {
                 reason = "DNS_RESOLUTION_FAILED";
+            }
+            else if (haystack.includes("abort") || haystack.includes("timeout") || causeCode === "ETIMEDOUT" || causeCode === "UND_ERR_ABORTED") {
+                reason = "TIMEOUT";
+            }
+            else if (causeCode === "ECONNREFUSED" || haystack.includes("econnrefused")) {
+                // Refused at TCP level = nothing was delivered.
+                reason = "CONNECTION_RESET";
             }
             else {
                 reason = "RESPONSE_STREAM_FAILED";

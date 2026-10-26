@@ -777,6 +777,96 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     const firstAttempt = attemptRecords[0] as { status?: string } | undefined;
     const latestAttemptStatus = firstAttempt?.status ?? null;
 
+    // R7-A8 (external audit 2026-10-26, Critical): restore the operation's
+    // OUTCOME. (1) resultData — from the durable outcome written by
+    // saveOperation (extraFields.resultData), falling back to the seller's
+    // stored response body of the latest SUCCESSFUL attempt (the data was
+    // always durable in execution_attempts — it was simply never read);
+    // (2) error — from error_reason; (3) settlementProof — reconstructed
+    // from the persisted SETTLED evidence bundle; (4) executionEvidence —
+    // from the successful attempt's HTTP evidence.
+    const attemptDetailRows = await this.db.execute(sql`
+      SELECT status, response_status_code, response_body, response_headers, completed_at
+      FROM execution_attempts
+      WHERE operation_id = ${opId}
+      ORDER BY attempt_number DESC
+      LIMIT 1
+    `);
+    const attemptDetails = (Array.isArray(attemptDetailRows)
+      ? attemptDetailRows
+      : ((attemptDetailRows as unknown as { rows?: unknown[] })?.rows ?? [])) as Array<{
+        status?: string;
+        response_status_code?: number;
+        response_body?: unknown;
+        response_headers?: unknown;
+        completed_at?: string | Date;
+      }>;
+    const latestAttempt = attemptDetails[0];
+
+    const rowWithExtras = row as PaymentIntentRow & {
+      extraFields?: { resultData?: unknown } | null;
+      errorReason?: string | null;
+      settledEvidenceBundle?: Record<string, unknown> | null;
+      asset?: string | null;
+      settledAt?: Date | string | null;
+    };
+
+    let resultData: unknown = rowWithExtras.extraFields?.resultData;
+    if (resultData === undefined && latestAttempt?.status === "SUCCESS" && latestAttempt.response_body !== undefined && latestAttempt.response_body !== null) {
+      resultData = latestAttempt.response_body;
+    }
+
+    let settlementProof: {
+      transactionHash?: string;
+      blockNumber?: number;
+      timestamp: number;
+      amount: string;
+      asset: string;
+      source: string;
+      rawData?: unknown;
+    } | undefined;
+    const bundle = rowWithExtras.settledEvidenceBundle as
+      | { authorizationUsed?: { transactionHash?: string; blockNumber?: number }; transfer?: { value?: string }; confirmations?: number }
+      | null
+      | undefined;
+    if (bundle?.authorizationUsed?.transactionHash) {
+      const settledAtRaw = rowWithExtras.settledAt;
+      const settledAtMs = settledAtRaw instanceof Date ? settledAtRaw.getTime() : (settledAtRaw ? new Date(settledAtRaw).getTime() : Date.now());
+      settlementProof = {
+        transactionHash: bundle.authorizationUsed.transactionHash,
+        ...(typeof bundle.authorizationUsed.blockNumber === "number" ? { blockNumber: bundle.authorizationUsed.blockNumber } : {}),
+        timestamp: settledAtMs,
+        amount: String(bundle.transfer?.value ?? ""),
+        asset: String(rowWithExtras.asset ?? ""),
+        source: "ReconciliationEngine",
+        rawData: bundle,
+      };
+    }
+
+    let executionEvidence: {
+      statusCode: number;
+      headers?: Record<string, string>;
+      body?: unknown;
+      timestamp: number;
+      source: "HTTP_RESPONSE" | "RESULT_RETRIEVAL" | "SIGNED_RECEIPT";
+      rawData?: unknown;
+    } | undefined;
+    if (latestAttempt?.status === "SUCCESS" && typeof latestAttempt.response_status_code === "number") {
+      executionEvidence = {
+        statusCode: latestAttempt.response_status_code,
+        ...(latestAttempt.response_headers !== undefined && latestAttempt.response_headers !== null
+          ? { headers: latestAttempt.response_headers as Record<string, string> }
+          : {}),
+        ...(latestAttempt.response_body !== undefined && latestAttempt.response_body !== null
+          ? { body: latestAttempt.response_body }
+          : {}),
+        timestamp: latestAttempt.completed_at
+          ? (latestAttempt.completed_at instanceof Date ? latestAttempt.completed_at.getTime() : new Date(latestAttempt.completed_at).getTime())
+          : Date.now(),
+        source: "HTTP_RESPONSE",
+      };
+    }
+
     // Step 3: evidence — full JSONB array from reconciliation_observations.
     // R0 repair: defensive COPY. Handing the row's array out by reference lets
     // any consumer (e.g. ExecutionFeedbackService.pushEvidence) mutate the
@@ -820,6 +910,11 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
         updatedAt: row.updatedAt instanceof Date ? row.updatedAt.getTime() : Number(row.updatedAt),
       },
       evidence,
+      // R7-A8: the outcome survives restarts.
+      ...(resultData !== undefined ? { resultData } : {}),
+      ...(settlementProof !== undefined ? { settlementProof } : {}),
+      ...(executionEvidence !== undefined ? { executionEvidence } : {}),
+      ...(rowWithExtras.errorReason ? { error: rowWithExtras.errorReason } : {}),
     } as Operation;
   }
 
@@ -837,12 +932,27 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
    * delivery_state, current_state) and does NOT add columns/tables.
    */
   async saveOperation(op: Operation): Promise<void> {
+    // R7-A8 (external audit 2026-10-26, Critical): the operation's OUTCOME is
+    // money-adjacent durable data. Previously saveOperation wrote only
+    // target/method/paymentPolicy (+evidence) — resultData and error were
+    // in-memory only, so GET /v1/requests/:id returned no outcome and the
+    // idempotent replay returned empty data/error after any restart. The
+    // outcome now round-trips through existing columns (extraFields JSONB for
+    // the result payload, error_reason for the error) — no new tables/columns.
+    const outcomeExtras: Record<string, unknown> = {};
+    if (op.resultData !== undefined) outcomeExtras.resultData = op.resultData;
     await this.db
       .update(paymentIntentsTable)
       .set({
         target: op.target ?? null,
         method: op.method ?? null,
         paymentPolicy: op.paymentPolicy ?? null,
+        ...(op.error !== undefined ? { errorReason: op.error } : {}),
+        ...(op.resultData !== undefined
+          ? {
+              extraFields: sql`COALESCE(${paymentIntentsTable.extraFields}, '{}'::jsonb) || ${JSON.stringify(outcomeExtras)}::jsonb`,
+            }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(paymentIntentsTable.operationId, op.operationId));
@@ -935,11 +1045,20 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
 
   // A1-R D-2: same canonical delegation as getOperationByClientAndRequestId —
   // locate by request_id, then reconstruct via getOperation(operationId).
-  async getOperationByRequestId(requestId: string): Promise<Operation | null> {
+  async getOperationByRequestId(requestId: string, clientId?: string): Promise<Operation | null> {
+    // R7-B5b (external audit 2026-10-26, High): the lookup previously matched
+    // request_id alone, but request ids are only unique per CLIENT (migration
+    // 0006 unique index is (client_id, request_id)). Two clients reusing the
+    // same requestId silently received each other's operations. When a client
+    // identity is supplied it is enforced; without one the legacy behavior is
+    // kept (the HTTP layer decides the enforcement policy).
+    const predicate = clientId
+      ? and(eq(paymentIntentsTable.requestId, requestId), eq(paymentIntentsTable.clientId, clientId))
+      : eq(paymentIntentsTable.requestId, requestId);
     const rows = await this.db
       .select({ operationId: paymentIntentsTable.operationId })
       .from(paymentIntentsTable)
-      .where(eq(paymentIntentsTable.requestId, requestId))
+      .where(predicate)
       .limit(1);
     if (rows.length === 0) return null;
     return this.getOperation(rows[0].operationId);
@@ -983,9 +1102,12 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
     }
   }
 
-  async getDueReconciliationJobs(): Promise<Array<{ jobId: string; paymentIntentId: string; probeCount: number }>> {
+  async getDueReconciliationJobs(limit?: number): Promise<Array<{ jobId: string; paymentIntentId: string; probeCount: number }>> {
     // B.3-B2-FIX: Discover both due PENDING jobs AND expired RUNNING leases.
     // locked_until IS NULL is NOT treated as expired.
+    // R7-C2: the worker's configured batchSize now actually bounds the poll
+    // (previously the LIMIT was hardcoded and the config value was dead).
+    const batchLimit = Number.isFinite(limit) && (limit as number) > 0 ? Math.floor(limit as number) : 100;
     const rows = await this.db.execute(sql`
       SELECT job_id, payment_intent_id, probe_count
       FROM reconciliation_jobs
@@ -995,9 +1117,29 @@ export class PostgresEvidenceStore implements DurableEvidenceStore {
           status = ${"RUNNING"} AND locked_until IS NOT NULL AND locked_until < NOW()
         )
       ORDER BY next_probe_at ASC
-      LIMIT 100
+      LIMIT ${batchLimit}
     `);
     return (Array.isArray(rows) ? rows : []).map((r: any) => ({ jobId: r.job_id, paymentIntentId: r.payment_intent_id, probeCount: r.probe_count }));
+  }
+
+  /**
+   * R7-C2 (external audit 2026-10-26): direct read-back of a reconciliation
+   * job by id — including RUNNING rows. The worker's probe-count sync used to
+   * re-read the job from the DUE set after claiming it, but a freshly claimed
+   * RUNNING job is by definition not due, so the lookup always missed and the
+   * engine's backoff schedule never grew past its first step.
+   */
+  async getReconciliationJobById(jobId: string): Promise<{ jobId: string; paymentIntentId: string; probeCount: number; status: string } | null> {
+    const rows = await this.db.execute(sql`
+      SELECT job_id, payment_intent_id, probe_count, status
+      FROM reconciliation_jobs
+      WHERE job_id = ${jobId}
+      LIMIT 1
+    `);
+    const normalized = Array.isArray(rows) ? rows : ((rows as unknown as { rows?: unknown[] })?.rows ?? []);
+    const row = normalized[0] as any;
+    if (!row) return null;
+    return { jobId: row.job_id, paymentIntentId: row.payment_intent_id, probeCount: row.probe_count, status: row.status };
   }
 
   // PENDING_SIGNATURE is passive and must be retired without claiming the job.

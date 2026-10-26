@@ -273,9 +273,13 @@ export class InMemoryEvidenceStore implements EvidenceStore {
     return this.operations.get(operationId) ?? null;
   }
 
-  async getOperationByRequestId(requestId: string): Promise<Operation | null> {
+  // R7-B5b: optional client scoping, mirroring the Postgres store —
+  // request ids are unique per CLIENT only (migration 0006).
+  async getOperationByRequestId(requestId: string, clientId?: string): Promise<Operation | null> {
     for (const operation of this.operations.values()) {
-      if (operation.requestId === requestId) return operation;
+      if (operation.requestId !== requestId) continue;
+      if (clientId && operation.clientId !== clientId) continue;
+      return operation;
     }
     return null;
   }

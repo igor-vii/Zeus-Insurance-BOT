@@ -296,14 +296,24 @@ export class X402FacilitatorClient implements SettlementAdapter {
     // refusal (e.g. insufficient_funds), NOT a settlement.
     // -----------------------------------------------------------------
     if (response.ok) {
-      if (body.success === false) {
+      // R7-A3-residual (external audit 2026-10-26): the previous check was
+      // `body.success === false` — a 2xx body with the success field MISSING
+      // (out-of-spec facilitator) fell through to SUBMITTED, trusting an
+      // answer that never actually declared the settlement. The canonical
+      // contract (and zeus-facilitator, and the mocks) always set success —
+      // anything else is treated as ambiguous and handed to the reconciler.
+      if (body.success !== true) {
         const reason = body.errorReason ?? body.error ?? body.message ?? "FACILITATOR_SETTLE_FAILED";
         await this.reconcileAmbiguous(intent.paymentIntentId, {
           facilitatorHttpStatus: response.status,
           facilitatorResponseBody: responseBody,
-          errorReason: `FACILITATOR_REJECTED: ${reason}`,
+          errorReason: body.success === false
+            ? `FACILITATOR_REJECTED: ${reason}`
+            : `FACILITATOR_AMBIGUOUS: 2xx without success field — reconciler owns the outcome`,
         });
-        return { status: "REJECTED", reason, rawResponse: responseBody };
+        return body.success === false
+          ? { status: "REJECTED", reason, rawResponse: responseBody }
+          : { status: "UNKNOWN", error: `FACILITATOR_AMBIGUOUS: 2xx response without a canonical success verdict` };
       }
 
       // Spec field is `transaction` (v2); keep legacy aliases for Zeus mocks.

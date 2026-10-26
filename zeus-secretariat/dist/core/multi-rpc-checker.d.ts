@@ -8,6 +8,14 @@
  */
 import type { RpcProviderConfig, FinalityPolicy, AuthorizationUsedScanObservation, AuthorizationUsedScanOutcome } from "./types.js";
 export interface TransactionCheckResult {
+    /**
+     * R7-B6d (external audit 2026-10-26): false = the provider answered the
+     * receipt query successfully but the transaction is NOT on the chain
+     * (dropped/replaced/never broadcast). Previously this case returned null —
+     * indistinguishable from an RPC failure — which stranded intents carrying
+     * a txHash in eternal RECONCILING with no authorizationState fallback.
+     */
+    found: boolean;
     confirmed: boolean;
     blockNumber?: number;
     status: "success" | "reverted" | "pending";
@@ -19,6 +27,8 @@ export interface TransactionCheckResult {
     }>;
     confirmations?: number;
     chainId?: number;
+    /** Real gas from the receipt when present (R7-C1: no fabricated "0"). */
+    gasUsed?: string;
 }
 export interface AuthorizationStateResult {
     state: boolean | null;
@@ -59,9 +69,20 @@ export interface AuthorizationUsedScanResult {
     /** present only when outcome === "EVENT_FOUND" */
     event?: AuthorizationUsedEventResult;
 }
+/**
+ * R7-B7c (external audit 2026-10-26): a provider answering on the WRONG
+ * chain is a configuration error, not a transient RPC hiccup. Swallowing it
+ * into "no receipt" let a misconfigured provider silently participate in
+ * consensus. This error is rethrown past the per-provider catch so the
+ * observation records the real failure.
+ */
+export declare class ChainMismatchError extends Error {
+    constructor(message: string);
+}
 export declare class SingleRpcProvider {
     readonly config: RpcProviderConfig;
-    constructor(config: RpcProviderConfig);
+    private readonly rpcTimeoutMs;
+    constructor(config: RpcProviderConfig, rpcTimeoutMs?: number);
     private rpcCall;
     getBlockNumber(): Promise<number>;
     getChainId(): Promise<number>;
@@ -75,6 +96,11 @@ export declare class SingleRpcProvider {
      * F-002: STRICT scan — throws on RPC failure instead of swallowing it.
      * A swallowed error is indistinguishable from an empty log range and would
      * let callers record a false "scan complete, nothing found".
+     *
+     * R7-B7d: the range [fromBlock, toBlock] is scanned in bounded chunks
+     * (LOG_SCAN_CHUNK). Providers that cap eth_getLogs ranges (10k blocks is
+     * a common cap) rejected full-range scans from block 0, which the §11
+     * fail-closed gate then turned into eternal RECONCILING.
      */
     findAuthorizationUsedEventStrict(tokenContract: string, authorizer: string, nonce: string, fromBlock: number, toBlock: number): Promise<{
         transactionHash: string;
@@ -104,6 +130,16 @@ export declare class MultiRpcChecker {
     constructor(configs: RpcProviderConfig[], finalityPolicy?: FinalityPolicy);
     /**
      * §14: Query all providers and determine agreement.
+     *
+     * R7-B7a (external audit 2026-10-26): the consensus previously compared
+     * JSON.stringify of the WHOLE result — including `confirmations =
+     * chainHead − blockNum` (and chainId), which differ between providers
+     * whenever their heads drift (i.e. almost always on real infrastructure).
+     * The consequence: honest providers were flagged DISAGREEMENT on every
+     * txHash check (masks stayed green only because mocks return identical
+     * numbers). Consensus is now computed over the settlement-relevant fields
+     * only; confirmations for the consensus value are taken CONSERVATIVELY as
+     * the minimum across the agreeing providers.
      */
     private aggregateResults;
     /**

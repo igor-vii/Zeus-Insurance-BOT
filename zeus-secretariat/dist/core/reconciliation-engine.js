@@ -18,6 +18,7 @@
  */
 import { DEFAULT_RECONCILIATION_SCHEDULE, DEFAULT_FINALITY_POLICY, } from "./types.js";
 import { keccak256, toBytes } from "viem";
+import { randomUUID } from "node:crypto";
 // ---------------------------------------------------------------------------
 // Transfer Event Parser (§7, §8)
 // ---------------------------------------------------------------------------
@@ -89,11 +90,21 @@ export class ReconciliationEngine {
                 reason: "PENDING_SIGNATURE: awaiting externally signed payment payload",
             };
         }
-        // Terminal states — do not re-reconcile
+        // Terminal states — do not re-reconcile.
+        // R7-C1 (external audit 2026-10-26): the early return previously dropped
+        // ALL evidence ("as any" without an evidence key), so a terminal verdict
+        // re-observed by a second worker (or by the sync observeSettlement path)
+        // recorded evidenceBundle: undefined. The persisted bundle is carried
+        // through when the store round-trips it.
         if (intent.settlementState === "SETTLED" || intent.settlementState === "NOT_SETTLED" || intent.settlementState === "UNRESOLVED_MANUAL") {
-            return { status: intent.settlementState, reason: "Already terminal" };
+            const bundle = intent.settledEvidenceBundle ?? intent.notSettledEvidenceBundle;
+            return {
+                status: intent.settlementState,
+                reason: "Already terminal",
+                ...(bundle !== undefined ? { evidence: bundle } : {}),
+            };
         }
-        const attemptId = `recon-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const attemptId = `recon-${Date.now()}-${randomUUID()}`;
         // §17: Strategy 1 — txHash known
         if (intent.txHash) {
             return await this.reconcileByTxHash(intent, attemptId);
@@ -103,6 +114,13 @@ export class ReconciliationEngine {
     }
     /**
      * §7 + §8 + §9 + §24: Reconcile by txHash.
+     *
+     * R7-B6d (external audit 2026-10-26): when the transaction is NOT on the
+     * chain (found:false — dropped/replaced/never broadcast), the intent used
+     * to be stranded in RECONCILING forever with no fallback. Now: before
+     * validBefore → keep probing (the tx may still land); after validBefore →
+     * the authorization is dead on-chain, fall back to the §10/§11
+     * authorizationState strategy which can reach a terminal verdict.
      */
     async reconcileByTxHash(intent, attemptId) {
         const txResult = await this.rpcChecker.checkTransaction(intent.txHash);
@@ -127,14 +145,69 @@ export class ReconciliationEngine {
             return { status: "RECONCILING", reason: "§14: RPC disagreement on txHash", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
         }
         const tx = txResult.unanimousValue;
+        // R7-B6d: unanimous "tx not found on chain".
+        if (tx.found === false) {
+            const currentTime = Math.floor(Date.now() / 1000);
+            if (currentTime < intent.validBefore) {
+                return {
+                    status: "RECONCILING",
+                    reason: "Transaction not found on chain — authorization window still open, probing",
+                    nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+                };
+            }
+            // The authorization has expired unused as far as this tx is concerned.
+            // Fall back to the authorizationState strategy (§10/§11) — it can reach
+            // a terminal verdict instead of eternally waiting for a dropped tx.
+            return await this.reconcileByAuthorizationState(intent, attemptId);
+        }
         // §9: Reverted transaction
         if (tx.status === "reverted") {
+            // R7-B6a (external audit 2026-10-26, High): a revert proves THIS tx
+            // failed, but the EIP-3009 authorization REMAINS VALID until validBefore
+            // — declaring NOT_SETTLED immediately re-opens allowNewPayment() while
+            // the same signature can still be executed (double-pay window). Hold in
+            // RECONCILING until the window closes, then declare NOT_SETTLED.
+            const currentTime = Math.floor(Date.now() / 1000);
+            if (currentTime < intent.validBefore) {
+                return {
+                    status: "RECONCILING",
+                    reason: "§9: Transaction reverted — authorization stays live until validBefore; NOT_SETTLED deferred",
+                    nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0),
+                };
+            }
             // §21: Atomic terminal transition
             const casSuccess = await this.store.compareAndSetState(intent.paymentIntentId, intent.settlementState, "NOT_SETTLED");
             if (!casSuccess) {
                 return { status: "RECONCILING", reason: "§21: CAS failed — another worker transitioned state" };
             }
-            return { status: "NOT_SETTLED", reason: "§9: Transaction reverted" };
+            // R7-C1: the NOT_SETTLED verdict carries its evidence — the revert,
+            // witnessed by each provider, is itself the negative proof (a reverted
+            // transferWithAuthorization leaves the authorization unconsumed).
+            return {
+                status: "NOT_SETTLED",
+                reason: "§9: Transaction reverted (authorization window closed)",
+                evidence: {
+                    authorizer: intent.authorizer,
+                    nonce: intent.nonce,
+                    validBefore: intent.validBefore,
+                    expiryConfirmedAt: currentTime,
+                    authorizationStateFalse: true,
+                    rpcObservations: txResult.observations
+                        .filter((obs) => obs.result?.found === true)
+                        .map((obs) => ({
+                        providerId: obs.providerId,
+                        underlyingProvider: obs.underlyingProvider,
+                        observedAt: obs.observedAt,
+                        blockNumber: obs.result?.blockNumber ?? 0,
+                        chainHead: (obs.result?.blockNumber ?? 0) + (obs.result?.confirmations ?? 0),
+                        authorizationState: false,
+                        stalenessBlocks: 0,
+                    })),
+                    scanComplete: true,
+                    authorizationUsedScanResult: "REVERTED_TX",
+                    authorizationUsedScan: { outcome: "REVERTED_TX", observations: [] },
+                },
+            };
         }
         if (tx.status === "pending") {
             return { status: "RECONCILING", reason: "Transaction still pending", nextProbeMs: this.getNextProbeDelay(intent.probeCount ?? 0) };
@@ -165,6 +238,14 @@ export class ReconciliationEngine {
             };
         }
         // Build SETTLED evidence bundle (§7 + §22)
+        //
+        // R7-C1 (external audit 2026-10-26): the bundle previously contained
+        // fabricated values (gasUsed:"0", rpcObservations:[]) despite the F-002
+        // "no fabricated zeros" principle. gasUsed now comes from the receipt
+        // when the provider reported it ("unavailable" when it did not — never a
+        // fake zero), finalityReached is COMPUTED from the confirmed
+        // confirmations, and the actually-performed RPC observations are
+        // recorded.
         const evidence = {
             authorizationUsed: {
                 transactionHash: intent.txHash,
@@ -174,7 +255,7 @@ export class ReconciliationEngine {
             receipt: {
                 status: 1,
                 blockNumber: tx.blockNumber,
-                gasUsed: "0",
+                gasUsed: tx.gasUsed ?? "unavailable",
             },
             transfer: {
                 from: transfer.from,
@@ -183,8 +264,18 @@ export class ReconciliationEngine {
                 tokenContract: transfer.tokenContract,
             },
             confirmations: tx.confirmations,
-            finalityReached: true,
-            rpcObservations: [],
+            finalityReached: (tx.confirmations ?? 0) >= this.finalityPolicy.requiredConfirmations,
+            rpcObservations: txResult.observations.map((obs) => ({
+                attemptId,
+                paymentIntentId: intent.paymentIntentId,
+                timestamp: obs.observedAt,
+                rpcProviderId: obs.providerId,
+                headBlock: obs.result?.blockNumber ?? 0,
+                authorizationState: null,
+                validBefore: intent.validBefore,
+                result: obs.result ? (obs.result.confirmed ? "SETTLED_FOUND" : "STILL_UNKNOWN") : "RPC_ERROR",
+                ...(obs.error !== undefined ? { error: obs.error } : {}),
+            })),
         };
         // §21: Atomic terminal transition via CAS
         const casSuccess = await this.store.compareAndSetState(intent.paymentIntentId, intent.settlementState, "SETTLED");
@@ -242,7 +333,12 @@ export class ReconciliationEngine {
             const authorizationScan = await this.rpcChecker.findAuthorizationUsedEvent(intent.asset, intent.authorizer, intent.nonce);
             if (authorizationScan.agreement === "UNANIMOUS" && authorizationScan.unanimousValue) {
                 const recovered = authorizationScan.unanimousValue;
-                await this.store.updatePaymentIntentStatus(intent.paymentIntentId, intent.settlementState, { txHash: recovered.transactionHash });
+                // R7-B8 (external audit 2026-10-26): the txHash recovery write used
+                // the UNCONDITIONAL updatePaymentIntentStatus with the intent captured
+                // at reconcile start — a concurrent worker that advanced the state
+                // could be silently rolled back. The write is now a same-state CAS:
+                // it only lands when the state is exactly what this worker observed.
+                await this.store.compareAndSetState(intent.paymentIntentId, intent.settlementState, intent.settlementState, { txHash: recovered.transactionHash });
                 // R0 repair (spec §10): "true → recover tx via logs → success+Transfer
                 // → SETTLED". The engine previously stopped here and waited for the
                 // next probe; follow the recovered receipt immediately — txHash-first
@@ -277,7 +373,9 @@ export class ReconciliationEngine {
         if (scan.outcome === "EVENT_FOUND" && scan.event) {
             // The authorization was actually consumed — the payment settled.
             // §17: recover through the concrete transaction; NOT_SETTLED is forbidden.
-            await this.store.updatePaymentIntentStatus(intent.paymentIntentId, intent.settlementState, { txHash: scan.event.transactionHash });
+            // R7-B8: same-state CAS instead of the unconditional status write
+            // (stale-intent rollback hazard).
+            await this.store.compareAndSetState(intent.paymentIntentId, intent.settlementState, intent.settlementState, { txHash: scan.event.transactionHash });
             return await this.reconcileByTxHash({ ...intent, txHash: scan.event.transactionHash }, attemptId);
         }
         if (scan.outcome !== "SCAN_COMPLETE_EMPTY") {

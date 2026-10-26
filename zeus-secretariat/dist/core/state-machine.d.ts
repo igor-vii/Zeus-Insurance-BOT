@@ -8,9 +8,9 @@ import { Operation, EvidenceRecord, ExecuteRequest, ExecutionResult, EvidenceSto
 import type { SettlementAdapter, PaymentPayload } from '../adapters/x402-facilitator-client.js';
 import type { ReconciliationEngine } from './reconciliation-engine.js';
 import type { AtomicSettlementHandoff } from './post-settlement-engine.js';
+import { CapabilitySource } from './capability-resolver.js';
 import { VALID_TRANSITIONS, isValidTransition } from './operation-fsm.js';
 export { VALID_TRANSITIONS, isValidTransition };
-import { CapabilitySource } from './capability-resolver.js';
 /**
  * P0-7: ARCHITECTURAL BOUNDARY — SINGLE AUTHORITATIVE EXECUTION PATH
  *
@@ -20,7 +20,7 @@ import { CapabilitySource } from './capability-resolver.js';
  * The SINGLE authoritative execution/recovery path is:
  *   SETTLED → PostSettlementEngine.initiateExecution() → ExecutionAttempt → seller → evidence
  *
- * StateMachine.observeExecution_DEPRECATED_USE_POST_SETTLEMENT_ENGINE() is DEPRECATED — it must NOT be used as an
+ * R7-C3: the deprecated in-machine execution path was REMOVED — there is no
  * alternative execution path. All post-settlement execution goes through
  * PostSettlementEngine exclusively.
  *
@@ -122,11 +122,6 @@ export declare class Secretariat {
     private authorizePayment;
     private submitPayment;
     private observeSettlement;
-    private observeExecution_DEPRECATED_USE_POST_SETTLEMENT_ENGINE;
-    private handleRecovery;
-    private recoverViaResultRetrieval;
-    private recoverViaIdempotentRetry;
-    private recoverViaSignedReceipt;
     private deliver;
     private failOperation;
     private transitionState;
@@ -195,6 +190,14 @@ export declare class Secretariat {
      * target/method under the same derived id is a client bug — reject with a
      * dedicated, actionable error instead of silently reusing the old
      * operation (which would execute the WRONG request after payment).
+     *
+     * R7-B5a (external audit 2026-10-26, High): target+method equality was
+     * also the ONLY check — the same client, same URL, same method but a
+     * DIFFERENT body/price silently received the FIRST operation's result
+     * (and eventually its data). The guard now also compares a stable
+     * fingerprint of the request payload, and applies to explicit-requestId
+     * reuse as well (a requestId is the identity of ONE logical request —
+     * replaying it with a different body is the same collision class).
      */
     private assertNoLogicalRequestCollision;
     private findExistingOperation;
@@ -225,7 +228,7 @@ export declare class Secretariat {
     private authorizationFromDurableIntent;
     private getSubmissionResultFromEvidence;
     getOperation(operationId: string): Promise<Operation | null>;
-    getOperationByRequestId(requestId: string): Promise<Operation | null>;
+    getOperationByRequestId(requestId: string, clientId?: string): Promise<Operation | null>;
     getEvidence(operationId: string): Promise<EvidenceRecord[]>;
 }
 //# sourceMappingURL=state-machine.d.ts.map

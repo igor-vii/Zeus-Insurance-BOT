@@ -6,6 +6,7 @@
  *
  * Lifecycle: poll → discover → claim → load DPI → reconcile → map outcome → release lease
  */
+import { SettlementFeedbackService } from './settlement-feedback-service.js';
 const DEFAULT_CONFIG = {
     pollIntervalMs: 5_000,
     leaseDurationMs: 30_000,
@@ -103,7 +104,9 @@ export class ReconciliationWorker {
         }
     }
     async processBatch() {
-        const jobs = await this.store.getDueReconciliationJobs();
+        // R7-C2 (external audit 2026-10-26): the configured batchSize was accepted
+        // but never used — every poll always scanned the store's hardcoded LIMIT.
+        const jobs = await this.store.getDueReconciliationJobs(this.config.batchSize);
         for (const job of jobs) {
             if (!this.running)
                 break;
@@ -142,20 +145,21 @@ export class ReconciliationWorker {
             // Step 3.5: B.3-B2-WIRING — Sync canonical probe count from job to DPI.
             // job.probe_count (incremented at claim) is the authoritative scheduling counter.
             // DPI.probeCount is a derived cache that ReconciliationEngine.getNextProbeDelay() reads.
-            // Without this sync, engine would use stale DPI.probeCount and compute wrong nextProbeMs.
+            //
+            // R7-C2 (external audit 2026-10-26): the previous sync re-read the job
+            // from getDueReconciliationJobs() AFTER claiming it — but a freshly
+            // claimed RUNNING job is by definition not due, so the lookup ALWAYS
+            // missed and DPI.probeCount was pinned to 1: the engine's backoff
+            // schedule never grew. The claimed job is now read back directly via
+            // the optional getReconciliationJobById primitive.
             try {
                 const extStore = this.store;
-                if (typeof extStore.updatePaymentIntentProbeCount === "function") {
-                    // Get current job probe_count after claim (claim incremented it)
-                    const dueJobs = await this.store.getDueReconciliationJobs();
-                    const currentJob = dueJobs.find(j => j.jobId === jobId);
-                    // If job not in due list anymore (already rescheduled by another path),
-                    // use the probeCount from the original discovery. The claim already incremented it.
-                    // We pass the job's probeCount which was set during claim.
-                    // Since we can't re-read the job easily here, we rely on the fact that
-                    // claim incremented probe_count atomically. We need to read it back.
-                    // Use a direct store lookup if available.
-                    const jobProbeCount = currentJob?.probeCount ?? 1; // fallback: at least 1 after first claim
+                if (typeof extStore.updatePaymentIntentProbeCount === "function" &&
+                    typeof extStore.getReconciliationJobById === "function") {
+                    const claimedJob = await extStore.getReconciliationJobById(jobId);
+                    // claimReconciliationJob incremented probe_count atomically before
+                    // this read; a missing row means the job vanished — fall back to 1.
+                    const jobProbeCount = claimedJob?.probeCount ?? 1;
                     await extStore.updatePaymentIntentProbeCount(paymentIntentId, jobProbeCount);
                 }
             }
@@ -166,8 +170,8 @@ export class ReconciliationWorker {
             }
             // Step 4: Reconcile
             const outcome = await this.engine.reconcile(paymentIntentId);
-            // Step 5: Map outcome to job lifecycle
-            await this.mapOutcome(jobId, outcome);
+            // Step 5: Map outcome to job lifecycle (and feed the Operation FSM — R7-A7)
+            await this.mapOutcome(jobId, outcome, dpi);
         }
         catch (err) {
             // Unexpected exception — reschedule with error backoff
@@ -180,7 +184,27 @@ export class ReconciliationWorker {
     // -------------------------------------------------------------------------
     // Outcome Mapping
     // -------------------------------------------------------------------------
-    async mapOutcome(jobId, outcome) {
+    async mapOutcome(jobId, outcome, dpi) {
+        // R7-A7 (external audit 2026-10-26, Critical): feed the outcome back into
+        // the Operation FSM. Previously only the JOB lifecycle was closed here,
+        // so an asynchronously settled operation stayed in SETTLEMENT_PENDING
+        // (public status PROCESSING) forever. Feedback runs BEFORE the job
+        // closure and is non-fatal: a feedback failure must never lose the job
+        // bookkeeping (the operation can be repaired by the next probe/scanner).
+        if (dpi?.operationId) {
+            try {
+                const feedback = new SettlementFeedbackService(this.store);
+                const result = await feedback.applyOutcome(dpi.operationId, outcome, {
+                    paymentIntentId: dpi.paymentIntentId,
+                });
+                if (result.applied) {
+                    console.info(`[ReconciliationWorker] Settlement feedback applied: operation=${dpi.operationId} -> ${result.currentState} (${outcome.status})`);
+                }
+            }
+            catch (feedbackErr) {
+                console.warn(`[ReconciliationWorker] Settlement feedback failed for operation=${dpi.operationId}:`, feedbackErr instanceof Error ? feedbackErr.message : feedbackErr);
+            }
+        }
         switch (outcome.status) {
             case "SETTLED":
             case "NOT_SETTLED":

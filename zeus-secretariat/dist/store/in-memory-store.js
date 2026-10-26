@@ -233,10 +233,15 @@ export class InMemoryEvidenceStore {
     async getOperation(operationId) {
         return this.operations.get(operationId) ?? null;
     }
-    async getOperationByRequestId(requestId) {
+    // R7-B5b: optional client scoping, mirroring the Postgres store —
+    // request ids are unique per CLIENT only (migration 0006).
+    async getOperationByRequestId(requestId, clientId) {
         for (const operation of this.operations.values()) {
-            if (operation.requestId === requestId)
-                return operation;
+            if (operation.requestId !== requestId)
+                continue;
+            if (clientId && operation.clientId !== clientId)
+                continue;
+            return operation;
         }
         return null;
     }

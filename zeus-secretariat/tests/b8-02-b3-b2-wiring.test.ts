@@ -65,6 +65,15 @@ class IntegratedFakeStore implements Partial<DurableEvidenceStore> {
     return true;
   }
 
+  // R7-C2: direct read-back of the claimed job — the due-list re-read that
+  // the old probe-sync used ALWAYS missed (a claimed RUNNING job is not due),
+  // which is exactly the bug the R7 audit caught.
+  async getReconciliationJobById(jobId: string): Promise<{ jobId: string; paymentIntentId: string; probeCount: number; status: string } | null> {
+    const j = this.jobs.get(jobId);
+    if (!j) return null;
+    return { jobId: j.jobId, paymentIntentId: j.paymentIntentId, probeCount: j.probeCount, status: j.status };
+  }
+
   async completeReconciliationJob(jobId: string, workerId: string): Promise<boolean> {
     const j = this.jobs.get(jobId);
     if (!j || j.status !== "RUNNING" || j.lockedBy !== workerId) return false;

@@ -279,6 +279,16 @@ export interface EvidenceRecord {
      */
     readonly sequence?: number;
 }
+/**
+ * Final status of an ExecutionResult.
+ *
+ * R7-A7 (external audit 2026-10-26): the union previously had no in-progress
+ * value, so mapToFinalStatus() reported every non-terminal state
+ * (SETTLEMENT_PENDING, PAYMENT_SUBMITTED, EXECUTION_PENDING, …) as 'FAILED' —
+ * an outright lie for an operation whose payment may still settle. 'PENDING'
+ * is the honest answer for anything not yet terminal.
+ */
+export type ExecutionResultStatus = 'SUCCESS' | 'FAILED' | 'RECOVERED' | 'UNRESOLVABLE' | 'PENDING';
 export interface ExecutionResult<T = unknown> {
     /**
      * Operation identifier
@@ -287,7 +297,7 @@ export interface ExecutionResult<T = unknown> {
     /**
      * Final status
      */
-    status: 'SUCCESS' | 'FAILED' | 'RECOVERED' | 'UNRESOLVABLE';
+    status: ExecutionResultStatus;
     /**
      * Payment status
      */
@@ -674,14 +684,20 @@ export interface DurableEvidenceStore {
     saveSettledEvidenceBundle(intentId: string, bundle: SettledEvidenceBundle): Promise<void>;
     saveNotSettledEvidenceBundle(intentId: string, bundle: NotSettledEvidenceBundle): Promise<void>;
     getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
-    getOperationByRequestId?(requestId: string): Promise<Operation | null>;
+    getOperationByRequestId?(requestId: string, clientId?: string): Promise<Operation | null>;
     createReconciliationJob(paymentIntentId: string, nextProbeAt: Date): Promise<string>;
-    getDueReconciliationJobs(): Promise<Array<{
+    getDueReconciliationJobs(limit?: number): Promise<Array<{
         jobId: string;
         paymentIntentId: string;
         probeCount: number;
     }>>;
     claimReconciliationJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean>;
+    getReconciliationJobById?(jobId: string): Promise<{
+        jobId: string;
+        paymentIntentId: string;
+        probeCount: number;
+        status: string;
+    } | null>;
     completeReconciliationJob(jobId: string, workerId: string): Promise<boolean>;
     rescheduleReconciliationJob(jobId: string, workerId: string, nextProbeAt: Date): Promise<boolean>;
     failReconciliationJob(jobId: string, workerId: string, error: string): Promise<boolean>;

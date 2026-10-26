@@ -41,9 +41,9 @@
  *   x402 rails (the Lab's own S10 "Delivery Uncertain" maps to the recover
  *   leg of B-BS-16 and to the live-matrix S4/S7 evidence).
  *   B-BS-16   paid but not delivered            → two legs:
- *             refuse:  seller 500 on every attempt → honest FAILED (never a
- *                      fake COMPLETED), exactly 1 settlement, exactly 1
- *                      delivery attempt (a definitive answer is not retried)
+ *             refuse:  seller 500 on every attempt → R7-B2: outcome UNKNOWN,
+ *                      bounded same-key retries (≤3), job UNRESOLVABLE, never
+ *                      a fake COMPLETED, exactly 1 settlement (no re-charge)
  *             recover: response lost mid-flight → DELIVERY_UNKNOWN →
  *                      recovery retry with the SAME idempotency key →
  *                      delivered, exactly 1 settlement across 2 attempts
@@ -406,6 +406,10 @@ function buildV2Payload({ payTo, value, nonceHex, validAfter, validBefore, signa
 }
 
 async function createRequest(scenario) {
+  // R7-B5c: the clientId is generated here and echoed to callers so status
+  // polls can present the X-Client-Id header (the status route is now
+  // client-scoped for operations that carry a clientId).
+  const clientId = `argus-${scenario}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const res = await fetch(`${SECRETARIAT}/v1/requests`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -413,7 +417,7 @@ async function createRequest(scenario) {
       target: `${ARGUS}/resource?s=${scenario}`,
       method: "POST",
       payload: { prompt: "r6-e2e" },
-      clientId: `argus-${scenario}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      clientId,
       authorizer: CLIENT_ADDR,
       policy: {
         maxPrice: MAX_PRICE,
@@ -424,14 +428,16 @@ async function createRequest(scenario) {
       },
     }),
   });
-  return { status: res.status, body: await res.json().catch(() => ({})) };
+  return { status: res.status, body: await res.json().catch(() => ({})), clientId };
 }
 
-async function pollFinal(requestId, timeoutMs = 30_000) {
+async function pollFinal(requestId, timeoutMs = 30_000, clientId = null) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
-    const res = await fetch(`${SECRETARIAT}/v1/requests/${requestId}`);
+    const res = await fetch(`${SECRETARIAT}/v1/requests/${requestId}`, {
+      headers: clientId ? { "X-Client-Id": clientId } : {},
+    });
     last = await res.json().catch(() => ({}));
     if (!["AWAITING_PAYMENT_SIGNATURE", "PROCESSING"].includes(last.status)) return last;
     await new Promise((r) => setTimeout(r, 500));
@@ -463,6 +469,7 @@ async function honestFlow(argus, account, tag, { pollMs = 30_000, sellerMode = n
   const created = await createRequest(tag);
   const out = {
     created,
+    clientId: created.clientId ?? null,
     requestId: created.body?.requestId ?? null,
     operationId: created.body?.operationId ?? null,
     payload: null,
@@ -479,14 +486,17 @@ async function honestFlow(argus, account, tag, { pollMs = 30_000, sellerMode = n
     headers: { "content-type": "application/json" },
     body: JSON.stringify(out.payload),
   });
-  out.final = await pollFinal(out.requestId, pollMs);
+  out.final = await pollFinal(out.requestId, pollMs, out.clientId);
   return out;
 }
 
 // B-BS-16 — paid but not delivered, both adversarial variants in one entry.
-//   refuse  — definitive 5xx: the pipeline must FAIL honestly with exactly
-//             one settlement and one delivery attempt (never a fake
-//             COMPLETED, no blind retry of a definitive answer).
+//   refuse  — seller 500 on every attempt. R7-B2 (external audit 2026-10-26):
+//             a bare 500 is NOT a definitive failure — the backend may or may
+//             not have processed the paid call. With the IDEMPOTENT
+//             capability the engine takes BOUNDED, same-key retries (no
+//             re-charge: exactly one settlement), then closes honestly as
+//             UNRESOLVABLE — NEVER a fake COMPLETED, never an infinite retry.
 //   recover — lost response: DELIVERY_UNKNOWN, then a recovery retry with
 //             the SAME idempotency key completes the delivery with exactly
 //             ONE settlement across both attempts (no re-charge). The
@@ -501,7 +511,10 @@ async function runPostMoney(argus, entry, account) {
     refuse: { requestId: refuse.requestId, operationId: refuse.operationId, finalStatus: refuse.final?.status ?? null },
     recover: { requestId: recover.requestId, operationId: recover.operationId, finalStatus: recover.final?.status ?? null },
   };
-  const refuseOk = refuse.final?.status === "FAILED";
+  // R7-B2: the honest terminal for a permanently-500ing seller is any
+  // non-COMPLETED resolution (UNRESOLVABLE/UNKNOWN/FAILED) — the lie that is
+  // forbidden is COMPLETED, not UNRESOLVABLE.
+  const refuseOk = !["COMPLETED"].includes(refuse.final?.status ?? "") && refuse.final?.status != null;
   const recoverOk = ["UNKNOWN", "COMPLETED"].includes(recover.final?.status ?? "");
   return {
     outcome: refuseOk && recoverOk ? "PASSED" : "LEAKED",
@@ -591,7 +604,16 @@ async function runOverBudget(argus, entry, account) {
 async function policyRejectedBaseline() {
   try {
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://zeus@localhost:5432/zeus" });
-    const b = await pool.query(`SELECT count(*)::int AS n FROM reconciliation_observations WHERE result = 'POLICY_REJECTED'`);
+    // R7-fix: the baseline MUST use the SAME run-window predicate as the
+    // post-run delta query. The previous all-time count worked only because
+    // CI provisions a FRESH database per run (baseline 0 by accident); on a
+    // persistent database the all-time baseline was subtracted from a
+    // run-window count, forcing delta=0 on every second run.
+    const b = await pool.query(
+      `SELECT count(*)::int AS n FROM reconciliation_observations
+       WHERE result = 'POLICY_REJECTED' AND observed_at >= to_timestamp($1 / 1000.0)`,
+      [RUN_STARTED_AT],
+    );
     await pool.end();
     return b.rows[0]?.n ?? 0;
   } catch {
@@ -644,11 +666,18 @@ async function assertObservations(results, policyBaseline) {
           const singleSettle = ints.rows.length === 1 && !!ints.rows[0].tx_hash;
           const events = (obs.rows[0]?.reconciliation_observations ?? []).map((o) => o.event);
           const a = att.rows;
+          // R7-B2 (external audit 2026-10-26): a permanent 500 is outcome-
+          // UNKNOWN, not definitive failure. Honest behavior: BOUNDED retries
+          // (max 3 attempts, same idempotency key), attempt rows recorded as
+          // DELIVERY_UNKNOWN with the real HTTP 500 preserved, job closes
+          // UNRESOLVABLE, exactly one settlement (no re-charge), never a
+          // success event.
+          const bounded = a.length >= 1 && a.length <= 3;
+          const allUnknown500 = a.every((x) => x.status === "DELIVERY_UNKNOWN" && x.response_status_code === 500);
           checks.push({
             leg: "refuse",
-            ok: a.length === 1 && a[0].status === "HTTP_FAILURE" && a[0].response_status_code === 500
-              && job.rows[0]?.status === "FAILED" && singleSettle
-              && events.includes("EXECUTION_HTTP_FAILURE") && !events.includes("EXECUTION_SUCCESS"),
+            ok: bounded && allUnknown500 && job.rows[0]?.status === "UNRESOLVABLE" && singleSettle
+              && events.includes("EXECUTION_RETRY_CREATED") && !events.includes("EXECUTION_SUCCESS"),
             note: `attempts=${a.length}[${a.map((x) => `${x.status}:${x.response_status_code ?? "-"}`).join(",")}] job=${job.rows[0]?.status ?? "-"} intents=${ints.rows.length} tx=${ints.rows[0]?.tx_hash ? "single" : "none"}`,
           });
         }
@@ -847,7 +876,7 @@ async function main() {
 
       // ---- Stage A: discovery (Argus serves the poisoned challenge) ----
       const created = await createRequest(scenario.id);
-      entry.clientId = created.body?.clientId ?? null;
+      entry.clientId = created.clientId ?? null;
       entry.requestId = created.body?.requestId ?? null;
       entry.operationId = created.body?.operationId ?? null;
 
@@ -910,7 +939,7 @@ async function main() {
       }
 
       // ---- Canonical scenarios: S8 honest pass, S9 idempotent retry ----
-      const first = await pollFinal(entry.requestId);
+      const first = await pollFinal(entry.requestId, undefined, entry.clientId);
       const firstTx = first.settlementTxHash ?? null;
 
       if (scenario.id === "S8") {

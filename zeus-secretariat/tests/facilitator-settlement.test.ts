@@ -459,20 +459,45 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
   // ---- Test AH: Reconciliation detects reverted tx ----
 
   test("AH: reconciliation detects reverted transaction", async () => {
-    const intent = makeIntent({
+    // R7-B6a (external audit 2026-10-26): a revert with the authorization
+    // window STILL OPEN must NOT declare NOT_SETTLED — the signature remains
+    // executable until validBefore, so an immediate NOT_SETTLED (which
+    // re-enables allowNewPayment) opened a double-pay window.
+    const liveIntent = makeIntent({
       settlementState: "RECONCILING",
       txHash: "0xreverted_tx",
     });
-    await store.createPaymentIntent(intent);
+    await store.createPaymentIntent(liveIntent);
 
-    const chainChecker = new MockMultiRpcChecker();
-    chainChecker.setTxResult("0xreverted_tx", {
+    const liveChecker = new MockMultiRpcChecker();
+    liveChecker.setTxResult("0xreverted_tx", {
       confirmed: false,
       status: "reverted",
     } as any);
 
-    const engine = new ReconciliationEngine(store, chainChecker);
-    const result = await engine.reconcile(intent.paymentIntentId ?? intent.operationId);
+    const liveEngine = new ReconciliationEngine(store, liveChecker);
+    const liveResult = await liveEngine.reconcile(liveIntent.paymentIntentId ?? liveIntent.operationId);
+
+    // Window open → hold in RECONCILING, never NOT_SETTLED.
+    expect(liveResult.status).toBe("RECONCILING");
+    expect((liveResult as any).reason).toContain("reverted");
+
+    // Expired window → the revert can now be declared definitively.
+    const expiredIntent = makeIntent({
+      settlementState: "RECONCILING",
+      txHash: "0xreverted_tx_expired",
+      validBefore: Math.floor(Date.now() / 1000) - 60,
+    });
+    await store.createPaymentIntent(expiredIntent);
+
+    const expiredChecker = new MockMultiRpcChecker();
+    expiredChecker.setTxResult("0xreverted_tx_expired", {
+      confirmed: false,
+      status: "reverted",
+    } as any);
+
+    const expiredEngine = new ReconciliationEngine(store, expiredChecker);
+    const result = await expiredEngine.reconcile(expiredIntent.paymentIntentId ?? expiredIntent.operationId);
 
     expect(result.status).toBe("NOT_SETTLED");
     if (result.status === "NOT_SETTLED") {
@@ -484,7 +509,7 @@ describe("Phase 2.3: Real Facilitator Settlement & Reconciliation", () => {
 
     // R0 repair: per types.ts §2 "FAILED is NOT a valid settlement state" and
     // spec §9, a reverted transaction is terminal NOT_SETTLED.
-    const updated = await store.getPaymentIntentByOperationId(intent.operationId);
+    const updated = await store.getPaymentIntentByOperationId(expiredIntent.operationId);
     expect(updated!.settlementState).toBe("NOT_SETTLED");
   });
 

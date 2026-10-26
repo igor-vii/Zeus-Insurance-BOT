@@ -427,6 +427,17 @@ export interface EvidenceRecord {
 // FINAL RESULT
 // ============================================================================
 
+/**
+ * Final status of an ExecutionResult.
+ *
+ * R7-A7 (external audit 2026-10-26): the union previously had no in-progress
+ * value, so mapToFinalStatus() reported every non-terminal state
+ * (SETTLEMENT_PENDING, PAYMENT_SUBMITTED, EXECUTION_PENDING, …) as 'FAILED' —
+ * an outright lie for an operation whose payment may still settle. 'PENDING'
+ * is the honest answer for anything not yet terminal.
+ */
+export type ExecutionResultStatus = 'SUCCESS' | 'FAILED' | 'RECOVERED' | 'UNRESOLVABLE' | 'PENDING';
+
 export interface ExecutionResult<T = unknown> {
   /**
    * Operation identifier
@@ -436,7 +447,7 @@ export interface ExecutionResult<T = unknown> {
   /**
    * Final status
    */
-  status: 'SUCCESS' | 'FAILED' | 'RECOVERED' | 'UNRESOLVABLE';
+  status: ExecutionResultStatus;
   
   /**
    * Payment status
@@ -1019,12 +1030,19 @@ export interface DurableEvidenceStore {
 
   // B8-001: Durable idempotency lookup
   getOperationByClientAndRequestId(clientId: string, requestId: string): Promise<Operation | null>;
-  getOperationByRequestId?(requestId: string): Promise<Operation | null>;
+  // R7-B5b: optional client scoping — request ids are unique per CLIENT only
+  // (migration 0006: unique (client_id, request_id)).
+  getOperationByRequestId?(requestId: string, clientId?: string): Promise<Operation | null>;
 
   // B.3-B2-FIX: Reconciliation job lifecycle (lease-safe atomic operations)
   createReconciliationJob(paymentIntentId: string, nextProbeAt: Date): Promise<string>;
-  getDueReconciliationJobs(): Promise<Array<{ jobId: string; paymentIntentId: string; probeCount: number }>>;
+  // R7-C2: optional batch limit — the worker's configured batchSize must
+  // actually bound the poll; stores default to their own sane LIMIT.
+  getDueReconciliationJobs(limit?: number): Promise<Array<{ jobId: string; paymentIntentId: string; probeCount: number }>>;
   claimReconciliationJob(jobId: string, workerId: string, lockDurationMs: number): Promise<boolean>;
+  // R7-C2: direct read-back of a claimed job (a freshly claimed RUNNING job
+  // is never in the due set — the old due-list re-read always missed).
+  getReconciliationJobById?(jobId: string): Promise<{ jobId: string; paymentIntentId: string; probeCount: number; status: string } | null>;
   completeReconciliationJob(jobId: string, workerId: string): Promise<boolean>;
   rescheduleReconciliationJob(jobId: string, workerId: string, nextProbeAt: Date): Promise<boolean>;
   failReconciliationJob(jobId: string, workerId: string, error: string): Promise<boolean>;

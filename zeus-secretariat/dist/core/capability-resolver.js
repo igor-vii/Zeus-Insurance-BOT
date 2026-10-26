@@ -29,7 +29,13 @@ export class SellerCapabilityResolver {
         // 2. Fallback to response headers (hint only)
         if (!cap && responseHeaders) {
             const recovery = responseHeaders.get('X-Recovery-Capability');
-            if (recovery && ['EXECUTION_IDEMPOTENT', 'RESULT_RETRIEVAL', 'SIGNED_RECEIPT'].includes(recovery)) {
+            // R7-B12 (external audit 2026-10-26): SIGNED_RECEIPT is REMOVED from the
+            // header-accept list. It is declared in the type system but has NO
+            // implementation (recoverViaSignedReceipt is a TODO stub), so honoring
+            // a seller's self-declared SIGNED_RECEIPT header enabled nothing except
+            // confusion (the engine treated it as retry-eligible). Fail closed:
+            // only capabilities that actually exist may be claimed via headers.
+            if (recovery && ['EXECUTION_IDEMPOTENT', 'RESULT_RETRIEVAL'].includes(recovery)) {
                 cap = {
                     recoveryCapability: recovery,
                     resultRetrievalEndpoint: responseHeaders.get('X-Result-Retrieval-Endpoint') || undefined,

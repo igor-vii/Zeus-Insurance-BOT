@@ -16,9 +16,17 @@ export const VALID_TRANSITIONS = {
     PAYMENT_REQUIRED: ['AWAITING_SIGNATURE', 'AUTHORIZED', 'POLICY_REJECTED', 'FAILED'],
     AWAITING_SIGNATURE: ['AUTHORIZED', 'FAILED'],
     AUTHORIZED: ['PAYMENT_SUBMITTED', 'FAILED'],
-    PAYMENT_SUBMITTED: ['SETTLEMENT_PENDING', 'SETTLEMENT_UNKNOWN', 'SETTLED', 'SETTLEMENT_FAILED'],
-    SETTLEMENT_PENDING: ['SETTLED', 'SETTLEMENT_UNKNOWN', 'SETTLEMENT_FAILED'],
-    SETTLEMENT_UNKNOWN: ['SETTLED', 'SETTLEMENT_FAILED'],
+    // R7-A6 (external audit 2026-10-26, Critical): UNRESOLVABLE must be
+    // reachable from every post-submission settlement state. The previous
+    // table made UNRESOLVED_MANUAL / INCIDENT reconciliation outcomes THROW
+    // ("Invalid state transition") inside observeSettlement, which the
+    // execute() catch-all then collapsed to terminal FAILED — representing
+    // "money MAY have moved, outcome unknown" as a definitive failure.
+    // From the moment a payment is submitted the honest terminal for an
+    // unresolvable settlement is UNRESOLVABLE, never FAILED.
+    PAYMENT_SUBMITTED: ['SETTLEMENT_PENDING', 'SETTLEMENT_UNKNOWN', 'SETTLED', 'SETTLEMENT_FAILED', 'UNRESOLVABLE'],
+    SETTLEMENT_PENDING: ['SETTLED', 'SETTLEMENT_UNKNOWN', 'SETTLEMENT_FAILED', 'UNRESOLVABLE'],
+    SETTLEMENT_UNKNOWN: ['SETTLED', 'SETTLEMENT_FAILED', 'UNRESOLVABLE'],
     SETTLED: ['EXECUTION_PENDING', 'EXECUTION_UNKNOWN'],
     EXECUTION_PENDING: ['EXECUTION_CONFIRMED', 'EXECUTION_UNKNOWN', 'FAILED'],
     EXECUTION_CONFIRMED: ['DELIVERED', 'FAILED'],

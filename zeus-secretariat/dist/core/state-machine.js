@@ -7,22 +7,29 @@
 import { CryptoNonceGenerator } from './nonce-generator.js';
 import { egressFetch } from './egress-guard.js';
 import { keccak256, toBytes } from 'viem';
+import { randomUUID } from 'node:crypto';
+// R7-C6 (external audit 2026-10-26): X402Parser / SellerCapabilityResolver
+// imports were sitting in the MIDDLE of the file (after the legacy
+// PaymentIntent declarations) — moved to the import block.
+import { X402Parser } from './x402-parser.js';
+import { SellerCapabilityResolver } from './capability-resolver.js';
 // F-110 (external audit 2026-10-26): single source of truth for the Operation
 // FSM — the table lives in operation-fsm.ts and is shared with
 // execution-feedback-service.ts (the hand-mirrored ALLOWED_EDGES copy is gone).
 import { VALID_TRANSITIONS, isValidTransition } from './operation-fsm.js';
 // Backwards-compatible re-export for existing imports from this module.
 export { VALID_TRANSITIONS, isValidTransition };
-import { X402Parser } from './x402-parser.js';
-import { SellerCapabilityResolver } from './capability-resolver.js';
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 function generateOperationId() {
-    return `op_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    // R7-C4 (external audit 2026-10-26): crypto-random ids instead of
+    // Date.now()+Math.random() — unguessable operation/request/intent ids also
+    // close the "guess a requestId" read vector on the public status route.
+    return `op_${Date.now()}_${randomUUID()}`;
 }
 function generateRequestId() {
-    return `req_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    return `req_${Date.now()}_${randomUUID()}`;
 }
 /**
  * S1/S5 live-matrix repair (2026-10-23, Argus Agent Test Lab vs real
@@ -47,7 +54,23 @@ function resolveLogicalRequestId(request) {
     return generateRequestId();
 }
 function generatePaymentIntentId() {
-    return `pi_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    return `pi_${Date.now()}_${randomUUID()}`;
+}
+/**
+ * R7-B5a: key-order-insensitive JSON fingerprint for payload equality.
+ * A client retry may serialize the same JSON object with different key
+ * order — that is the SAME logical payload, not a collision.
+ */
+function stableFingerprint(value) {
+    if (value === undefined)
+        return "undefined";
+    if (value === null || typeof value !== "object")
+        return JSON.stringify(value ?? null);
+    if (Array.isArray(value))
+        return `[${value.map(stableFingerprint).join(",")}]`;
+    const record = value;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableFingerprint(record[k])}`).join(",")}}`;
 }
 function now() {
     return Date.now();
@@ -383,12 +406,20 @@ export class Secretariat {
             // Make initial request to discover if payment is required.
             // F-09 fix: client-supplied target is validated against the egress
             // policy (no loopback/private/metadata destinations, no redirects).
+            // R7-C5 (external audit 2026-10-26): GET/HEAD requests never carry a
+            // body — (a) undici throws a TypeError on GET+body (surfaced as
+            // DISCOVERY_ERROR → FAILED for perfectly valid GET APIs), and
+            // (b) sending the FULL request payload during a pre-payment probe
+            // fires side effects before any payment decision. Bodyless methods
+            // are now probed without the payload (payment requirement discovery
+            // needs the endpoint, not the body).
+            const isBodylessMethod = ['GET', 'HEAD'].includes(String(operation.method ?? '').toUpperCase());
             const response = await egressFetch(operation.target, {
                 method: operation.method,
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: operation.requestPayload ? JSON.stringify(operation.requestPayload) : undefined,
+                body: !isBodylessMethod && operation.requestPayload ? JSON.stringify(operation.requestPayload) : undefined,
             });
             if (response.status === 402) {
                 // Payment required - parse payment requirement
@@ -523,7 +554,13 @@ export class Secretariat {
             return false;
         }
         // Check allowed networks
-        if (!policy.allowedNetworks.includes(requirement.network)) {
+        // R7-B11b (external audit 2026-10-26): policy list comparisons are
+        // CASE-INSENSITIVE — sellers/parsers may emit checksummed contract
+        // addresses (0xAbC…) or differently-cased CAIP-2 ids while the policy
+        // lists lowercase ones (or vice versa). Money policy must not reject on
+        // casing.
+        const norm = (v) => String(v ?? "").trim().toLowerCase();
+        if (!policy.allowedNetworks.map(norm).includes(norm(requirement.network))) {
             this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
                 reason: 'Network not allowed',
                 required: requirement.network,
@@ -532,7 +569,7 @@ export class Secretariat {
             return false;
         }
         // Check allowed assets
-        if (!policy.allowedAssets.includes(requirement.asset)) {
+        if (!policy.allowedAssets.map(norm).includes(norm(requirement.asset))) {
             this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
                 reason: 'Asset not allowed',
                 required: requirement.asset,
@@ -541,7 +578,7 @@ export class Secretariat {
             return false;
         }
         // Check allowed sellers (if specified)
-        if (policy.allowedSellers && !policy.allowedSellers.includes(requirement.payee)) {
+        if (policy.allowedSellers && !policy.allowedSellers.map(norm).includes(norm(requirement.payee))) {
             this.recordEvidence(operation, 'POLICY', 'POLICY_REJECTED', {
                 reason: 'Seller not allowed',
                 required: requirement.payee,
@@ -1011,212 +1048,6 @@ export class Secretariat {
                 break;
         }
     }
-    // ==========================================================================
-    // PHASE 6: EXECUTION OBSERVATION
-    // This is a SEPARATE axis from payment state
-    // Payment can be SETTLED while execution is UNKNOWN
-    // ==========================================================================
-    async observeExecution_DEPRECATED_USE_POST_SETTLEMENT_ENGINE(operation) {
-        this.transitionState(operation, 'EXECUTION_PENDING');
-        try {
-            // Attempt to get execution result
-            // F-09 fix: guarded egress (same policy as discovery).
-            const response = await egressFetch(operation.target, {
-                method: operation.method,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: operation.requestPayload ? JSON.stringify(operation.requestPayload) : undefined,
-            });
-            if (response.ok) {
-                const body = await response.json().catch(() => null);
-                operation.resultData = body;
-                operation.executionState = 'CONFIRMED';
-                operation.executionEvidence = {
-                    statusCode: response.status,
-                    headers: Object.fromEntries(response.headers.entries()),
-                    body,
-                    timestamp: now(),
-                    source: 'HTTP_RESPONSE',
-                };
-                this.transitionState(operation, 'EXECUTION_CONFIRMED');
-                operation.timestamps.executionConfirmedAt = now();
-                this.recordEvidence(operation, 'EXECUTION', 'EXECUTION_CONFIRMED', {
-                    statusCode: response.status,
-                });
-            }
-            else {
-                // Execution failed or unknown
-                this.transitionState(operation, 'EXECUTION_UNKNOWN');
-                operation.executionState = 'UNKNOWN';
-                this.recordEvidence(operation, 'EXECUTION', 'EXECUTION_UNKNOWN', {
-                    statusCode: response.status,
-                    statusText: response.statusText,
-                });
-                // Trigger recovery based on seller capabilities
-                await this.handleRecovery(operation);
-            }
-        }
-        catch (error) {
-            // Network error - execution unknown
-            this.transitionState(operation, 'EXECUTION_UNKNOWN');
-            operation.executionState = 'UNKNOWN';
-            this.recordEvidence(operation, 'EXECUTION', 'EXECUTION_NETWORK_ERROR', {
-                error: error instanceof Error ? error.message : String(error),
-            });
-            // Trigger recovery based on seller capabilities
-            await this.handleRecovery(operation);
-        }
-    }
-    // ==========================================================================
-    // PHASE 7: RECOVERY
-    // Based on seller capabilities - NO blind retry
-    // CRITICAL GUARD: Block retry if payment is settled but delivery is unknown
-    // and seller capability is NONE
-    // ==========================================================================
-    async handleRecovery(operation) {
-        // CRITICAL: Only block if payment is actually settled but delivery is unknown
-        if (operation.paymentState === 'SETTLED' &&
-            operation.deliveryState === 'UNKNOWN' &&
-            operation.sellerCapability?.recoveryCapability === 'NONE') {
-            this.recordEvidence(operation, 'RECOVERY', 'GUARD_BLOCKED_RETRY', {
-                reason: 'Seller capability is NONE. Blind retry forbidden after settlement.',
-                paymentState: operation.paymentState,
-                deliveryState: operation.deliveryState,
-            });
-            this.transitionState(operation, 'UNRESOLVABLE');
-            operation.error = 'Settlement confirmed but execution unknown with no recovery path';
-            return; // STOP execution flow
-        }
-        if (!operation.sellerCapability) {
-            this.recordEvidence(operation, 'RECOVERY', 'NO_CAPABILITIES_KNOWN', {});
-            this.transitionState(operation, 'UNRESOLVABLE');
-            operation.error = 'No seller capabilities known - cannot recover';
-            return;
-        }
-        const capability = operation.sellerCapability.recoveryCapability;
-        this.recordEvidence(operation, 'RECOVERY', 'RECOVERY_ATTEMPT_STARTED', {
-            capability,
-        });
-        this.transitionState(operation, 'RECOVERY_PENDING');
-        switch (capability) {
-            case 'RESULT_RETRIEVAL':
-                await this.recoverViaResultRetrieval(operation);
-                break;
-            case 'EXECUTION_IDEMPOTENT':
-                await this.recoverViaIdempotentRetry(operation);
-                break;
-            case 'SIGNED_RECEIPT':
-                await this.recoverViaSignedReceipt(operation);
-                break;
-            case 'NONE':
-            default:
-                this.recordEvidence(operation, 'RECOVERY', 'NO_RECOVERY_PATH', {
-                    capability,
-                });
-                this.transitionState(operation, 'UNRESOLVABLE');
-                operation.error = 'No recovery path available';
-                break;
-        }
-    }
-    async recoverViaResultRetrieval(operation) {
-        const endpoint = operation.sellerCapability?.resultRetrievalEndpoint;
-        if (!endpoint) {
-            this.recordEvidence(operation, 'RECOVERY', 'RESULT_RETRIEVAL_NO_ENDPOINT', {});
-            this.transitionState(operation, 'UNRESOLVABLE');
-            operation.error = 'No result retrieval endpoint available';
-            return;
-        }
-        try {
-            const url = `${endpoint}/${operation.operationId}`;
-            // F-09 fix: guarded egress — retrieval endpoints may also come from the
-            // client-discovered seller metadata.
-            const response = await egressFetch(url, { method: 'GET' });
-            if (response.ok) {
-                const body = await response.json().catch(() => null);
-                operation.resultData = body;
-                operation.executionState = 'CONFIRMED';
-                operation.executionEvidence = {
-                    statusCode: response.status,
-                    headers: Object.fromEntries(response.headers.entries()),
-                    body,
-                    timestamp: now(),
-                    source: 'RESULT_RETRIEVAL',
-                };
-                this.transitionState(operation, 'RECOVERED');
-                operation.timestamps.completedAt = now();
-                this.recordEvidence(operation, 'RECOVERY', 'RESULT_RETRIEVED', {
-                    endpoint: url,
-                });
-            }
-            else {
-                this.recordEvidence(operation, 'RECOVERY', 'RESULT_RETRIEVAL_FAILED', {
-                    statusCode: response.status,
-                });
-                this.transitionState(operation, 'UNRESOLVABLE');
-                operation.error = 'Result retrieval failed';
-            }
-        }
-        catch (error) {
-            this.recordEvidence(operation, 'RECOVERY', 'RESULT_RETRIEVAL_ERROR', {
-                error: error instanceof Error ? error.message : String(error),
-            });
-            this.transitionState(operation, 'UNRESOLVABLE');
-            operation.error = 'Result retrieval error';
-        }
-    }
-    async recoverViaIdempotentRetry(operation) {
-        const headerName = operation.sellerCapability?.idempotencyHeader ?? 'Idempotency-Key';
-        try {
-            // F-09 fix: guarded egress (same policy as discovery).
-            const response = await egressFetch(operation.target, {
-                method: operation.method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    [headerName]: operation.operationId,
-                },
-                body: operation.requestPayload ? JSON.stringify(operation.requestPayload) : undefined,
-            });
-            if (response.ok) {
-                const body = await response.json().catch(() => null);
-                operation.resultData = body;
-                operation.executionState = 'CONFIRMED';
-                operation.executionEvidence = {
-                    statusCode: response.status,
-                    headers: Object.fromEntries(response.headers.entries()),
-                    body,
-                    timestamp: now(),
-                    source: 'HTTP_RESPONSE',
-                };
-                this.transitionState(operation, 'SUCCESS');
-                operation.timestamps.completedAt = now();
-                this.recordEvidence(operation, 'RECOVERY', 'IDEMPOTENT_RETRY_SUCCESS', {
-                    idempotencyKey: operation.operationId,
-                });
-            }
-            else {
-                this.recordEvidence(operation, 'RECOVERY', 'IDEMPOTENT_RETRY_FAILED', {
-                    statusCode: response.status,
-                });
-                this.transitionState(operation, 'UNRESOLVABLE');
-                operation.error = 'Idempotent retry failed';
-            }
-        }
-        catch (error) {
-            this.recordEvidence(operation, 'RECOVERY', 'IDEMPOTENT_RETRY_ERROR', {
-                error: error instanceof Error ? error.message : String(error),
-            });
-            this.transitionState(operation, 'UNRESOLVABLE');
-            operation.error = 'Idempotent retry error';
-        }
-    }
-    async recoverViaSignedReceipt(operation) {
-        // TODO: Implement signed receipt verification
-        this.recordEvidence(operation, 'RECOVERY', 'SIGNED_RECEIPT_NOT_IMPLEMENTED', {});
-        this.transitionState(operation, 'UNRESOLVABLE');
-        operation.error = 'Signed receipt verification not implemented in V0';
-    }
-    // ==========================================================================
     // PHASE 8: DELIVERY
     // ==========================================================================
     async deliver(operation) {
@@ -1398,8 +1229,8 @@ export class Secretariat {
      */
     async persistSettlementAndExecutionObligation(operation) {
         const now = Date.now();
-        const jobId = `rj-${now}-${Math.random().toString(36).slice(2)}`;
-        const attemptId = `att-${now}-${Math.random().toString(36).slice(2)}`;
+        const jobId = `rj-${now}-${randomUUID()}`;
+        const attemptId = `att-${now}-${randomUUID()}`;
         const job = {
             jobId,
             operationId: operation.operationId,
@@ -1494,8 +1325,20 @@ export class Secretariat {
                 return 'RECOVERED';
             case 'UNRESOLVABLE':
                 return 'UNRESOLVABLE';
-            default:
+            case 'FAILED':
+            case 'POLICY_REJECTED':
+            case 'SETTLEMENT_FAILED':
                 return 'FAILED';
+            default:
+                // R7-A7 (external audit 2026-10-26): every remaining state is
+                // NON-TERMINAL (CREATED, DISCOVERING, PAYMENT_REQUIRED,
+                // AWAITING_SIGNATURE, AUTHORIZED, PAYMENT_SUBMITTED,
+                // SETTLEMENT_PENDING, SETTLEMENT_UNKNOWN, SETTLED,
+                // EXECUTION_PENDING, EXECUTION_UNKNOWN, RECOVERY_PENDING).
+                // The old default collapsed ALL of them into 'FAILED' — reporting
+                // an operation whose payment may still settle as definitively
+                // failed. 'PENDING' is the honest answer.
+                return 'PENDING';
         }
     }
     // ==========================================================================
@@ -1611,14 +1454,35 @@ export class Secretariat {
      * target/method under the same derived id is a client bug — reject with a
      * dedicated, actionable error instead of silently reusing the old
      * operation (which would execute the WRONG request after payment).
+     *
+     * R7-B5a (external audit 2026-10-26, High): target+method equality was
+     * also the ONLY check — the same client, same URL, same method but a
+     * DIFFERENT body/price silently received the FIRST operation's result
+     * (and eventually its data). The guard now also compares a stable
+     * fingerprint of the request payload, and applies to explicit-requestId
+     * reuse as well (a requestId is the identity of ONE logical request —
+     * replaying it with a different body is the same collision class).
      */
     assertNoLogicalRequestCollision(derivedWithoutRequestId, request, existing, requestId) {
-        if (!derivedWithoutRequestId)
-            return;
         const normalize = (u) => String(u ?? '').replace(/\/+$/, '');
         const sameTarget = normalize(existing.target) === normalize(request.target);
         const sameMethod = String(existing.method ?? '').toUpperCase() === String(request.method ?? '').toUpperCase();
-        if (sameTarget && sameMethod)
+        if (!derivedWithoutRequestId && !sameTarget && !sameMethod) {
+            // Explicit requestId resolving to a DIFFERENT paid contract: the 0006
+            // unique index makes this impossible in durable stores (it would have
+            // created a new operation instead), so this is only reachable against
+            // stores without the index. Keep the legacy lenient behavior there.
+            return;
+        }
+        if (sameTarget && sameMethod) {
+            const samePayload = stableFingerprint(request.payload) === stableFingerprint(existing.requestPayload);
+            if (samePayload)
+                return;
+            throw new Error(`REQUEST_COLLISION: ${derivedWithoutRequestId ? `client ${request.clientId} already owns logical request "${requestId}"` : `requestId "${requestId}" is already bound`}` +
+                ` for ${existing.method} ${existing.target} with a DIFFERENT payload. ` +
+                `Replays must reuse the exact same body; send a new requestId for a new logical request.`);
+        }
+        if (!derivedWithoutRequestId)
             return;
         throw new Error(`REQUEST_COLLISION: client ${request.clientId} already owns logical request "${requestId}" ` +
             `for ${existing.method} ${existing.target}. The new request (${request.method} ${request.target}) ` +
@@ -1841,11 +1705,12 @@ export class Secretariat {
     async getOperation(operationId) {
         return await this.config.evidenceStore.getOperation(operationId);
     }
-    async getOperationByRequestId(requestId) {
+    async getOperationByRequestId(requestId, clientId) {
         if (typeof this.config.evidenceStore.getOperationByRequestId !== 'function') {
             return null;
         }
-        return await this.config.evidenceStore.getOperationByRequestId(requestId);
+        // R7-B5b: pass the optional client scope through to the store.
+        return await this.config.evidenceStore.getOperationByRequestId(requestId, clientId);
     }
     async getEvidence(operationId) {
         return await this.config.evidenceStore.getEvidence(operationId);

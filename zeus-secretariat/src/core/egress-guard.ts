@@ -117,6 +117,10 @@ export function isPrivateOrReservedAddress(address: string): boolean {
       ["fe80::", 10], // link-local
       ["fc00::", 7], // unique local
       ["ff00::", 8], // multicast
+      // R7-B10 (external audit 2026-10-26): translation/encapsulation
+      // prefixes — an IPv6 literal here can reach IPv4 private space:
+      ["64:ff9b::", 96], // NAT64 (RFC 6052) — well-known prefix
+      ["2002::", 16], // 6to4 (RFC 3056) — embeds an IPv4 address
     ];
     if (v6Blocked.some(([prefix, bits]) => v6InCidr(ip, prefix, bits))) return true;
     const expanded = expandV6(ip);
@@ -200,8 +204,19 @@ export async function assertEgressAllowed(rawUrl: string): Promise<void> {
  * destination against the egress policy, then performs the request with
  * redirects FORBIDDEN (a redirect to another host would silently bypass the
  * DNS-level check). Callers receive the raw fetch Response.
+ *
+ * R7-B10 (external audit 2026-10-26): a default timeout now bounds every
+ * server-issued fetch — previously only the seller-execution adapter armed
+ * an AbortSignal, so a hung discovery/DEAD-code fetch could stall the
+ * operation indefinitely. A caller-supplied signal wins; the default is
+ * combined with it.
  */
+const DEFAULT_EGRESS_TIMEOUT_MS = 15_000;
+
 export async function egressFetch(url: string, init: RequestInit = {}): Promise<Response> {
   await assertEgressAllowed(url);
-  return fetch(url, { ...init, redirect: "error" });
+  const callerSignal = init.signal as AbortSignal | null | undefined;
+  const timeoutSignal = AbortSignal.timeout(DEFAULT_EGRESS_TIMEOUT_MS);
+  const signal = callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
+  return fetch(url, { ...init, signal, redirect: "error" });
 }

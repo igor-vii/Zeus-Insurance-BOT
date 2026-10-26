@@ -12,6 +12,7 @@
  *   INV-12: Crash-safe recovery (DB-backed job queue)
  *   INV-13: Evidence before interpretation (raw result stored first)
  */
+import { randomUUID } from 'node:crypto';
 // ---------------------------------------------------------------------------
 // In-Memory Execution Store (for testing + fallback)
 // ---------------------------------------------------------------------------
@@ -252,6 +253,13 @@ export class InMemoryExecutionStore {
 // ---------------------------------------------------------------------------
 // PostSettlementEngine
 // ---------------------------------------------------------------------------
+/**
+ * R7-B2 (external audit 2026-10-26, High): seller statuses whose answer does
+ * NOT prove the paid call definitively failed. 408 (seller-side timeout),
+ * 429 (rate limit) and gateway-class 5xx mean the request MAY or MAY NOT
+ * have been processed. Definitive 4xx (400/401/403/404/…) are NOT here.
+ */
+const RETRYABLE_SELLER_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 export class PostSettlementEngine {
     paymentStore;
     executionStore;
@@ -283,8 +291,8 @@ export class PostSettlementEngine {
         if (!intent || intent.settlementState !== "SETTLED") {
             throw new Error(`INV-8_VIOLATION: Cannot execute — intent status is ${intent?.settlementState ?? "NOT_FOUND"}, expected SETTLED`);
         }
-        const attemptId = `attempt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const attemptId = `attempt-${Date.now()}-${randomUUID()}`;
+        const jobId = `job-${Date.now()}-${randomUUID()}`;
         // INV-9: Stable execution identity = operationId
         const executionId = operationId;
         const attempt = {
@@ -378,14 +386,19 @@ export class PostSettlementEngine {
                     completedAt: Date.now(),
                 }, jobId);
                 break;
-            case "HTTP_FAILURE":
-                persisted = await this.executionStore.updateAttemptStatus(attemptId, "HTTP_FAILURE", fenceGeneration, {
-                    responseStatusCode: result.statusCode,
-                    responseBody: result.body,
-                    responseHeaders: result.headers,
-                    completedAt: Date.now(),
-                }, jobId);
+            case "HTTP_FAILURE": {
+                // R7-B2: for TRANSIENT statuses (408/429/500/502/503/504) the outcome
+                // is UNKNOWN, not a definitive failure — the attempt is recorded as
+                // DELIVERY_UNKNOWN (with the HTTP status preserved in errorReason)
+                // so the fenced retry machinery (createRecoveryAttemptIfOwner) can
+                // take over, exactly like a timeout. Definitive 4xx stays
+                // HTTP_FAILURE (terminal, honest: the seller answered).
+                const transient = RETRYABLE_SELLER_STATUSES.has(result.statusCode);
+                persisted = await this.executionStore.updateAttemptStatus(attemptId, transient ? "DELIVERY_UNKNOWN" : "HTTP_FAILURE", fenceGeneration, transient
+                    ? { errorReason: `HTTP ${result.statusCode} — transient seller failure (outcome unknown)`, responseStatusCode: result.statusCode, responseBody: result.body, completedAt: Date.now() }
+                    : { responseStatusCode: result.statusCode, responseBody: result.body, responseHeaders: result.headers, completedAt: Date.now() }, jobId);
                 break;
+            }
             case "DELIVERY_UNKNOWN":
                 persisted = await this.executionStore.updateAttemptStatus(attemptId, "DELIVERY_UNKNOWN", fenceGeneration, {
                     errorReason: result.reason,
@@ -458,7 +471,7 @@ export class PostSettlementEngine {
             }
             // --- RESULT_RETRIEVAL: Create retrieval job, do NOT re-execute original attempt ---
             if (capability === "RESULT_RETRIEVAL") {
-                const retrievalJobId = `job-retrieval-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                const retrievalJobId = `job-retrieval-${Date.now()}-${randomUUID()}`;
                 const created = await this.executionStore.createRecoveryJobIfOwner(jobId, latestAttempt.attemptId, fenceGeneration, {
                     jobId: retrievalJobId,
                     operationId: job.operationId,
@@ -484,7 +497,7 @@ export class PostSettlementEngine {
             if (capability === "EXECUTION_IDEMPOTENT") {
                 // Create new attempt with SAME idempotency key (INV-9)
                 if (job.currentAttempt < job.maxAttempts) {
-                    const newAttemptId = `attempt-retry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                    const newAttemptId = `attempt-retry-${Date.now()}-${randomUUID()}`;
                     const created = await this.executionStore.createRecoveryAttemptIfOwner(jobId, latestAttempt.attemptId, fenceGeneration, {
                         attemptId: newAttemptId,
                         operationId: job.operationId,
@@ -569,7 +582,65 @@ export class PostSettlementEngine {
                 return { success: true, result, finalStatus: "SUCCESS" };
             }
             case "HTTP_FAILURE": {
-                // HTTP failure is a definitive answer — execution happened but failed
+                // R7-B2 (external audit 2026-10-26, High): "HTTP failure is a
+                // definitive answer" was TRUE only for a subset of statuses. A
+                // 408/429/503/504 (and gateway-class 5xx) does NOT tell us the paid
+                // call definitively failed — the backend may or may not have
+                // processed it. Collapsing ALL of them to terminal FAILED hid
+                // possible deliveries behind a lie.
+                //
+                // Classification (mirrors the facilitator leg, F-112):
+                //   definitive 4xx (400/401/403/404/405/410/422/…) → HTTP_FAILURE
+                //     → execution feedback → FAILED (honest: the seller answered).
+                //   transient/unknown (408, 429, 500, 502, 503, 504) →
+                //     capability-gated retry exactly like DELIVERY_UNKNOWN; with no
+                //     retry capability → UNRESOLVABLE (INV-10 semantics — money
+                //     spent, outcome unknown, no blind retry).
+                if (RETRYABLE_SELLER_STATUSES.has(result.statusCode)) {
+                    if (capability === "EXECUTION_IDEMPOTENT" && job.currentAttempt < job.maxAttempts) {
+                        // R7-B12: retries are gated STRICTLY on EXECUTION_IDEMPOTENT.
+                        const newAttemptId = `attempt-retry-${Date.now()}-${randomUUID()}`;
+                        const created = await this.executionStore.createRecoveryAttemptIfOwner(jobId, latestAttempt.attemptId, fenceGeneration, {
+                            attemptId: newAttemptId,
+                            operationId: job.operationId,
+                            executionId: latestAttempt.executionId, // SAME stable key
+                            attemptNumber: latestAttempt.attemptNumber + 1,
+                            status: "PENDING",
+                            requestUrl: latestAttempt.requestUrl,
+                            requestMethod: latestAttempt.requestMethod,
+                            requestBody: latestAttempt.requestBody,
+                            idempotencyKey: latestAttempt.idempotencyKey, // SAME key (INV-9)
+                            createdAt: Date.now(),
+                        }, `HTTP ${result.statusCode} — transient seller failure, idempotent retry created`);
+                        if (!created)
+                            return { success: false, finalStatus: "RUNNING" };
+                        await this.appendEvidence(job.operationId, "EXECUTION_RETRY_CREATED", {
+                            reason: `HTTP ${result.statusCode} — transient seller failure`,
+                            newAttemptId,
+                            originalAttemptId: latestAttempt.attemptId,
+                        });
+                        // Outcome not yet known — the retry attempt will produce the
+                        // authoritative verdict; feedback maps this to EXECUTION_UNKNOWN.
+                        return { success: false, result, finalStatus: "DELIVERY_UNKNOWN" };
+                    }
+                    // No idempotent-retry capability: honest unknown, not a lie.
+                    // Attempt marker is best-effort (may already be terminal); the job
+                    // closure is fenced + mandatory (F-03: verified).
+                    await this.executionStore.updateAttemptStatus(latestAttempt.attemptId, "UNRESOLVABLE", fenceGeneration, {
+                        errorReason: `HTTP ${result.statusCode} with capability ${capability} — outcome unknown, no safe retry`,
+                    }, jobId).catch(() => false);
+                    const jobUnknown = await this.executionStore.updateJobStatus(jobId, "UNRESOLVABLE", fenceGeneration, {
+                        lastError: `HTTP ${result.statusCode} — transient seller failure without retry capability ${capability}`,
+                    });
+                    if (!jobUnknown)
+                        return { success: false, finalStatus: "RUNNING" };
+                    await this.appendEvidence(job.operationId, "EXECUTION_UNRESOLVABLE", {
+                        reason: `HTTP ${result.statusCode} with capability ${capability} — outcome unknown, no safe retry`,
+                        attemptId: latestAttempt.attemptId,
+                    });
+                    return { success: false, result, finalStatus: "UNRESOLVABLE" };
+                }
+                // Definitive seller answer — execution happened and failed.
                 const jobFailed = await this.executionStore.updateJobStatus(jobId, "FAILED", fenceGeneration, {
                     lastError: `HTTP ${result.statusCode}`,
                 });
@@ -598,7 +669,7 @@ export class PostSettlementEngine {
                     // R2.2 Repair #3C: Atomic fenced retrieval job creation.
                     // Replaces unfenced saveJob() + separate updateJobStatus() to prevent
                     // stale workers from creating recovery jobs after losing their fence.
-                    const retrievalJobId = `job-retrieval-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                    const retrievalJobId = `job-retrieval-${Date.now()}-${randomUUID()}`;
                     const created = await this.executionStore.createRecoveryJobIfOwner(jobId, latestAttempt.attemptId, fenceGeneration, {
                         jobId: retrievalJobId,
                         operationId: job.operationId,
@@ -617,12 +688,17 @@ export class PostSettlementEngine {
                     }
                     return { success: false, result, finalStatus: "DELIVERY_UNKNOWN" };
                 }
-                // EXECUTION_IDEMPOTENT: safe to retry
-                if (job.currentAttempt < job.maxAttempts) {
+                // R7-B12 (external audit 2026-10-26): retries are gated STRICTLY on
+                // EXECUTION_IDEMPOTENT. The previous fall-through accepted ANY other
+                // capability here — including header-claimed SIGNED_RECEIPT, which is
+                // NOT IMPLEMENTED — and re-fired the PAID call under a capability
+                // that never promised idempotency. Anything but EXECUTION_IDEMPOTENT
+                // is treated as NONE (INV-10: honest UNRESOLVABLE, no blind retry).
+                if (capability === "EXECUTION_IDEMPOTENT" && job.currentAttempt < job.maxAttempts) {
                     // R2.2 Repair #3C: Atomic fenced retry attempt creation.
                     // Replaces unfenced saveAttempt() + separate updateJobStatus() to prevent
                     // stale workers from creating retry attempts after losing their fence.
-                    const newAttemptId = `attempt-retry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                    const newAttemptId = `attempt-retry-${Date.now()}-${randomUUID()}`;
                     const created = await this.executionStore.createRecoveryAttemptIfOwner(jobId, latestAttempt.attemptId, fenceGeneration, {
                         attemptId: newAttemptId,
                         operationId: job.operationId,
@@ -814,7 +890,7 @@ export class PostSettlementEngine {
                     const terminalAttemptStates = ["SUCCESS", "HTTP_FAILURE", "DELIVERY_UNKNOWN", "UNRESOLVABLE"];
                     const now = Date.now();
                     const repairJob = {
-                        jobId: `job-${now}-${Math.random().toString(36).slice(2)}`,
+                        jobId: `job-${now}-${randomUUID()}`,
                         operationId: intent.operationId,
                         jobType: "EXECUTION",
                         status: terminalAttemptStates.includes(existingAttempt.status) ? "COMPLETED" : "PENDING",

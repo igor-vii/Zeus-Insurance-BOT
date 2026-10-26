@@ -226,7 +226,19 @@ describeIfDb("A1-R Stage 2A: canonical reconstruction over real PostgreSQL", () 
     await new Promise<void>((resolve) => server.listen(0, resolve));
     try {
       const addr = server.address() as any;
-      const res = await fetch(`http://127.0.0.1:${addr.port}/v1/requests/${id.requestId}`);
+      // R7-B5c: operations carrying a clientId answer ONLY to the matching
+      // X-Client-Id header — without it the route answers 404 (existence is
+      // not disclosed).
+      const withoutHeader = await fetch(`http://127.0.0.1:${addr.port}/v1/requests/${id.requestId}`);
+      expect(withoutHeader.status).toBe(404);
+      const wrongClient = await fetch(`http://127.0.0.1:${addr.port}/v1/requests/${id.requestId}`, {
+        headers: { "X-Client-Id": "not-the-owner" },
+      });
+      expect(wrongClient.status).toBe(404);
+
+      const res = await fetch(`http://127.0.0.1:${addr.port}/v1/requests/${id.requestId}`, {
+        headers: { "X-Client-Id": id.clientId },
+      });
       expect(res.status).toBe(200);
       const body = await res.json();
       // Pre-D-2 behavior: PROCESSING. Post-fix: terminal outcome visible.

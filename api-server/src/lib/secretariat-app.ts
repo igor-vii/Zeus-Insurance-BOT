@@ -7,6 +7,33 @@ import { createSecretariatComposition, type SecretariatComposition } from "./sec
 import { createRequestsRouter } from "../routes/requests.js";
 import { logger } from "./logger.js";
 
+/**
+ * R7-C-API-2 (external audit 2026-10-26): the standalone app previously used
+ * bare `cors()` — every origin allowed, credentials-reflected. The main app.ts
+ * already enforces an origin allowlist; the standalone Secretariat now mirrors
+ * it (CORS_ORIGINS env, comma-separated; localhost dev origins always pass;
+ * empty env = same-origin only for browsers; server-to-server clients are
+ * unaffected by CORS anyway).
+ */
+function secretariatCorsOrigin(): cors.CorsOptions["origin"] {
+  const configured = String(process.env["CORS_ORIGINS"] ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter((o) => o.length > 0);
+  const allowlist = new Set([
+    ...configured,
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+  ]);
+  return (origin, callback) => {
+    if (!origin) return callback(null, true); // curl / server-to-server
+    if (allowlist.has(origin)) return callback(null, true);
+    return callback(null, false); // deny without error — browser blocks it
+  };
+}
+
 export interface StandaloneSecretariatApp {
   app: Express;
   listen(port: number): Promise<Server>;
@@ -21,7 +48,7 @@ export function createSecretariatApp(options: SecretariatAppOptions = {}): Stand
   const composition = options.composition ?? createSecretariatComposition();
   const app = express();
   app.set("trust proxy", 1);
-  app.use(cors());
+  app.use(cors({ origin: secretariatCorsOrigin() }));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use(

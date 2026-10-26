@@ -14,15 +14,44 @@
  */
 import { createWalletClient, http, } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { base } from 'viem/chains';
-// EIP-3009 / USDC Contract Configuration for Base Mainnet
-const USDC_CONTRACT_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const USDC_DOMAIN = {
-    name: 'USD Coin',
-    version: '2',
-    chainId: base.id,
-    verifyingContract: USDC_CONTRACT_ADDRESS,
-};
+import { base, baseSepolia, xLayer } from 'viem/chains';
+// D1-verified bindings (see UNVERIFIED_ASSUMPTIONS.md: D1 = FACT —
+// DOMAIN_SEPARATOR() on-chain matches keccak(EIP712Domain(USD Coin, 2, chainId, token))).
+const USDC_DOMAIN_BINDINGS = [
+    {
+        chain: base,
+        chainAliases: new Set(['base', 'base-mainnet', 'eip155:8453', '8453']),
+        verifyingContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    },
+    {
+        chain: xLayer,
+        chainAliases: new Set(['x-layer', 'xlayer', 'xlayer-mainnet', 'eip155:196', '196']),
+        verifyingContract: '0x74b7F16337B8972027F6196A17a631aC6dE26d22',
+    },
+    {
+        // Testnet — Circle native USDC (EIP-3009, domain "USD Coin"/"2").
+        // Present so dev/test rigs keep working; production is fail-fast on
+        // chains without a D1-verified binding.
+        chain: baseSepolia,
+        chainAliases: new Set(['base-sepolia', 'eip155:84532', '84532']),
+        verifyingContract: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+    },
+];
+function resolveUsdcDomain(request) {
+    const network = String(request.network ?? '').trim().toLowerCase();
+    const binding = USDC_DOMAIN_BINDINGS.find((b) => b.chainAliases.has(network));
+    if (!binding) {
+        throw new Error(`LocalEoaPaymentSigner: no USDC EIP-712 domain binding for network "${request.network}". ` +
+            `Supported: ${[...USDC_DOMAIN_BINDINGS.flatMap((b) => b.chainAliases)].join(', ')}. ` +
+            `Use the non-custodial (external signature) path for other networks.`);
+    }
+    return {
+        name: 'USD Coin',
+        version: '2',
+        chainId: binding.chain.id,
+        verifyingContract: binding.verifyingContract,
+    };
+}
 const TRANSFER_WITH_AUTHORIZATION_TYPES = {
     TransferWithAuthorization: [
         { name: 'from', type: 'address' },
@@ -77,10 +106,13 @@ export class LocalEoaPaymentSigner {
             validBefore: BigInt(request.validBefore),
             nonce: request.nonce,
         };
-        // Sign using EIP-712 (signTypedData)
+        // Sign using EIP-712 (signTypedData) — R7-C-signer: the domain is derived
+        // from the request's network (fail-fast on unsupported networks), no
+        // longer hardwired to Base.
+        const domain = resolveUsdcDomain(request);
         const signature = await this.walletClient.signTypedData({
             account: this.walletClient.account,
-            domain: USDC_DOMAIN,
+            domain,
             types: TRANSFER_WITH_AUTHORIZATION_TYPES,
             primaryType: 'TransferWithAuthorization',
             message,

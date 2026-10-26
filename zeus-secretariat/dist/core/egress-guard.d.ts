@@ -37,11 +37,5 @@ export declare class EgressBlockedError extends Error {
  * Throws EgressBlockedError when the destination violates the egress policy.
  */
 export declare function assertEgressAllowed(rawUrl: string): Promise<void>;
-/**
- * Guarded fetch for server-issued outbound requests: validates the
- * destination against the egress policy, then performs the request with
- * redirects FORBIDDEN (a redirect to another host would silently bypass the
- * DNS-level check). Callers receive the raw fetch Response.
- */
 export declare function egressFetch(url: string, init?: RequestInit): Promise<Response>;
 //# sourceMappingURL=egress-guard.d.ts.map
