@@ -35,10 +35,11 @@
     "rate-limit-redis": "^4.2.0",
     "redis": "^4.7.0",
     "viem": "^2.54.0",
-    "x402": "^1.2.0",
-    "x402-express": "^1.2.0",
     "zeus-secretariat": "workspace:*",
-    "zod": "^3.25.61"
+    "zod": "^3.25.61",
+    "@x402/core": "^2.28.0",
+    "@x402/express": "^2.28.0",
+    "@x402/evm": "^2.28.0"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",

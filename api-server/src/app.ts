@@ -2,12 +2,14 @@ import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { pinoHttp } from "pino-http";
-import { paymentMiddleware } from "x402-express";
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 import { startBackgroundSync } from "./lib/background-sync.js";
 import { startEventListener } from "./lib/event-listener.js";
-import { ZEUS_TREASURY, X402_FACILITATOR_URL, x402Routes } from "./config/x402.js";
+import { ZEUS_TREASURY, X402_FACILITATOR_URL, X402_FACILITATOR_API_KEY, x402Routes } from "./config/x402.js";
 import { connectMCPServer } from "./mcp-server/index.js";
 import llmsTxtRouter from "./routes/llms-txt.js";
 import { createRequestsRouter } from "./routes/requests.js";
@@ -91,11 +93,16 @@ app.use(limiter);
 // Disabled gracefully if ZEUS_TREASURY is not configured.
 // The facilitator is Zeus-operated (X402_FACILITATOR_URL / ZEUS_FACILITATOR_URL):
 // the default public facilitator does not support eip155:196 (X Layer).
+//
+// R8-A4 (external audit round-8, 2026-10-26): seller side on the official
+// v2 stack. The v2 resource server discovers the facilitator's supported
+// kinds via GET /supported (our zeus-facilitator serves it) and builds
+// CAIP-2-native v2 payment requirements — the v1 713-line network-enum
+// patch is gone. Settlement now runs over the canonical v2 wire
+// ({x402Version, paymentPayload, paymentRequirements}), identical to what
+// the Secretariat buyer side and the D2 facilitator speak.
 if (ZEUS_TREASURY) {
-  const facilitator = X402_FACILITATOR_URL
-    ? { url: X402_FACILITATOR_URL }
-    : undefined;
-  if (!facilitator) {
+  if (!X402_FACILITATOR_URL) {
     // F-113/M-15 (external audit 2026-10-26): fail fast in production — the
     // default public facilitator does NOT support eip155:196 (the only
     // network x402Routes targets), so "start anyway and warn" guarantees that
@@ -112,7 +119,26 @@ if (ZEUS_TREASURY) {
         "(does NOT support eip155:196; protected routes will fail settlement)",
     );
   }
-  app.use(paymentMiddleware(ZEUS_TREASURY, x402Routes, facilitator));
+  const facilitatorClient = new HTTPFacilitatorClient({
+    url: X402_FACILITATOR_URL || undefined,
+    // The Zeus facilitator rejects /verify+/settle+/supported with 401 when
+    // ZEUS_FACILITATOR_API_KEY is set on its side — mirror the credential.
+    // Per-path keys are REQUIRED by the client's normalizer (a flat headers
+    // object is rejected; see @x402/core HTTPFacilitatorClient).
+    ...(X402_FACILITATOR_API_KEY
+      ? {
+          createAuthHeaders: async () => {
+            const headers = { Authorization: `Bearer ${X402_FACILITATOR_API_KEY}` };
+            return { verify: headers, settle: headers, supported: headers };
+          },
+        }
+      : {}),
+  });
+  const resourceServer = new x402ResourceServer(facilitatorClient).register(
+    "eip155:196",
+    new ExactEvmScheme(),
+  );
+  app.use(paymentMiddleware(x402Routes, resourceServer));
 } else {
   logger.warn("ZEUS_TREASURY not set — x402 payment middleware disabled");
 }
