@@ -1,0 +1,18 @@
+{
+  "name": "zeus-testnet-live-rig",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Zeus live testnet rig — full x402 v2 cycle on a base-sepolia fork: StandardX402Transport (repo client) -> OFFICIAL @x402/express seller -> zeus-facilitator (repo server) -> on-chain EIP-3009 settle. NOT part of the pnpm workspace and NOT run by CI; standalone npm project (npm install, then: npx tsx rig.ts with an anvil fork of sepolia.base.org on :8545).",
+  "scripts": {
+    "rig": "tsx rig.ts"
+  },
+  "dependencies": {
+    "@x402/core": "2.28.0",
+    "@x402/express": "2.28.0",
+    "@x402/evm": "2.28.0",
+    "express": "^5.2.1",
+    "tsx": "^4.21.0",
+    "viem": "^2.54.0"
+  }
+}
