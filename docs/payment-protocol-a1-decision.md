@@ -1,6 +1,27 @@
 # A1 — Payment Protocol Model: Decision Memo (R8, 2026-10-26)
 
-**Status: OPEN — requires the owner's call. Nothing else in the codebase blocks on it.**
+**Status: DECIDED (2026-10-26, owner call) — Option B implemented as a transport
+adapter in R9-A1; Option A's documentation duty is discharged by
+`docs/standard-x402-transport.md` (claim boundary). The pay-then-prove flow
+remains the default for Zeus-perimeter targets; `policy.transport: "standard"`
+(or `ZEUS_PAYMENT_TRANSPORT=standard`) activates the canonical x402 v2 client
+flow for third-party sellers. Certification methodology (hostile-retry matrix
+with seller effect journaling) adapted from Once (onceexec.com) — see
+`docs/standard-x402-transport.md`.**
+
+Implementation map (R9-A1):
+- `zeus-secretariat/src/core/standard-x402-transport.ts` — the adapter
+- `state-machine.ts` — transport selection, inline execution discharge,
+  durable persistence of the inline lifecycle, FSM-honest deliver()
+  (EXECUTION_CONFIRMED → DELIVERED → SUCCESS; the pre-existing direct hop to
+  SUCCESS predated the F-110 table and was unreachable in the Zeus path)
+- `settlement-feedback-service.ts` — async crash-window completion from the
+  durable STANDARD_PAID_CALL marker
+- `post-settlement-engine.ts` — scanner defense-in-depth skip
+- `api-server` — composition wiring, `ZEUS_PAYMENT_TRANSPORT`, policy schema
+- `zeus-secretariat/tests/r9-a1-standard-transport.test.ts` — 24-scenario
+  certification matrix
+
 Origin: external audit `secretariat-audit.md` finding A1 (verified against code —
 the description below is accurate as of main @ R8).
 
