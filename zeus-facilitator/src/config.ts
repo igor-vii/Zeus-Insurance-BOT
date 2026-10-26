@@ -60,6 +60,11 @@ export interface FacilitatorConfig {
   readonly network: FacilitatorNetwork;
   /** One or more JSON-RPC endpoints (first is primary, rest are fallbacks). */
   readonly rpcUrls: readonly string[];
+  /** Optional extra HTTP headers for every RPC request. REQUIRED for
+   * providers that filter by User-Agent (xlayerrpc.okx.com answers an
+   * empty body to non-browser UAs). Format: JSON object, e.g.
+   * ZEUS_FACILITATOR_RPC_HEADERS='{"User-Agent":"Mozilla/5.0"}' */
+  readonly rpcHeaders: Readonly<Record<string, string>> | undefined;
   /** Gas payer for broadcasting transferWithAuthorization. MUST be a dedicated
    * key — NEVER the Secretariat signer key (F-116: the two roles must never
    * share a key; they authorize different things). */
@@ -105,6 +110,25 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Facilit
     .filter((u) => u.length > 0);
   if (rpcUrls.length === 0) throw new ConfigError("ZEUS_FACILITATOR_RPC_URLS is required");
 
+  let rpcHeaders: Record<string, string> | undefined;
+  const rpcHeadersRaw = (env["ZEUS_FACILITATOR_RPC_HEADERS"] ?? "").trim();
+  if (rpcHeadersRaw) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rpcHeadersRaw);
+    } catch {
+      throw new ConfigError("ZEUS_FACILITATOR_RPC_HEADERS must be a JSON object of string->string");
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new ConfigError("ZEUS_FACILITATOR_RPC_HEADERS must be a JSON object of string->string");
+    }
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    if (entries.some(([, v]) => typeof v !== "string")) {
+      throw new ConfigError("ZEUS_FACILITATOR_RPC_HEADERS must be a JSON object of string->string");
+    }
+    rpcHeaders = Object.fromEntries(entries as Array<[string, string]>);
+  }
+
   const gasPrivateKey = requireEnv(env, "ZEUS_FACILITATOR_GAS_PRIVATE_KEY") as Hex;
   if (!/^0x[0-9a-fA-F]{64}$/.test(gasPrivateKey)) {
     throw new ConfigError("ZEUS_FACILITATOR_GAS_PRIVATE_KEY must be a 0x-prefixed 32-byte hex key");
@@ -123,6 +147,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Facilit
   return {
     network,
     rpcUrls,
+    rpcHeaders,
     gasPrivateKey,
     apiKey: (env["ZEUS_FACILITATOR_API_KEY"] ?? "").trim(),
     port,

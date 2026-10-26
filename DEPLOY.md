@@ -135,8 +135,20 @@ Deploy as a separate Railway service (root dir `zeus-facilitator`):
   Start:  node zeus-facilitator/dist/server.js
   Health: GET /health → {ok, network, testnet, payer}
 Required env:
-  ZEUS_FACILITATOR_RPC_URLS - comma-separated X Layer RPC endpoints
-    (public: https://xlayerrpc.okx.com — verify reachability from Railway)
+  ZEUS_FACILITATOR_RPC_URLS - comma-separated X Layer RPC endpoints.
+    Primary: https://xlayerrpc.okx.com (probed live 2026-10-27: serves an
+    EMPTY 200 body to non-browser User-Agents — the headers env below is
+    MANDATORY for it). Fallback/secondary: https://196.rpc.thirdweb.com
+    (no key needed, but public rate limits 429 under load — keep it second;
+    a thirdweb API key lifts the cap).
+  ZEUS_FACILITATOR_RPC_HEADERS - JSON object of extra HTTP headers applied
+    to EVERY RPC request. For xlayerrpc.okx.com:
+      {"User-Agent":"Mozilla/5.0 (compatible; zeus-facilitator/1.0)"}
+    Fail-fast boot contract: malformed JSON or non-string values refuse to
+    start (tested). Verified live: with this header the OKX RPC answers
+    eth_chainId=0xc4; the full D2 rig settled ON-CHAIN against the real
+    X Layer USDC (fork at block 74,269,2xx, txs 0xa613f42b…, 0x650881c4…,
+    AuthorizationUsed verified, exact-price balance delta, replay refused).
   ZEUS_FACILITATOR_GAS_PRIVATE_KEY - dedicated gas-payer key funded with
     OKB. NEVER reuse ZEUS_SIGNER_PRIVATE_KEY (F-116: the two roles must
     never share a key).
@@ -152,6 +164,54 @@ Optional env:
 Point BOTH consumers at it (api-server X402_FACILITATOR_URL and Secretariat
 ZEUS_FACILITATOR_URL = the deployed facilitator base URL). Never point
 production at the free public facilitator for eip155:196 traffic.
+
+#### Railway ops runbook (zeus-facilitator, production eip155:196) — 2026-10-27
+
+Pre-flight (DONE 2026-10-27, no action needed): the D2 live rig ran the FULL
+cycle — transport → official @x402/express seller → this facilitator →
+transferWithAuthorization ON-CHAIN — against forks of BOTH base-sepolia
+(3 runs) and X Layer MAINNET (2 runs: real USDC 0x74b7F1…6d22, real domain
+"USD Coin"/"2", real authorizationState rail). Recipe: testnet/live-rig/.
+
+1. GENERATE THE GAS KEY OFFLINE (never on a shared machine, never in chat):
+     openssl rand -hex 32            # -> ZEUS_FACILITATOR_GAS_PRIVATE_KEY
+   Derive the address (viem/python) and record ONLY the address.
+   F-116: this key must differ from ZEUS_SIGNER_PRIVATE_KEY. It moves ONLY
+   gas; it never holds USDC and never signs payment authorizations.
+2. FUND the gas address with 0.5–1 OKB. Measured economics (2026-10-26):
+   ~$0.00026/settlement worst case → 1 OKB ≈ $107 covers >400k settlements.
+3. Railway → New Service → GitHub repo, ROOT DIRECTORY = zeus-facilitator:
+     Build:  pnpm install && pnpm --filter zeus-facilitator run build
+     Start:  node zeus-facilitator/dist/server.js
+     Healthcheck path: /health
+4. Service env (all required for prod):
+     NODE_ENV=production
+     ZEUS_FACILITATOR_NETWORK=eip155:196
+     ZEUS_FACILITATOR_RPC_URLS=https://xlayerrpc.okx.com,https://196.rpc.thirdweb.com
+     ZEUS_FACILITATOR_RPC_HEADERS={"User-Agent":"Mozilla/5.0 (compatible; zeus-facilitator/1.0)"}
+     ZEUS_FACILITATOR_GAS_PRIVATE_KEY=<step 1>
+     ZEUS_FACILITATOR_API_KEY=<openssl rand -hex 24>
+   Boot is fail-fast: wrong JSON headers / bad key / unknown network refuse
+   to start (tested) — a red deploy log means config, not runtime.
+5. SMOKE (before wiring consumers):
+     curl $URL/health    -> {"ok":true,"network":"eip155:196","payer":"<gas addr>"}
+     curl $URL/supported -> kinds[] includes x402Version 2 / exact / eip155:196
+     curl -H "Authorization: Bearer <key>" $URL/verify with a bogus body ->
+       400 JSON (proves bearer auth + wire, spends nothing).
+6. WIRE CONSUMERS: api-server X402_FACILITATOR_URL=$URL (+
+   X402_FACILITATOR_API_KEY same value) and Secretariat
+   ZEUS_FACILITATOR_URL=$URL. Never point 196 traffic at a public facilitator.
+7. FIRST REAL SETTLEMENT = the D2 FACT gate: one $0.001 protected-route buy
+   on X Layer, then verify on-chain: USDC moved payTo<-payer AND the
+   facilitator log shows settle success with a transaction hash.
+8. BALANCE ALERT (Railway does not watch chains): daily cron hitting any
+   X Layer RPC eth_getBalance for the gas address; alert < 0.1 OKB.
+   The facilitator also fails loud per-settle (503/504 → clients go
+   RECONCILING) if gas runs out, so a missed alarm degrades safely.
+9. KEY HYGIENE: rotate ZEUS_FACILITATOR_API_KEY by redeploying both envs in
+   the same change window; rotate the gas key by funding a NEW address and
+   swapping the env (old key keeps no USDC, only residual OKB — sweep it).
+
 
 #### Build and Deploy
 

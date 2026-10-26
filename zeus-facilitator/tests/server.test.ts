@@ -245,4 +245,25 @@ describe("loadConfigFromEnv (fail-fast boot contract)", () => {
       loadConfigFromEnv({ ...BASE_ENV, ZEUS_FACILITATOR_NETWORK: "eip155:1" }),
     ).toThrow(/registry/);
   });
+
+  it("defaults rpcHeaders to undefined when the env is absent/empty", () => {
+    expect(loadConfigFromEnv(BASE_ENV).rpcHeaders).toBeUndefined();
+    expect(loadConfigFromEnv({ ...BASE_ENV, ZEUS_FACILITATOR_RPC_HEADERS: "  " }).rpcHeaders).toBeUndefined();
+  });
+
+  it("parses ZEUS_FACILITATOR_RPC_HEADERS as a string->string map", () => {
+    const config = loadConfigFromEnv({
+      ...BASE_ENV,
+      ZEUS_FACILITATOR_RPC_HEADERS: JSON.stringify({ "User-Agent": "Mozilla/5.0 Zeus" }),
+    });
+    expect(config.rpcHeaders).toEqual({ "User-Agent": "Mozilla/5.0 Zeus" });
+  });
+
+  it.each([
+    ["not-json"],
+    ['{"User-Agent": 42}'],
+    ['["User-Agent"]'],
+  ])("fails fast on a malformed ZEUS_FACILITATOR_RPC_HEADERS (%s)", (raw) => {
+    expect(() => loadConfigFromEnv({ ...BASE_ENV, ZEUS_FACILITATOR_RPC_HEADERS: raw })).toThrow(ConfigError);
+  });
 });

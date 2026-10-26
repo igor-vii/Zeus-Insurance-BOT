@@ -226,8 +226,23 @@ export class SettleExecutor {
 }
 
 /** viem-backed ChainRpc over plain HTTP JSON-RPC endpoints (native fallback). */
-export function createViemRpc(rpcUrls: readonly string[], chain: Chain): ChainRpc {
-  const transports = rpcUrls.map((url) => http(url, { timeout: 15_000, retryCount: 1 }));
+export function createViemRpc(
+  rpcUrls: readonly string[],
+  chain: Chain,
+  rpcHeaders?: Readonly<Record<string, string>>,
+): ChainRpc {
+  // Extra HTTP headers ride EVERY JSON-RPC request (xlayerrpc.okx.com serves
+  // an EMPTY 200 body to non-browser User-Agents — header discipline is the
+  // difference between a working facilitator and an unreachable chain).
+  const transports = rpcUrls.map((url) =>
+    http(url, {
+      timeout: 15_000,
+      retryCount: 1,
+      ...(rpcHeaders && Object.keys(rpcHeaders).length > 0
+        ? { fetchOptions: { headers: { ...rpcHeaders } } }
+        : {}),
+    }),
+  );
   const transport = transports.length > 1 ? fallback(transports) : transports[0];
   const publicClient = createPublicClient({ chain, transport });
 

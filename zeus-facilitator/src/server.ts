@@ -220,7 +220,7 @@ export function main(): void {
       name: config.network.id,
       nativeCurrency: { name: config.network.gasSymbol, symbol: config.network.gasSymbol, decimals: 18 },
       rpcUrls: { default: { http: [...config.rpcUrls] } },
-    }));
+    }), config.rpcHeaders);
     const account = privateKeyToAccount(config.gasPrivateKey);
     const facilitator = new ZeusFacilitator({ config, rpc, account });
     const server = facilitator.listen();

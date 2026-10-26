@@ -29,12 +29,33 @@ import { StandardX402Transport } from "../../zeus-secretariat/src/core/standard-
 import type { DurableEvidenceStore, DurablePaymentIntent } from "../../zeus-secretariat/src/core/types.js";
 
 // ---------------------------------------------------------------------------
-// Config
+// Config — network selectable via RIG_NETWORK (eip155:84532 | eip155:196).
+// Both entries are the values the facilitator registry pins (config.ts);
+// domains were verified against the LIVE contracts (D1 + Task 14/15).
 // ---------------------------------------------------------------------------
-const ANVIL = "http://127.0.0.1:8545";
-const CHAIN_ID = 84532;
-const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const; // Base Sepolia USDC
-const DOMAIN = { name: "USDC", version: "2" } as const; // verified live (D1 follow-up)
+const NETWORKS = {
+  "eip155:84532": {
+    chainId: 84532,
+    usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    domain: { name: "USDC", version: "2" },
+    anvilPort: 8545,
+    label: "base-sepolia fork",
+  },
+  "eip155:196": {
+    chainId: 196,
+    usdc: "0x74b7F16337b8972027F6196A17a631aC6dE26d22",
+    domain: { name: "USD Coin", version: "2" },
+    anvilPort: 8645,
+    label: "X Layer mainnet fork",
+  },
+} as const;
+const NETWORK_ID = (process.env["RIG_NETWORK"] ?? "eip155:84532").trim();
+const NET = NETWORKS[NETWORK_ID as keyof typeof NETWORKS];
+if (!NET) throw new Error(`RIG_NETWORK '${NETWORK_ID}' is not one of ${Object.keys(NETWORKS).join(", ")}`);
+const ANVIL = `http://127.0.0.1:${NET.anvilPort}`;
+const CHAIN_ID = NET.chainId;
+const USDC = NET.usdc;
+const DOMAIN = NET.domain; // verified live on BOTH chains
 const PRICE = "1000"; // $0.001 in atomic units
 const FACILITATOR_PORT = 3001;
 const SELLER_PORT = 4021;
@@ -131,7 +152,7 @@ async function startFacilitator(): Promise<ReturnType<typeof spawn>> {
   const child = spawn("node", [FACILITATOR_DIST], {
     env: {
       ...process.env,
-      ZEUS_FACILITATOR_NETWORK: "eip155:84532",
+      ZEUS_FACILITATOR_NETWORK: NETWORK_ID,
       ZEUS_FACILITATOR_RPC_URLS: ANVIL,
       ZEUS_FACILITATOR_GAS_PRIVATE_KEY: GAS_KEY,
       PORT: String(FACILITATOR_PORT),
@@ -174,7 +195,7 @@ function startSeller(): Promise<unknown> {
   const app = express();
   app.use(express.json());
   const facilitatorClient = new HTTPFacilitatorClient({ url: `http://127.0.0.1:${FACILITATOR_PORT}` });
-  const resourceServer = new x402ResourceServer(facilitatorClient).register("eip155:84532", new ExactEvmScheme());
+  const resourceServer = new x402ResourceServer(facilitatorClient).register(NETWORK_ID, new ExactEvmScheme());
   app.use(
     paymentMiddleware(
       {
@@ -183,7 +204,7 @@ function startSeller(): Promise<unknown> {
             {
               scheme: "exact",
               price: { amount: PRICE, asset: USDC, extra: { name: DOMAIN.name, version: DOMAIN.version } },
-              network: "eip155:84532",
+              network: NETWORK_ID,
               payTo: treasury,
               maxTimeoutSeconds: 60,
             },
@@ -250,7 +271,7 @@ async function main(): Promise<void> {
   process.env["ZEUS_EGRESS_ALLOWED_HOSTS"] = "127.0.0.1";
   const sellerUrl = `http://127.0.0.1:${SELLER_PORT}/paid/data`;
 
-  log("== [1/7] funding wallets on the base-sepolia fork ==");
+  log(`== [1/7] funding wallets on the ${NET.label} ==`);
   await fundWallets();
 
   log("== [2/7] booting zeus-facilitator ==");
@@ -274,7 +295,7 @@ async function main(): Promise<void> {
   };
   const req0 = pr.accepts[0];
   log(`[discovery] x402Version=${pr.x402Version} network=${req0.network} asset=${req0.asset} payTo=${req0.payTo} extra=${JSON.stringify(req0.extra)}`);
-  if (pr.x402Version !== 2 || req0.network !== "eip155:84532") fail("discovery payload is not canonical v2 for eip155:84532");
+  if (pr.x402Version !== 2 || req0.network !== NETWORK_ID) fail(`discovery payload is not canonical v2 for ${NETWORK_ID}`);
   if (req0.extra?.name !== DOMAIN.name || req0.extra?.version !== DOMAIN.version) fail(`seller domain mismatch: ${JSON.stringify(req0.extra)}`);
 
   log("== [5/7] signing EIP-3009 authorization (payer) ==");
@@ -379,7 +400,7 @@ async function main(): Promise<void> {
 
   const evidence = {
     run: new Date().toISOString(),
-    chain: `base-sepolia fork via anvil @ ${ANVIL}`,
+    chain: `${NET.label} (anvil @ ${ANVIL})`,
     payer: payer.address,
     treasury,
     facilitatorGasPayer: gasPayer.address,
