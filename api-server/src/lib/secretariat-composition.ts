@@ -18,6 +18,7 @@ import {
   ReconciliationEngine,
   ReconciliationWorker,
   X402FacilitatorClient,
+  StandardX402Transport,
   PostSettlementEngine,
   HttpSellerExecutionAdapter,
   Secretariat,
@@ -184,6 +185,24 @@ export function createSecretariatComposition(): SecretariatComposition {
     stores.evidenceStore,
   );
 
+  // 5b. R9-A1: standard x402 v2 client transport (third-party sellers).
+  // Talks straight to seller URLs via the egress policy; the seller's own
+  // facilitator verifies + settles. No Zeus facilitator involvement.
+  const standardTransport = new StandardX402Transport(
+    { timeoutMs: config.facilitatorTimeoutMs },
+    stores.evidenceStore,
+  );
+
+  // R9-A1: default payment transport — ZEUS_PAYMENT_TRANSPORT "zeus" (default)
+  // or "standard". Per-request policy.transport overrides this.
+  const rawTransport = String(process.env.ZEUS_PAYMENT_TRANSPORT ?? "zeus").trim().toLowerCase();
+  if (rawTransport !== "zeus" && rawTransport !== "standard") {
+    throw new Error(
+      `Invalid ZEUS_PAYMENT_TRANSPORT="${rawTransport}" — must be "zeus" or "standard"`
+    );
+  }
+  const defaultPaymentTransport = rawTransport as "zeus" | "standard";
+
   // 6. Explicit custodial test signer only. The default path is non-custodial:
   // the client signs externally and calls Secretariat.submitSignedPayment().
   // R4 (typed): LocalEoaPaymentSigner implements the SIGNING-REQUEST protocol
@@ -221,6 +240,9 @@ export function createSecretariatComposition(): SecretariatComposition {
     signer,
     adapters: new Map(), // Legacy PaymentAdapter map — empty for V2-only path
     settlementAdapter,
+    // R9-A1: standard x402 client transport for third-party sellers
+    standardTransport,
+    defaultPaymentTransport,
     reconciliationEngine,
     atomicSettlementHandoff: stores.executionStore,
     // F-01 fix: the atomic settlement → execution handoff must honor the same

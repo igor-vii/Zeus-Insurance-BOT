@@ -23,6 +23,10 @@ const paymentPolicySchema = z.object({
   allowedAssets: z.array(z.string()),
   allowedSellers: z.array(z.string()).optional(),
   authorizationMode: z.enum(["explicit", "policy-bound"]),
+  // R9-A1: payment transport selection — "zeus" (default, pay-then-prove via
+  // the Zeus facilitator) or "standard" (canonical x402 v2 client flow for
+  // third-party sellers). Optional; the composition default applies otherwise.
+  transport: z.enum(["zeus", "standard"]).optional(),
 });
 
 const createRequestSchema = z.object({

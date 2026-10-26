@@ -16,35 +16,45 @@
  * dynamically AFTER the env is seeded.
  */
 import { describe, it, expect, beforeAll } from "@jest/globals";
-import { x402ResourceServer, type RoutesConfig } from "@x402/express";
-import type {
-  FacilitatorClient,
-  PaymentPayload,
-  PaymentRequirements,
-  SettleResponse,
-  SupportedResponse,
-  VerifyResponse,
-} from "@x402/core/server";
+// R9-A1 hygiene (2026-10-26): @x402/core 2.28 stopped re-exporting the wire
+// payload types from "@x402/core/server" and @x402/express stopped exporting
+// RoutesConfig. RoutesConfig IS exported from @x402/core/server; the wire
+// shapes are pinned here as LOCAL STRUCTURAL types — the contract under test
+// is the middleware's runtime behavior, not the library's type-export churn.
+import { x402ResourceServer } from "@x402/express";
+import type { FacilitatorClient, RoutesConfig } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 
+type MinimalPaymentPayload = Record<string, unknown>;
+type MinimalPaymentRequirements = {
+  scheme: string;
+  network: string;
+  asset: string;
+  amount: string;
+  payTo: string;
+  extra?: Record<string, unknown>;
+} & Record<string, unknown>;
+
 /** Zeus facilitator's GET /supported body (see zeus-facilitator/src/server.ts). */
-const ZEUS_SUPPORTED: SupportedResponse = {
+const ZEUS_SUPPORTED = {
   kinds: [{ x402Version: 2, scheme: "exact", network: "eip155:196", extra: {} }],
   extensions: [],
   signers: {},
 };
 
-const stubFacilitator: FacilitatorClient = {
-  async verify(_p: PaymentPayload, _r: PaymentRequirements): Promise<VerifyResponse> {
+// Hermetic stub — runtime duck-typing is what x402ResourceServer consumes;
+// the FacilitatorClient cast documents the contract it impersonates.
+const stubFacilitator = {
+  async verify(_p: MinimalPaymentPayload, _r: MinimalPaymentRequirements) {
     return { isValid: true };
   },
-  async settle(_p: PaymentPayload, _r: PaymentRequirements): Promise<SettleResponse> {
+  async settle(_p: MinimalPaymentPayload, _r: MinimalPaymentRequirements) {
     return { success: true, transaction: "0x" + "ab".repeat(32), network: "eip155:196" };
   },
-  async getSupported(): Promise<SupportedResponse> {
+  async getSupported() {
     return ZEUS_SUPPORTED;
   },
-};
+} as unknown as FacilitatorClient;
 
 type AcceptShape = {
   scheme: string;
@@ -97,11 +107,16 @@ describe("R8-A4: x402Routes v2 seller contract (eip155:196, no patch)", () => {
 
     for (const [key, cfg] of Object.entries(x402Routes)) {
       const accepts = (Array.isArray(cfg.accepts) ? cfg.accepts : [cfg.accepts]) as AcceptShape[];
+      const options = accepts.map((a) => ({
+        ...a,
+        resource: `https://zeus.example${key.split(/\s+/)[1]}`,
+      })) as unknown as Parameters<x402ResourceServer["buildPaymentRequirementsFromOptions"]>[0];
       const reqs = await server.buildPaymentRequirementsFromOptions(
-        accepts.map((a) => ({ ...a, resource: `https://zeus.example${key.split(/\s+/)[1]}` })),
+        options,
+        undefined, // 2.28: context parameter is required — none needed for this route set
       );
       expect(reqs.length).toBe(1);
-      const req = reqs[0] as PaymentRequirements & { extra?: Record<string, unknown> };
+      const req = reqs[0] as MinimalPaymentRequirements & { extra?: Record<string, unknown> };
       expect(req.scheme).toBe("exact");
       expect(req.network).toBe("eip155:196");
       expect(req.asset.toLowerCase()).toBe(USDC_XLAYER.toLowerCase());
