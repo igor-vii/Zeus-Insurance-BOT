@@ -24,9 +24,10 @@
  *   RECONCILING       → no feedback (non-terminal; job rescheduled)
  */
 
-import type { Operation, OperationStatus } from "./types.js";
+import type { Operation, OperationStatus, DurablePaymentIntent } from "./types.js";
 import type { ReconciliationOutcome } from "./reconciliation-engine.js";
 import { isValidTransition as canTransition } from "./operation-fsm.js";
+import { isStandardPaidCallRecord, STANDARD_PAID_CALL_MARKER } from "./standard-x402-transport.js";
 
 // ---------------------------------------------------------------------------
 // Minimal store contract — satisfied by every DurableEvidenceStore
@@ -79,7 +80,17 @@ export function planSettlementTransitions(
 // ---------------------------------------------------------------------------
 
 export class SettlementFeedbackService {
-  constructor(private readonly ops: OperationPersistence) {}
+  constructor(
+    private readonly ops: OperationPersistence,
+    /**
+     * R9-A1: optional durable intent reader. When present, SETTLED outcomes
+     * for STANDARD_PAID_CALL intents are completed inline (the paid call
+     * discharged execution atomically — see docs/standard-x402-transport.md).
+     */
+    private readonly durable?: {
+      getPaymentIntentById(paymentIntentId: string): Promise<DurablePaymentIntent | null>;
+    },
+  ) {}
 
   /**
    * Apply a reconciliation outcome to the Operation FSM.
@@ -110,7 +121,56 @@ export class SettlementFeedbackService {
     }
 
     let appliedAny = false;
-    for (const next of plan) {
+    let planSteps = plan;
+
+    // R9-A1: standard-transport completion. The paid x402 call discharged
+    // execution atomically — when reconciliation lands SETTLED there is NO
+    // post-settlement seller leg to run. Complete the FSM inline:
+    //   receipt body captured   → EXECUTION_PENDING → EXECUTION_CONFIRMED
+    //                             → DELIVERED → SUCCESS (result = seller body)
+    //   no body (e.g. paid call  → EXECUTION_UNKNOWN → RECOVERY_PENDING
+    //   timed out post-settle)     → UNRESOLVABLE (money moved, result unknown)
+    if (planSteps.includes("SETTLED") && this.durable && extra?.paymentIntentId) {
+      const marker = await this.readStandardMarker(extra.paymentIntentId);
+      if (marker) {
+        const hasResult =
+          (marker.sellerBody !== null && marker.sellerBody !== undefined) ||
+          operation.executionEvidence?.source === "STANDARD_TRANSPORT";
+        planSteps = [
+          ...planSteps,
+          ...(hasResult
+            ? (["EXECUTION_PENDING", "EXECUTION_CONFIRMED", "DELIVERED", "SUCCESS"] as OperationStatus[])
+            : (["EXECUTION_UNKNOWN", "RECOVERY_PENDING", "UNRESOLVABLE"] as OperationStatus[])),
+        ];
+        if (marker.sellerBody !== null && marker.sellerBody !== undefined) {
+          operation.resultData = marker.sellerBody;
+        }
+        if (!operation.executionEvidence || operation.executionEvidence.source !== "STANDARD_TRANSPORT") {
+          operation.executionEvidence = {
+            statusCode: marker.sellerHttpStatus,
+            body: marker.sellerBody ?? undefined,
+            timestamp: marker.capturedAt,
+            source: "STANDARD_TRANSPORT",
+          };
+        }
+        operation.evidence.push({
+          operationId: operation.operationId,
+          phase: "EXECUTION",
+          timestamp: Date.now(),
+          event: "STANDARD_EXECUTION_DISCHARGED",
+          payload: {
+            note: hasResult
+              ? "paid call delivered the result — completing inline from the STANDARD_PAID_CALL marker"
+              : "settlement confirmed on-chain but the paid-call result was never received — honest UNRESOLVABLE",
+            kind: STANDARD_PAID_CALL_MARKER,
+            sellerHttpStatus: marker.sellerHttpStatus,
+          },
+          sequence: operation.evidence.length,
+        } as unknown as import("./types.js").EvidenceRecord);
+      }
+    }
+
+    for (const next of planSteps) {
       if (operation.currentState === next) continue; // already there (sync path won the race)
       if (!canTransition(operation.currentState, next)) {
         // Edge not present — stop applying further steps, record why.
@@ -174,12 +234,48 @@ export class SettlementFeedbackService {
         // settled) — only the operation terminates as unresolvable.
         operation.paymentState = "FAILED";
         break;
+      case "EXECUTION_PENDING":
+        operation.executionState = operation.executionState === "CONFIRMED" ? operation.executionState : "PENDING";
+        break;
+      case "EXECUTION_CONFIRMED":
+        operation.executionState = "CONFIRMED";
+        operation.timestamps.executionConfirmedAt =
+          operation.timestamps.executionConfirmedAt ?? Date.now();
+        break;
+      case "EXECUTION_UNKNOWN":
+        operation.executionState = operation.executionState === "CONFIRMED" ? operation.executionState : "UNKNOWN";
+        break;
+      case "DELIVERED":
+        operation.deliveryState = "DELIVERED";
+        operation.timestamps.deliveredAt = operation.timestamps.deliveredAt ?? Date.now();
+        break;
+      case "SUCCESS":
+        operation.deliveryState = operation.deliveryState === "DELIVERED" ? operation.deliveryState : "DELIVERED";
+        operation.timestamps.completedAt = operation.timestamps.completedAt ?? Date.now();
+        break;
       default:
         // SETTLED evidence bundle, when present in the outcome, is owned by
         // the ReconciliationEngine (saveSettledEvidenceBundle) — the FSM
         // feedback only records orchestration.
         void outcome;
         break;
+    }
+  }
+
+  /**
+   * R9-A1: read the durable STANDARD_PAID_CALL marker from the intent
+   * (persisted by the standard transport right after the paid call).
+   */
+  private async readStandardMarker(
+    paymentIntentId: string,
+  ): Promise<import("./standard-x402-transport.js").StandardPaidCallRecord | null> {
+    if (!this.durable) return null;
+    try {
+      const intent = await this.durable.getPaymentIntentById(paymentIntentId);
+      if (!intent) return null;
+      return isStandardPaidCallRecord(intent.facilitatorResponseBody) ? intent.facilitatorResponseBody : null;
+    } catch {
+      return null;
     }
   }
 

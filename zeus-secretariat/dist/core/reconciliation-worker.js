@@ -193,7 +193,9 @@ export class ReconciliationWorker {
         // bookkeeping (the operation can be repaired by the next probe/scanner).
         if (dpi?.operationId) {
             try {
-                const feedback = new SettlementFeedbackService(this.store);
+                // R9-A1: the same durable store doubles as the intent reader so the
+                // feedback service can complete STANDARD_PAID_CALL operations inline.
+                const feedback = new SettlementFeedbackService(this.store, this.store);
                 const result = await feedback.applyOutcome(dpi.operationId, outcome, {
                     paymentIntentId: dpi.paymentIntentId,
                 });

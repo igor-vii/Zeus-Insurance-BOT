@@ -25,6 +25,8 @@ import type {
   SellerExecutionRequest,
   SellerExecutionResult,
 } from "../adapters/seller-execution-adapter.js";
+// R9-A1: standard-transport paid-call marker (scanner defense-in-depth)
+import { isStandardPaidCallRecord } from "./standard-x402-transport.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1245,6 +1247,19 @@ export class PostSettlementEngine {
     const created: string[] = [];
     for (const intent of settled) {
       try {
+        // R9-A1 (defense-in-depth): standard-transport intents discharge
+        // execution atomically inside the paid x402 call. The Settlement
+        // FeedbackService completes them inline; if the scanner sees one
+        // here it is a crash-window race — NEVER create an execution
+        // obligation, or the seller would be re-called WITHOUT payment (402)
+        // or, worse, a second paid leg would be attempted.
+        if (isStandardPaidCallRecord(intent.facilitatorResponseBody)) {
+          this.appendEvidence(intent.operationId, "EXECUTION_OBLIGATION_SKIPPED_STANDARD_TRANSPORT", {
+            note: "STANDARD_PAID_CALL intent — execution discharged by the paid call; feedback service owns completion",
+            paymentIntentId: intent.paymentIntentId,
+          }).catch(() => {});
+          continue;
+        }
         // F-001 (external audit Blocker): the scanner selects SETTLED intents
         // by a MISSING EXECUTION job. An intent that already has an attempt
         // (a legacy orphan from a crash between the two unfenced writes) must

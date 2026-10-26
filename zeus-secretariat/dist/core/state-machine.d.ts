@@ -9,6 +9,7 @@ import type { SettlementAdapter, PaymentPayload } from '../adapters/x402-facilit
 import type { ReconciliationEngine } from './reconciliation-engine.js';
 import type { AtomicSettlementHandoff } from './post-settlement-engine.js';
 import { CapabilitySource } from './capability-resolver.js';
+import type { StandardX402Transport as StandardX402TransportType } from './standard-x402-transport.js';
 import { VALID_TRANSITIONS, isValidTransition } from './operation-fsm.js';
 export { VALID_TRANSITIONS, isValidTransition };
 /**
@@ -46,6 +47,20 @@ export interface SecretariatConfig {
     settlementAdapter?: SettlementAdapter;
     /** Canonical reconciliation engine. Required for settlement verification. */
     reconciliationEngine?: ReconciliationEngine;
+    /**
+     * R9-A1: standard x402 v2 client transport for THIRD-PARTY sellers.
+     * Required only when a request's policy.transport === "standard"
+     * (or defaultPaymentTransport === "standard"); absent → such requests
+     * fail closed with a configuration error before any money moves.
+     */
+    standardTransport?: StandardX402TransportType;
+    /**
+     * R9-A1: default payment transport for requests whose policy does not pin
+     * one explicitly. Default "zeus" (pay-then-prove) — the pre-existing
+     * behavior; "standard" flips the whole deployment to canonical x402
+     * client mode unless a request overrides it via policy.transport.
+     */
+    defaultPaymentTransport?: 'zeus' | 'standard';
     /**
      * R2.1-FIX-5: REQUIRED atomic settlement → execution handoff.
      * Production MUST provide PostgresExecutionStore implementing this contract.
@@ -169,6 +184,29 @@ export declare class Secretariat {
      * Sequential fallback REMOVED — production MUST provide atomic implementation.
      * Fails closed if atomic handoff is unavailable or returns false unexpectedly.
      */
+    /**
+     * R9-A1: resolve the payment transport for an operation.
+     * Per-request policy wins; then the deployment default; then "zeus"
+     * (the pre-existing pay-then-prove behavior) — no implicit behavior change
+     * for any existing caller.
+     */
+    private resolvePaymentTransport;
+    /**
+     * R9-A1: settlement → execution dispatch.
+     *
+     * "zeus" mode: persist the durable execution obligation (PostSettlementEngine
+     * owns the seller leg exclusively).
+     *
+     * "standard" mode: the paid x402 call ALREADY executed the seller route
+     * atomically (verify → settle → route → response). Creating a post-settlement
+     * execution obligation would re-call the seller WITHOUT payment (402) —
+     * execution is discharged inline instead. Both FSM edges
+     * (SETTLED → EXECUTION_PENDING → EXECUTION_CONFIRMED) exist in the
+     * authoritative table; no handoff obligation is created, so the scanner
+     * never sees a standard-mode intent as "settled without obligation"
+     * (defense-in-depth: the scanner ALSO skips STANDARD_PAID_CALL markers).
+     */
+    private settleToExecution;
     private persistSettlementAndExecutionObligation;
     private buildResult;
     private mapToFinalStatus;

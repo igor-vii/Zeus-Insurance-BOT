@@ -27,5 +27,7 @@ export { ExecutionWorker } from './core/execution-worker.js';
 export type { ExecutionWorkerConfig } from './core/execution-worker.js';
 export { ExecutionFeedbackService, planExecutionTransitions } from './core/execution-feedback-service.js';
 export type { OperationPersistence } from './core/execution-feedback-service.js';
+export { StandardX402Transport, parsePaymentResponseHeader, isStandardPaidCallRecord, STANDARD_PAID_CALL_MARKER } from './core/standard-x402-transport.js';
+export type { StandardTransportConfig, StandardTransportTarget, StandardPaidCallRecord, StandardPaymentReceipt } from './core/standard-x402-transport.js';
 export { MultiRpcChecker } from './core/multi-rpc-checker.js';
 //# sourceMappingURL=index.d.ts.map

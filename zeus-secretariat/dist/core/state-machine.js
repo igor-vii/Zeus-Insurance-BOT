@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 // PaymentIntent declarations) — moved to the import block.
 import { X402Parser } from './x402-parser.js';
 import { SellerCapabilityResolver } from './capability-resolver.js';
+import { isStandardPaidCallRecord } from './standard-x402-transport.js';
 // F-110 (external audit 2026-10-26): single source of truth for the Operation
 // FSM — the table lives in operation-fsm.ts and is shared with
 // execution-feedback-service.ts (the hand-mirrored ALLOWED_EDGES copy is gone).
@@ -144,11 +145,18 @@ export class Secretariat {
             // StateMachine does NOT execute seller work — it only persists the handoff.
             // PostSettlementEngine owns execution lifecycle exclusively.
             if (operation.currentState === 'SETTLED' || operation.currentState === 'EXECUTION_PENDING') {
-                await this.persistSettlementAndExecutionObligation(operation);
+                await this.settleToExecution(operation);
             }
             // Step 8: Delivery
             if (operation.currentState === 'EXECUTION_CONFIRMED') {
                 await this.deliver(operation);
+            }
+            // R9-A1: the standard transport completes the whole lifecycle in-process
+            // (execution discharged inline) — persist the terminal/non-terminal
+            // snapshot durably. The Zeus path is deliberately untouched: there the
+            // durable operation is owned by the async feedback services.
+            if (this.resolvePaymentTransport(operation) === 'standard') {
+                await this.persistOperation(operation);
             }
             return this.buildResult(operation);
         }
@@ -327,7 +335,7 @@ export class Secretariat {
         await this.observeSettlement(operation);
         const finalState = String(operation.currentState);
         if (finalState === 'SETTLED' || finalState === 'EXECUTION_PENDING') {
-            await this.persistSettlementAndExecutionObligation(operation);
+            await this.settleToExecution(operation);
         }
         await this.persistOperation(operation);
         return this.buildResult(operation);
@@ -359,7 +367,7 @@ export class Secretariat {
         await this.observeSettlement(operation);
         const resumedState = String(operation.currentState);
         if (resumedState === 'SETTLED' || resumedState === 'EXECUTION_PENDING') {
-            await this.persistSettlementAndExecutionObligation(operation);
+            await this.settleToExecution(operation);
         }
         await this.persistOperation(operation);
         return this.buildResult(operation);
@@ -922,12 +930,76 @@ export class Secretariat {
                 },
             },
         };
-        // 4. Submit via canonical SettlementAdapter
-        const settlementAdapter = this.config.settlementAdapter;
-        if (!settlementAdapter) {
-            throw new Error('No settlementAdapter configured — required for V2 payment submission');
+        // 4. Submit — R9-A1: transport selection.
+        //    "zeus"     (default): settle via the configured SettlementAdapter
+        //               (zeus-facilitator) BEFORE the seller leg (pay-then-prove).
+        //    "standard": the signed payload rides in PAYMENT-SIGNATURE to a
+        //               third-party seller; the SELLER's facilitator verifies +
+        //               settles during the paid request, and the SAME response
+        //               carries the settlement receipt and the route result.
+        const transportMode = this.resolvePaymentTransport(operation);
+        let result;
+        if (transportMode === 'standard') {
+            const standardTransport = this.config.standardTransport;
+            if (!standardTransport) {
+                throw new Error('Standard x402 transport requested (policy.transport="standard") but no standardTransport is configured');
+            }
+            const isBodylessMethod = ['GET', 'HEAD'].includes(String(operation.method ?? '').toUpperCase());
+            const target = {
+                url: operation.target,
+                method: operation.method,
+                body: !isBodylessMethod && operation.requestPayload !== undefined
+                    ? JSON.stringify(operation.requestPayload)
+                    : undefined,
+            };
+            // The header payload must mirror the DISCOVERED requirements: the
+            // seller's middleware verifies against its own route config, so the
+            // advertised maxTimeoutSeconds (dropped from the DPI window arithmetic)
+            // is restored from the discovery evidence when available.
+            const discovered = await this.getPaymentRequirementFromEvidence(operation);
+            const discoveredMaxTimeout = typeof discovered?.maxTimeoutSeconds === 'number'
+                ? discovered.maxTimeoutSeconds
+                : undefined;
+            const payloadForStandard = {
+                ...v2Payload,
+                resource: { url: operation.target },
+                accepted: {
+                    ...v2Payload.accepted,
+                    ...(discoveredMaxTimeout !== undefined ? { maxTimeoutSeconds: discoveredMaxTimeout } : {}),
+                },
+            };
+            result = await standardTransport.submit(dpi, payloadForStandard, target);
+            // The paid call IS the delivery. Capture the seller's answer as
+            // execution evidence (durably mirrored in the intent via the
+            // STANDARD_PAID_CALL marker, so a crash right after the paid call
+            // cannot lose the result — SettlementFeedbackService completes from
+            // the marker). UNKNOWN carries no rawResponse by contract — the
+            // marker stays readable on the durable intent for forensics.
+            const marker = result.status === 'UNKNOWN' ? null : result.rawResponse;
+            if (result.status === 'SUBMITTED' && isStandardPaidCallRecord(marker)) {
+                operation.resultData = marker.sellerBody ?? undefined;
+                operation.executionEvidence = {
+                    statusCode: marker.sellerHttpStatus,
+                    body: marker.sellerBody,
+                    timestamp: marker.capturedAt,
+                    source: 'STANDARD_TRANSPORT',
+                };
+            }
+            this.recordEvidence(operation, 'PAYMENT', 'STANDARD_PAID_CALL', {
+                verdict: result.status,
+                sellerHttpStatus: isStandardPaidCallRecord(marker) ? marker.sellerHttpStatus : undefined,
+                ...(result.status === 'SUBMITTED' ? { transactionHash: result.txHash } : {}),
+                ...(result.status === 'REJECTED' ? { reason: result.reason } : {}),
+                ...(result.status === 'UNKNOWN' ? { error: result.error } : {}),
+            });
         }
-        const result = await settlementAdapter.submit(dpi, v2Payload);
+        else {
+            const settlementAdapter = this.config.settlementAdapter;
+            if (!settlementAdapter) {
+                throw new Error('No settlementAdapter configured — required for V2 payment submission');
+            }
+            result = await settlementAdapter.submit(dpi, v2Payload);
+        }
         // 5. Handle result
         if (result.status === "REJECTED") {
             this.recordEvidence(operation, 'PAYMENT', 'PAYMENT_SUBMISSION_FAILED', {
@@ -1054,6 +1126,14 @@ export class Secretariat {
         operation.deliveryState = 'DELIVERED';
         operation.timestamps.deliveredAt = now();
         this.recordEvidence(operation, 'DELIVERY', 'DELIVERY_COMPLETED', {});
+        // R9-A1 (2026-10-26): the F-110 authoritative FSM routes
+        // EXECUTION_CONFIRMED → DELIVERED → SUCCESS. The old direct hop
+        // EXECUTION_CONFIRMED → SUCCESS predates the single-source table and was
+        // unreachable in the Zeus sync path (execution confirms asynchronously via
+        // ExecutionFeedbackService, so execute() never entered step 8 with
+        // EXECUTION_CONFIRMED). The standard x402 transport discharges execution
+        // inline, making this path live — follow the table.
+        this.transitionState(operation, 'DELIVERED');
         this.transitionState(operation, 'SUCCESS');
         operation.timestamps.completedAt = now();
     }
@@ -1227,6 +1307,51 @@ export class Secretariat {
      * Sequential fallback REMOVED — production MUST provide atomic implementation.
      * Fails closed if atomic handoff is unavailable or returns false unexpectedly.
      */
+    /**
+     * R9-A1: resolve the payment transport for an operation.
+     * Per-request policy wins; then the deployment default; then "zeus"
+     * (the pre-existing pay-then-prove behavior) — no implicit behavior change
+     * for any existing caller.
+     */
+    resolvePaymentTransport(operation) {
+        const policyTransport = operation.paymentPolicy?.transport;
+        if (policyTransport === 'zeus' || policyTransport === 'standard')
+            return policyTransport;
+        return this.config.defaultPaymentTransport ?? 'zeus';
+    }
+    /**
+     * R9-A1: settlement → execution dispatch.
+     *
+     * "zeus" mode: persist the durable execution obligation (PostSettlementEngine
+     * owns the seller leg exclusively).
+     *
+     * "standard" mode: the paid x402 call ALREADY executed the seller route
+     * atomically (verify → settle → route → response). Creating a post-settlement
+     * execution obligation would re-call the seller WITHOUT payment (402) —
+     * execution is discharged inline instead. Both FSM edges
+     * (SETTLED → EXECUTION_PENDING → EXECUTION_CONFIRMED) exist in the
+     * authoritative table; no handoff obligation is created, so the scanner
+     * never sees a standard-mode intent as "settled without obligation"
+     * (defense-in-depth: the scanner ALSO skips STANDARD_PAID_CALL markers).
+     */
+    async settleToExecution(operation) {
+        if (this.resolvePaymentTransport(operation) === 'standard') {
+            this.transitionState(operation, 'EXECUTION_PENDING');
+            this.transitionState(operation, 'EXECUTION_CONFIRMED');
+            operation.executionState = 'CONFIRMED';
+            operation.timestamps.executionConfirmedAt = now();
+            this.recordEvidence(operation, 'EXECUTION', 'EXECUTION_CONFIRMED', {
+                source: 'STANDARD_TRANSPORT',
+                note: 'execution discharged atomically by the paid x402 call — no post-settlement seller leg',
+            });
+            // Crash-window durability: a kill between here and step 8 must leave a
+            // durable EXECUTION_CONFIRMED — the SettlementFeedbackService and the
+            // FSM table replay it to SUCCESS on recovery.
+            await this.persistOperation(operation);
+            return;
+        }
+        await this.persistSettlementAndExecutionObligation(operation);
+    }
     async persistSettlementAndExecutionObligation(operation) {
         const now = Date.now();
         const jobId = `rj-${now}-${randomUUID()}`;
@@ -1652,6 +1777,12 @@ export class Secretariat {
             network: accept.network,
             payee: accept.payTo,
             deadline: accept.maxTimeoutSeconds ? Date.now() + accept.maxTimeoutSeconds * 1000 : undefined,
+            // R9-A1: carry the seller-advertised window — the standard transport
+            // restores it into the PAYMENT-SIGNATURE payload (the seller's
+            // middleware verifies against its own route config, not our arithmetic).
+            ...(accept.maxTimeoutSeconds !== undefined
+                ? { maxTimeoutSeconds: accept.maxTimeoutSeconds }
+                : {}),
         };
     }
     async getPaymentRequirementFromEvidence(operation) {

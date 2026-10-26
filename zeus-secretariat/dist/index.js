@@ -29,6 +29,8 @@ export { ReconciliationWorker } from './core/reconciliation-worker.js';
 // A1 repair: production execution worker + FSM feedback for execution results
 export { ExecutionWorker } from './core/execution-worker.js';
 export { ExecutionFeedbackService, planExecutionTransitions } from './core/execution-feedback-service.js';
+// R9-A1: standard x402 v2 client transport (third-party sellers)
+export { StandardX402Transport, parsePaymentResponseHeader, isStandardPaidCallRecord, STANDARD_PAID_CALL_MARKER } from './core/standard-x402-transport.js';
 // Multi-RPC checker (required by ReconciliationEngine)
 export { MultiRpcChecker } from './core/multi-rpc-checker.js';
 //# sourceMappingURL=index.js.map

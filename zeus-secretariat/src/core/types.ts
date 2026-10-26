@@ -184,6 +184,26 @@ export interface PaymentPolicy {
    * - "policy-bound": automatic approval if within policy bounds
    */
   authorizationMode: 'explicit' | 'policy-bound';
+
+  /**
+   * R9-A1 (external audit 2026-10-26, decision memo
+   * docs/payment-protocol-a1-decision.md): payment transport selection.
+   *
+   * - "zeus"     — pay-then-prove: Secretariat settles via the configured
+   *                SettlementAdapter (zeus-facilitator) BEFORE contacting the
+   *                seller; the seller leg is a bare idempotent delivery call.
+   *                Coherent inside the Zeus perimeter only.
+   * - "standard" — canonical x402 v2 client flow for THIRD-PARTY sellers:
+   *                the signed PaymentPayload travels in the PAYMENT-SIGNATURE
+   *                header, the SELLER's own facilitator verifies + settles
+   *                during the paid request, and the same response carries
+   *                PAYMENT-RESPONSE + the route result. Execution is
+   *                discharged atomically by the paid call.
+   *
+   * Optional: absent → SecretariatConfig.defaultPaymentTransport applies
+   * (which itself defaults to "zeus").
+   */
+  transport?: 'zeus' | 'standard';
 }
 
 // ============================================================================
@@ -384,7 +404,7 @@ export interface ExecutionEvidence {
   /**
    * Source of evidence
    */
-  source: 'HTTP_RESPONSE' | 'RESULT_RETRIEVAL' | 'SIGNED_RECEIPT';
+  source: 'HTTP_RESPONSE' | 'RESULT_RETRIEVAL' | 'SIGNED_RECEIPT' | 'STANDARD_TRANSPORT';
   
   /**
    * Raw response data
