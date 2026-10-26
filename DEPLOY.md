@@ -90,6 +90,46 @@ The protocol runs TWO facilitators (user decision, 2026-10-26):
    Settlement: gas payer broadcasts transferWithAuthorization (EIP-1559),
    waits for the receipt; per-nonce guard prevents double broadcast.
 
+Hour-check of external facilitators for eip155:196 (2026-10-26; probe:
+scripts/d2-xlayer-eip3009-gas.py, raw output in worklog Task 14):
+
+  - Coinbase CDP facilitator — networks are Base, Base Sepolia, Polygon,
+    Arbitrum, Monad, World, World Sepolia, Solana. NO X Layer. Free tier:
+    first 1,000 onchain settlements/month $0.00, then $0.001/tx; verify is
+    always free; settlement gas is paid by CDP and covered by that fee.
+  - thirdweb facilitator (https://api.thirdweb.com/v1/payments/x402) —
+    wire shape is byte-identical to the canonical v2 envelope above
+    (POST /verify, /settle {x402Version, paymentPayload,
+    paymentRequirements}), BUT auth is the `x-secret-key` header (not
+    `Authorization: Bearer`) — X402FacilitatorClient would need a ~20-line
+    header adapter to point at it. Accepts arbitrary CAIP-2 chain ids
+    (defaults the token to USDC). Preconditions verified on-chain today:
+    thirdweb public RPC https://196.rpc.thirdweb.com answers
+    eth_chainId=0xc4 WITHOUT a key; X Layer is Prague (latest block carries
+    requestsHash ⇒ EIP-7702, the path their gasless settlement uses, is
+    available); USDC on 196 exposes the full EIP-3009 rail (transferWith
+    Authorization 0xe3ee160e, receiveWithAuthorization 0xef55bec6,
+    authorizationState(address,bytes32) 0xe94a0102 — implementation
+    0x19556fd56bf1298090d491f995a743ed71bdf89b behind the OZ-legacy proxy
+    slot). Chain support on their side is account-gated: every
+    /supported and /verify call returns 401 without a real secret key, so
+    the last confirmation is one GET /supported?chainId=196 from a
+    thirdweb dashboard account. Economics: plans from $99/mo (Growth),
+    0.3% per facilitator transaction, first 1,000 Engine requests/month
+    included then $1/1000, 2.5% gas surcharge on mainnet txs, and the
+    settlement gas is funded from YOUR thirdweb server wallet.
+  - X Layer gas economics (measured 2026-10-26): eth_gasPrice 0.02 gwei,
+    OKB $107.66 ⇒ one transferWithAuthorization settlement ≈ $0.00015
+    (70k gas) to $0.00026 (120k gas); 10,000 settlements/month worst case
+    ≈ 0.024 OKB ≈ $2.58.
+
+  Conclusion: at the $0.001 route price ANY third-party per-transaction
+  fee ($0.001 CDP tier / $0.001 Engine tier) equals 100% of the payment,
+  so the Zeus-operated facilitator is the only production-viable rail on
+  X Layer. External free facilitators stay dev/test-only (CDP/x402.org on
+  base-sepolia); thirdweb is a documented PAID fallback for 196 if the
+  operator ever prefers zero-infrastructure over zero-fee.
+
 Deploy as a separate Railway service (root dir `zeus-facilitator`):
   Build:  pnpm install && pnpm --filter zeus-facilitator run build
   Start:  node zeus-facilitator/dist/server.js
